@@ -80,23 +80,40 @@ async function scanRepositories(rootDir: string): Promise<RepoInfo[]> {
   return repos.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
 }
 
+function shiftDateString(date: string, deltaDays: number) {
+  const [year, month, day] = date.split('-').map(Number);
+  const shifted = new Date(year, month - 1, day + deltaDays);
+  const shiftedYear = shifted.getFullYear();
+  const shiftedMonth = String(shifted.getMonth() + 1).padStart(2, '0');
+  const shiftedDay = String(shifted.getDate()).padStart(2, '0');
+  return `${shiftedYear}-${shiftedMonth}-${shiftedDay}`;
+}
+
 function nextDateString(date: string) {
-  const next = new Date(`${date}T00:00:00`);
-  next.setDate(next.getDate() + 1);
-  return next.toISOString().slice(0, 10);
+  return shiftDateString(date, 1);
+}
+
+// 目标当天在本地时区的起始毫秒数（用于 author date 的半开区间 [start, end) 判定）。
+function dateToLocalMs(date: string) {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(year, month - 1, day).getTime();
 }
 
 async function collectGitData(repoPath: string, date: string) {
   const git = simpleGit(repoPath);
-  const since = `${date} 00:00:00`;
-  const until = `${nextDateString(date)} 00:00:00`;
   const marker = '__COMMIT__';
+  // git log 的 --since/--until 过滤的是 committer date，但日报关心的是 author date：
+  // 提交被 rebase / merge 后 committer date 会被刷新到处理那一刻，author date 仍是当初写代码的时间。
+  // 因此这里只用宽松的 committer-date 下界做粗筛（committer date 一般 ≥ author date），不设 --until，
+  // 再在 JS 里按 author date(%ad) 精确筛到目标当天，避免漏掉「当天写、隔天才合并」的提交。
+  const dayStartMs = dateToLocalMs(date);
+  const dayEndMs = dateToLocalMs(nextDateString(date));
+  const coarseSince = `${shiftDateString(date, -2)} 00:00:00`;
 
   const logOutput = await git.raw([
     'log',
-    `--since=${since}`,
-    `--until=${until}`,
-    `--pretty=format:${marker}%H%x09%ad%x09%s`,
+    `--since=${coarseSince}`,
+    `--pretty=format:${marker}%H%x09%ad%x09%an%x09%s`,
     '--date=iso-strict',
     '--name-only',
     '--no-merges',
@@ -109,8 +126,13 @@ async function collectGitData(repoPath: string, date: string) {
     const line = rawLine.trimEnd();
     if (!line) continue;
     if (line.startsWith(marker)) {
-      const [, hash, commitDate, message] = line.slice(marker.length).split('\t');
-      current = { hash, date: commitDate, message, files: [], show: '' };
+      const [hash, commitDate, author, message] = line.slice(marker.length).split('\t');
+      const authoredMs = new Date(commitDate).getTime();
+      if (Number.isNaN(authoredMs) || authoredMs < dayStartMs || authoredMs >= dayEndMs) {
+        current = null; // 非目标当天创作，跳过该提交（其 --name-only 文件行也随之忽略）
+        continue;
+      }
+      current = { hash, date: commitDate, author, message, files: [], show: '' };
       commits.push(current);
       continue;
     }
@@ -132,10 +154,24 @@ async function collectGitData(repoPath: string, date: string) {
     commit.show = show.slice(0, 4000);
   }
 
+  return formatCollectedGitData(commits);
+}
+
+function normalizeAuthorName(name: string) {
+  return name.trim().toLocaleLowerCase();
+}
+
+function filterCommitsByReporter(commits: CommitEntry[], reporterName: string) {
+  const normalizedReporterName = normalizeAuthorName(reporterName);
+  if (!normalizedReporterName) return commits;
+  return commits.filter((commit) => normalizeAuthorName(commit.author) === normalizedReporterName);
+}
+
+function formatCollectedGitData(commits: CommitEntry[]) {
   const gitLogs = commits
     .map((commit, index) => {
       const fileList = commit.files.length ? commit.files.join(', ') : '无';
-      return `${index + 1}. ${commit.date} | ${commit.message} | 文件: ${fileList}`;
+      return `${index + 1}. ${commit.date} | 作者: ${commit.author} | ${commit.message} | 文件: ${fileList}`;
     })
     .join('\n');
 
@@ -143,6 +179,70 @@ async function collectGitData(repoPath: string, date: string) {
   const diff = commits.map((commit) => `### ${commit.hash}\n${commit.show}`).join('\n\n').slice(0, 12000);
 
   return { commits, gitLogs, files, diff };
+}
+
+function normalizeAiBaseUrl(aiBaseUrl: string) {
+  return aiBaseUrl.trim().replace(/\/+$/, '');
+}
+
+function getChatCompletionsUrl(aiBaseUrl: string) {
+  const baseUrl = normalizeAiBaseUrl(aiBaseUrl);
+  return baseUrl.endsWith('/chat/completions') ? baseUrl : `${baseUrl}/chat/completions`;
+}
+
+function getModelsUrl(aiBaseUrl: string) {
+  const baseUrl = normalizeAiBaseUrl(aiBaseUrl);
+  return baseUrl.endsWith('/chat/completions') ? baseUrl.replace(/\/chat\/completions$/, '/models') : `${baseUrl}/models`;
+}
+
+function parseAiError(detail: string) {
+  if (!detail) return '';
+  try {
+    const data = JSON.parse(detail) as { error?: unknown; message?: unknown };
+    if (typeof data.error === 'string') return data.error;
+    if (typeof data.message === 'string') return data.message;
+    if (data.error && typeof data.error === 'object' && 'message' in data.error) {
+      const message = (data.error as { message?: unknown }).message;
+      return typeof message === 'string' ? message : detail;
+    }
+  } catch {
+    return detail;
+  }
+  return detail;
+}
+
+function isUnsupportedModelError(status: number, detail: string) {
+  const message = parseAiError(detail);
+  return status === 404 && /模型|model/i.test(message) && /不支持|unsupported|not\s+support/i.test(message);
+}
+
+async function fetchAvailableModels(config: AppConfig) {
+  try {
+    const response = await fetch(getModelsUrl(config.aiBaseUrl), {
+      headers: { Authorization: `Bearer ${config.aiApiKey}` },
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    if (!Array.isArray(data?.data)) return [];
+    return data.data
+      .map((item: { id?: unknown }) => item.id)
+      .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
+      .slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
+async function buildAiErrorMessage(config: AppConfig, response: Response, detail: string) {
+  const parsedDetail = parseAiError(detail);
+  if (isUnsupportedModelError(response.status, detail)) {
+    const models = await fetchAvailableModels(config);
+    const modelTips = models.length
+      ? `；/models 可查询到的模型包括：${models.join('、')}。注意：模型列表不一定代表当前 /chat/completions 接口全部可用`
+      : '；同时未能从 /models 获取可用模型列表';
+    return `AI接口调用失败：当前接口不支持模型 ${config.aiModel}${modelTips}。请在基础配置中更换为服务方明确支持 Chat Completions 的模型。原始错误：${parsedDetail || `${response.status} ${response.statusText}`}`;
+  }
+  return `AI接口调用失败：${response.status} ${response.statusText}${parsedDetail ? `，返回内容：${parsedDetail.slice(0, 500)}` : ''}`;
 }
 
 async function callAiReport(config: AppConfig, rawInput: { gitLogs: string; files: string; diff: string }) {
@@ -158,6 +258,7 @@ async function callAiReport(config: AppConfig, rawInput: { gitLogs: string; file
 5. 相同模块合并总结。
 6. 输出3-5条工作内容。
 7. 自动生成明日计划。
+8. 只能依据提供的Git数据、修改文件和代码变更总结，禁止补写未出现的工作内容。
 
 Git数据：
 ${rawInput.gitLogs}
@@ -186,7 +287,9 @@ ${rawInput.diff}
 1.
 2.`;
 
-  const response = await fetch(`${config.aiBaseUrl.replace(/\/$/, '')}/chat/completions`, {
+  const chatCompletionsUrl = getChatCompletionsUrl(config.aiBaseUrl);
+
+  const response = await fetch(chatCompletionsUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -203,7 +306,8 @@ ${rawInput.diff}
   });
 
   if (!response.ok) {
-    throw new Error(`AI接口调用失败：${response.status} ${response.statusText}`);
+    const detail = await response.text();
+    throw new Error(await buildAiErrorMessage(config, response, detail));
   }
 
   const data = await response.json();
@@ -262,8 +366,13 @@ function fallbackReport(repoNames: string[], date: string, reporterName: string,
 async function generateReport(params: GenerateReportParams): Promise<ReportResult> {
   const config = await loadConfig();
   const repos = params.repoPaths.map((repoPath) => ({ name: basename(repoPath), path: repoPath }));
-  const repoDataList = await Promise.all(params.repoPaths.map((repoPath) => collectGitData(repoPath, params.date)));
+  const allRepoDataList = await Promise.all(params.repoPaths.map((repoPath) => collectGitData(repoPath, params.date)));
+  const repoDataList = allRepoDataList.map((item) => {
+    const commits = filterCommitsByReporter(item.commits, params.reporterName);
+    return formatCollectedGitData(commits);
+  });
   const commits = repoDataList.flatMap((item) => item.commits);
+  const allCommits = allRepoDataList.flatMap((item) => item.commits);
   const rawInput = {
     gitLogs: repoDataList
       .map((item, index) => `## ${repos[index]?.name ?? `项目${index + 1}`}\n${item.gitLogs || '当日无记录'}`)
@@ -274,6 +383,30 @@ async function generateReport(params: GenerateReportParams): Promise<ReportResul
       .join('\n\n')
       .slice(0, 12000),
   };
+
+  if (!commits.length) {
+    const matchedTip = allCommits.length
+      ? `所选日期存在 ${allCommits.length} 条提交记录，但没有匹配到汇报人“${params.reporterName}”的提交。`
+      : '所选日期未采集到代码提交记录。';
+    const report = [
+      '今日工作内容：',
+      '',
+      `1. ${matchedTip}暂不生成推测性日报内容。`,
+      '',
+      '工作成果：',
+      '',
+      '1. 已完成所选仓库的提交记录扫描，但未发现可用于日报生成的研发变更。',
+      '',
+      '明日计划：',
+      '',
+      '1. 请确认工作日期、仓库路径、汇报人名称与 Git 作者名称后重新生成日报。',
+      '',
+      `汇报人：${params.reporterName}`,
+      `日期：${params.date}`,
+    ].join('\n');
+
+    return { report, commits, repos, rawInput };
+  }
 
   let report = '';
   if (config.aiApiKey) {
@@ -314,7 +447,7 @@ async function pushFeishu(webhook: string, report: string) {
 function createWindow() {
   const preloadPath = existsSync(join(__dirname, '../preload/index.js'))
     ? join(__dirname, '../preload/index.js')
-    : join(__dirname, '../preload/preload.mjs');
+    : join(__dirname, '../preload/preload.cjs');
 
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -325,6 +458,7 @@ function createWindow() {
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: false,
     },
   });
 
@@ -340,7 +474,9 @@ app.whenReady().then(() => {
   ipcMain.handle('app:load-config', async () => loadConfig());
   ipcMain.handle('app:save-config', async (_event, config: AppConfig) => saveConfig(config));
   ipcMain.handle('dialog:select-directory', async () => {
-    const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] })
+      : await dialog.showOpenDialog({ properties: ['openDirectory'] });
     return result.canceled ? null : result.filePaths[0] ?? null;
   });
   ipcMain.handle('repo:scan', async (_event, workspaceDir: string) => scanRepositories(workspaceDir));

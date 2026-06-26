@@ -21,6 +21,7 @@ export interface GenerateReportParams {
 export interface CommitEntry {
   hash: string;
   date: string;
+  author: string;
   message: string;
   files: string[];
   show: string;

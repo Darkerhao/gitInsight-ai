@@ -31,6 +31,17 @@ const reporterOptions = computed(() => {
 
 const selectedRepos = computed(() => repos.value.filter((item) => selectedRepoPaths.value.includes(item.path)));
 
+function getConfigPayload(): AppConfig {
+  return {
+    workspaceDir: config.workspaceDir,
+    reporterName: config.reporterName,
+    aiBaseUrl: config.aiBaseUrl,
+    aiApiKey: config.aiApiKey,
+    aiModel: config.aiModel,
+    feishuWebhook: config.feishuWebhook,
+  };
+}
+
 async function loadConfig() {
   const saved = await window.api.loadConfig();
   Object.assign(config, saved);
@@ -44,7 +55,7 @@ async function chooseWorkspace() {
   const dir = await window.api.selectDirectory();
   if (!dir) return;
   config.workspaceDir = dir;
-  await window.api.saveConfig(config);
+  await window.api.saveConfig(getConfigPayload());
   await refreshRepos();
 }
 
@@ -67,7 +78,7 @@ async function refreshRepos() {
 }
 
 async function saveSettings() {
-  await window.api.saveConfig(config);
+  await window.api.saveConfig(getConfigPayload());
   ElMessage.success('配置已保存');
 }
 
@@ -82,14 +93,18 @@ async function generate() {
   }
   loading.value = true;
   try {
-    await window.api.saveConfig(config);
+    await window.api.saveConfig(getConfigPayload());
     const result = await window.api.generateReport({
-      repoPaths: selectedRepoPaths.value,
+      repoPaths: [...selectedRepoPaths.value],
       date: form.date,
       reporterName: config.reporterName,
     });
     report.value = result.report;
     status.value = `已汇总 ${result.repos.length} 个仓库，生成 ${result.commits.length} 条记录`;
+    if (!result.commits.length) {
+      ElMessage.warning('未匹配到可用于生成日报的提交记录');
+      return;
+    }
     ElMessage.success('日报已生成');
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '生成失败');

@@ -16,6 +16,8 @@ export default defineConfig({
     build: {
       lib: {
         entry: resolve('electron/preload.ts'),
+        formats: ['cjs'],
+        fileName: () => 'preload.js',
       },
     },
   },
