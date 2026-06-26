@@ -1,0 +1,33 @@
+{
+  "name": "gitinsight-ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "out/main/main.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron .",
+    "preview": "electron-vite preview",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@vueuse/core": "^13.5.0",
+    "dayjs": "^1.11.13",
+    "element-plus": "^2.10.4",
+    "electron-updater": "^6.6.2",
+    "lucide-vue-next": "^0.548.0",
+    "simple-git": "^3.27.0",
+    "vue": "^3.5.17",
+    "vue-router": "^4.5.1"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.13.5",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "electron": "^37.2.6",
+    "electron-vite": "^3.1.0",
+    "typescript": "^5.8.3",
+    "vite": "^5.4.19",
+    "vue-tsc": "^2.2.12"
+  }
+}
