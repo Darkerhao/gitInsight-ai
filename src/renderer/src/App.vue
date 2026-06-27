@@ -1,19 +1,28 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useAssistant } from '@/composables/useAssistant';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppTopbar from '@/components/AppTopbar.vue';
-import SectionTitle from '@/components/common/SectionTitle.vue';
-import BasicConfigCard from '@/components/panels/BasicConfigCard.vue';
-import AdvancedConfigPanels from '@/components/panels/AdvancedConfigPanels.vue';
-import AutoSyncCard from '@/components/panels/AutoSyncCard.vue';
-import ReportPreviewCard from '@/components/panels/ReportPreviewCard.vue';
-import TodayStatusCards from '@/components/aside/TodayStatusCards.vue';
-import SyncLogFeed from '@/components/aside/SyncLogFeed.vue';
-import UsageGuide from '@/components/aside/UsageGuide.vue';
+import WelcomeGate from '@/components/WelcomeGate.vue';
+import ReportConfigView from '@/views/ReportConfigView.vue';
+import ReportGenerateView from '@/views/ReportGenerateView.vue';
+import SyncTasksView from '@/views/SyncTasksView.vue';
+import HistoryLogsView from '@/views/HistoryLogsView.vue';
+import SystemSettingsView from '@/views/SystemSettingsView.vue';
 
 const assistant = useAssistant();
-const activeNav = ref('config');
+const activeNav = ref('system');
+const showWelcome = ref(true);
+
+const viewMap = {
+  config: ReportConfigView,
+  generate: ReportGenerateView,
+  sync: SyncTasksView,
+  history: HistoryLogsView,
+  system: SystemSettingsView,
+};
+
+const activeView = computed(() => viewMap[activeNav.value as keyof typeof viewMap] ?? SystemSettingsView);
 
 onMounted(async () => {
   await assistant.init();
@@ -25,6 +34,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <WelcomeGate v-if="showWelcome" @finished="showWelcome = false" />
+
   <div class="app-layout">
     <AppSidebar v-model:active-nav="activeNav" />
 
@@ -32,23 +43,7 @@ onBeforeUnmount(() => {
       <AppTopbar />
 
       <div class="app-scroll">
-        <div class="main-grid">
-          <div class="main-center">
-            <section class="surface-card config-surface">
-              <SectionTitle title="日报配置" subtitle="配置日报生成规则与同步设置" />
-              <BasicConfigCard />
-              <AdvancedConfigPanels />
-              <AutoSyncCard />
-              <ReportPreviewCard />
-            </section>
-          </div>
-
-          <div class="main-aside">
-            <TodayStatusCards />
-            <SyncLogFeed />
-            <UsageGuide />
-          </div>
-        </div>
+        <component :is="activeView" />
 
         <footer class="app-footer">
           AI日报助手 v1.0.0 · 让技术日报生成更简单、更智能
