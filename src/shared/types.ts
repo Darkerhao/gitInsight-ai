@@ -41,12 +41,18 @@ export const DEFAULT_FEISHU_FORM_CONFIG: FeishuFormConfig = {
   contentFieldId: 'fldCODa6wU',
 };
 
+export const DEFAULT_AI_BASE_URL_OPTIONS = ['https://api.openai.com/v1', 'https://api.deepseek.com'];
+export const DEFAULT_AI_MODEL_OPTIONS = ['gpt-4o-mini', 'deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-flash'];
+
 export interface AppConfig {
   workspaceDir: string;
+  workspaceDirs: string[];
   reporterName: string;
   aiBaseUrl: string;
   aiApiKey: string;
   aiModel: string;
+  aiBaseUrlOptions: string[];
+  aiModelOptions: string[];
   feishuForm: FeishuFormConfig;
 }
 

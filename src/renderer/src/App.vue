@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import { FolderSearch, LogIn, Send, Sparkles, RefreshCw, Settings2, TestTube2 } from 'lucide-vue-next';
-import { DEFAULT_FEISHU_FORM_CONFIG } from '@shared/types';
+import { FolderSearch, LogIn, Send, Sparkles, RefreshCw, Settings2, TestTube2, Trash2 } from 'lucide-vue-next';
+import { DEFAULT_AI_BASE_URL_OPTIONS, DEFAULT_AI_MODEL_OPTIONS, DEFAULT_FEISHU_FORM_CONFIG } from '@shared/types';
 import type { AppConfig, FeishuProjectOption, RepoInfo } from '@shared/types';
 
 const today = new Date().toISOString().slice(0, 10);
@@ -15,13 +15,17 @@ const projectOptions = ref<FeishuProjectOption[]>([]);
 const selectedRepoPaths = ref<string[]>([]);
 const report = ref('');
 const status = ref('');
+const advancedConfigPanels = ref<string[]>([]);
 
 const config = reactive<AppConfig>({
   workspaceDir: '',
+  workspaceDirs: [],
   reporterName: '',
   aiBaseUrl: 'https://api.openai.com/v1',
   aiApiKey: '',
   aiModel: 'gpt-4o-mini',
+  aiBaseUrlOptions: [...DEFAULT_AI_BASE_URL_OPTIONS],
+  aiModelOptions: [...DEFAULT_AI_MODEL_OPTIONS],
   feishuForm: { ...DEFAULT_FEISHU_FORM_CONFIG },
 });
 
@@ -33,15 +37,67 @@ const reporterOptions = computed(() => {
   return config.reporterName ? [config.reporterName] : [];
 });
 
+function mergeCurrentOption(options: string[], currentValue: string) {
+  const normalizedValue = currentValue.trim();
+  if (!normalizedValue || options.includes(normalizedValue)) return options;
+  return [normalizedValue, ...options];
+}
+
+function normalizeOptions(options: string[]) {
+  return Array.from(new Set(options.map((item) => item.trim()).filter(Boolean)));
+}
+
+function normalizeWorkspaceDirs(options: string[]) {
+  return Array.from(new Set(options.map((item) => item.trim()).filter(Boolean)));
+}
+
+function getWorkspaceDirs() {
+  const workspaceDirs = normalizeWorkspaceDirs([...config.workspaceDirs, config.workspaceDir]);
+  config.workspaceDirs = workspaceDirs;
+  return workspaceDirs;
+}
+
+function getRepoKey(path: string) {
+  return path.trim().toLocaleLowerCase();
+}
+
+function mergeRepos(currentRepos: RepoInfo[], nextRepos: RepoInfo[]) {
+  const repoMap = new Map<string, RepoInfo>();
+  for (const repo of [...currentRepos, ...nextRepos]) {
+    repoMap.set(getRepoKey(repo.path), repo);
+  }
+  return Array.from(repoMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+}
+
+function normalizeRepoSelections(paths: string[]) {
+  const selectedPathMap = new Map<string, string>();
+  for (const path of paths) {
+    if (path.trim()) selectedPathMap.set(getRepoKey(path), path);
+  }
+  return Array.from(selectedPathMap.values());
+}
+
+async function scanWorkspaceDirs(workspaceDirs: string[]) {
+  const scannedGroups = await Promise.all(workspaceDirs.map((workspaceDir) => window.api.scanRepositories(workspaceDir)));
+  return scannedGroups.flat();
+}
+
+const aiBaseUrlOptions = computed(() => mergeCurrentOption(config.aiBaseUrlOptions, config.aiBaseUrl));
+const aiModelOptions = computed(() => mergeCurrentOption(config.aiModelOptions, config.aiModel));
+
 const selectedRepos = computed(() => repos.value.filter((item) => selectedRepoPaths.value.includes(item.path)));
 
 function getConfigPayload(): AppConfig {
+  const workspaceDirs = getWorkspaceDirs();
   return {
     workspaceDir: config.workspaceDir,
+    workspaceDirs,
     reporterName: config.reporterName,
     aiBaseUrl: config.aiBaseUrl,
     aiApiKey: config.aiApiKey,
     aiModel: config.aiModel,
+    aiBaseUrlOptions: normalizeOptions([...config.aiBaseUrlOptions, config.aiBaseUrl]),
+    aiModelOptions: normalizeOptions([...config.aiModelOptions, config.aiModel]),
     feishuForm: {
       ...DEFAULT_FEISHU_FORM_CONFIG,
       ...config.feishuForm,
@@ -59,10 +115,17 @@ async function loadConfig() {
     },
   });
   if (!form.date) form.date = today;
+  config.aiBaseUrlOptions = normalizeOptions(config.aiBaseUrlOptions.length ? config.aiBaseUrlOptions : [...DEFAULT_AI_BASE_URL_OPTIONS]);
+  config.aiModelOptions = normalizeOptions(config.aiModelOptions.length ? config.aiModelOptions : [...DEFAULT_AI_MODEL_OPTIONS]);
+  config.workspaceDirs = normalizeWorkspaceDirs([...(config.workspaceDirs ?? []), config.workspaceDir]);
+  advancedConfigPanels.value = [
+    ...(!config.aiApiKey ? ['ai'] : []),
+    ...(!config.feishuForm.shareToken || !config.feishuForm.cookie || !config.feishuForm.csrfToken ? ['feishu'] : []),
+  ];
   if (config.feishuForm.shareToken) {
     await loadFeishuProjects();
   }
-  if (config.workspaceDir) {
+  if (config.workspaceDirs.length) {
     await refreshRepos();
   }
 }
@@ -71,20 +134,34 @@ async function chooseWorkspace() {
   const dir = await window.api.selectDirectory();
   if (!dir) return;
   config.workspaceDir = dir;
+  config.workspaceDirs = normalizeWorkspaceDirs([...config.workspaceDirs, dir]);
   await window.api.saveConfig(getConfigPayload());
-  await refreshRepos();
+  loading.value = true;
+  try {
+    const scannedRepos = await scanWorkspaceDirs([dir]);
+    repos.value = mergeRepos(repos.value, scannedRepos);
+    selectedRepoPaths.value = normalizeRepoSelections([...selectedRepoPaths.value, ...scannedRepos.map((repo) => repo.path)]);
+    status.value = `已添加 ${scannedRepos.length} 个仓库，项目列表共 ${repos.value.length} 个仓库`;
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '扫描失败');
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function refreshRepos() {
-  if (!config.workspaceDir) {
+  const workspaceDirs = getWorkspaceDirs();
+  if (!workspaceDirs.length) {
     repos.value = [];
     selectedRepoPaths.value = [];
     return;
   }
   loading.value = true;
   try {
-    repos.value = await window.api.scanRepositories(config.workspaceDir);
-    selectedRepoPaths.value = repos.value.length ? [repos.value[0].path] : [];
+    repos.value = mergeRepos([], await scanWorkspaceDirs(workspaceDirs));
+    const repoPathSet = new Set(repos.value.map((repo) => getRepoKey(repo.path)));
+    const selectedPaths = selectedRepoPaths.value.filter((path) => repoPathSet.has(getRepoKey(path)));
+    selectedRepoPaths.value = selectedPaths.length || !repos.value.length ? selectedPaths : [repos.value[0].path];
     status.value = `已扫描到 ${repos.value.length} 个仓库`;
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '扫描失败');
@@ -96,6 +173,28 @@ async function refreshRepos() {
 async function saveSettings() {
   await window.api.saveConfig(getConfigPayload());
   ElMessage.success('配置已保存');
+}
+
+function rememberAiBaseUrlOption(value: string) {
+  config.aiBaseUrlOptions = normalizeOptions([...config.aiBaseUrlOptions, value]);
+}
+
+function rememberAiModelOption(value: string) {
+  config.aiModelOptions = normalizeOptions([...config.aiModelOptions, value]);
+}
+
+async function removeAiBaseUrlOption(value: string) {
+  config.aiBaseUrlOptions = config.aiBaseUrlOptions.filter((item) => item !== value);
+  if (config.aiBaseUrl === value) config.aiBaseUrl = '';
+  await window.api.saveConfig(getConfigPayload());
+  ElMessage.success('接口地址选项已删除');
+}
+
+async function removeAiModelOption(value: string) {
+  config.aiModelOptions = config.aiModelOptions.filter((item) => item !== value);
+  if (config.aiModel === value) config.aiModel = '';
+  await window.api.saveConfig(getConfigPayload());
+  ElMessage.success('模型选项已删除');
 }
 
 async function loginFeishu() {
@@ -236,29 +335,20 @@ onMounted(loadConfig);
       </div>
     </header>
 
-    <section class="panel">
+    <section class="panel config-panel">
       <div class="panel-title">
-        <span>基础配置</span>
+        <span>日报配置</span>
         <el-button size="small" :icon="FolderSearch" @click="chooseWorkspace">选择工作目录</el-button>
       </div>
-      <div class="form-grid">
-        <el-input v-model="config.workspaceDir" placeholder="例如：D:/workspace" />
+      <div class="common-config-grid">
+        <el-input v-model="config.workspaceDir" class="wide-field" placeholder="例如：D:/workspace" />
         <el-date-picker v-model="form.date" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" />
         <el-select v-model="config.reporterName" filterable allow-create placeholder="选择或输入汇报人">
           <el-option v-for="item in reporterOptions" :key="item" :label="item" :value="item" />
         </el-select>
-        <el-input v-model="config.aiBaseUrl" placeholder="OpenAI兼容接口地址" />
-        <el-input v-model="config.aiModel" placeholder="模型名称" />
-        <el-input v-model="config.aiApiKey" type="password" show-password placeholder="API Key" />
-        <el-input v-model="config.feishuForm.endpoint" placeholder="飞书表单提交接口地址" />
-        <el-input v-model="config.feishuForm.shareToken" placeholder="飞书表单 shareToken" />
-        <el-input v-model="config.feishuForm.csrfToken" type="password" show-password placeholder="x-csrftoken" />
-        <el-input v-model="config.feishuForm.cookie" type="textarea" :rows="2" placeholder="Cookie（仅保存在本机配置）" />
-        <el-input v-model="config.feishuForm.reporterUserId" placeholder="飞书汇报人 userId" />
-        <el-input v-model="config.feishuForm.reporterName" placeholder="飞书汇报人名称，留空使用上方汇报人" />
-        <el-input v-model="config.feishuForm.reporterAvatarUrl" placeholder="飞书头像地址，可选" />
         <el-select
           v-model="config.feishuForm.projectOptionId"
+          class="wide-field"
           filterable
           placeholder="选择所属项目"
           :loading="projectLoading"
@@ -266,7 +356,6 @@ onMounted(loadConfig);
         >
           <el-option v-for="item in projectOptions" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
-        <el-input v-model="config.feishuForm.projectName" placeholder="所属项目名称，仅用于备注" />
         <el-input-number
           v-model="config.feishuForm.defaultWorkHours"
           :min="0.5"
@@ -281,6 +370,65 @@ onMounted(loadConfig);
           <el-button :icon="TestTube2" type="warning" :loading="feishuLoading" @click="testSubmitFeishu">测试提交</el-button>
         </div>
       </div>
+      <el-collapse v-model="advancedConfigPanels" class="advanced-collapse">
+        <el-collapse-item title="AI 接入配置" name="ai">
+          <div class="form-grid">
+            <el-select
+              v-model="config.aiBaseUrl"
+              filterable
+              allow-create
+              default-first-option
+              placeholder="OpenAI兼容接口地址"
+              @change="rememberAiBaseUrlOption"
+            >
+              <el-option v-for="item in aiBaseUrlOptions" :key="item" :label="item" :value="item">
+                <div class="select-option-row">
+                  <span>{{ item }}</span>
+                  <el-button
+                    class="option-delete"
+                    link
+                    type="danger"
+                    :icon="Trash2"
+                    @click.stop="removeAiBaseUrlOption(item)"
+                  />
+                </div>
+              </el-option>
+            </el-select>
+            <el-select
+              v-model="config.aiModel"
+              filterable
+              allow-create
+              default-first-option
+              placeholder="模型名称"
+              @change="rememberAiModelOption"
+            >
+              <el-option v-for="item in aiModelOptions" :key="item" :label="item" :value="item">
+                <div class="select-option-row">
+                  <span>{{ item }}</span>
+                  <el-button class="option-delete" link type="danger" :icon="Trash2" @click.stop="removeAiModelOption(item)" />
+                </div>
+              </el-option>
+            </el-select>
+            <el-input v-model="config.aiApiKey" type="password" show-password placeholder="API Key" />
+          </div>
+        </el-collapse-item>
+        <el-collapse-item title="飞书连接配置" name="feishu">
+          <div class="form-grid">
+            <el-input v-model="config.feishuForm.endpoint" placeholder="飞书表单提交接口地址" />
+            <el-input v-model="config.feishuForm.shareToken" placeholder="飞书表单 shareToken" />
+            <el-input v-model="config.feishuForm.csrfToken" type="password" show-password placeholder="x-csrftoken" />
+            <el-input v-model="config.feishuForm.cookie" type="textarea" :rows="2" placeholder="Cookie（仅保存在本机配置）" />
+          </div>
+        </el-collapse-item>
+        <el-collapse-item title="飞书人员与项目映射" name="mapping">
+          <div class="form-grid">
+            <el-input v-model="config.feishuForm.reporterUserId" placeholder="飞书汇报人 userId" />
+            <el-input v-model="config.feishuForm.reporterName" placeholder="飞书汇报人名称，留空使用上方汇报人" />
+            <el-input v-model="config.feishuForm.reporterAvatarUrl" placeholder="飞书头像地址，可选" />
+            <el-input v-model="config.feishuForm.projectName" placeholder="所属项目名称，仅用于备注" />
+          </div>
+        </el-collapse-item>
+      </el-collapse>
     </section>
 
     <section class="layout">

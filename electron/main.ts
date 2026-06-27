@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { simpleGit } from 'simple-git';
-import { DEFAULT_FEISHU_FORM_CONFIG } from '../src/shared/types.js';
+import { DEFAULT_AI_BASE_URL_OPTIONS, DEFAULT_AI_MODEL_OPTIONS, DEFAULT_FEISHU_FORM_CONFIG } from '../src/shared/types.js';
 import type {
   AppConfig,
   CommitEntry,
@@ -21,10 +21,13 @@ import type {
 
 const DEFAULT_CONFIG: AppConfig = {
   workspaceDir: '',
+  workspaceDirs: [],
   reporterName: '',
   aiBaseUrl: 'https://api.openai.com/v1',
   aiApiKey: '',
   aiModel: 'gpt-4o-mini',
+  aiBaseUrlOptions: [...DEFAULT_AI_BASE_URL_OPTIONS],
+  aiModelOptions: [...DEFAULT_AI_MODEL_OPTIONS],
   feishuForm: { ...DEFAULT_FEISHU_FORM_CONFIG },
 };
 
@@ -45,14 +48,35 @@ async function ensureConfigDir() {
 }
 
 function normalizeConfig(config?: Partial<AppConfig>): AppConfig {
+  const workspaceDirs = normalizeWorkspaceDirs(config?.workspaceDirs, config?.workspaceDir);
   return {
     ...DEFAULT_CONFIG,
     ...config,
+    workspaceDirs,
+    workspaceDir: config?.workspaceDir || workspaceDirs[0] || '',
+    aiBaseUrlOptions: normalizeOptions(config?.aiBaseUrlOptions, DEFAULT_AI_BASE_URL_OPTIONS),
+    aiModelOptions: normalizeOptions(config?.aiModelOptions, DEFAULT_AI_MODEL_OPTIONS),
     feishuForm: {
       ...DEFAULT_FEISHU_FORM_CONFIG,
       ...(config?.feishuForm ?? {}),
     },
   };
+}
+
+function normalizeWorkspaceDirs(options: unknown, currentWorkspaceDir?: string) {
+  const source = Array.isArray(options) ? options : [];
+  return Array.from(
+    new Set(
+      [...source, currentWorkspaceDir]
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean),
+    ),
+  );
+}
+
+function normalizeOptions(options: unknown, fallbackOptions: string[]) {
+  const source = Array.isArray(options) ? options : fallbackOptions;
+  return Array.from(new Set(source.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean)));
 }
 
 async function loadConfig(): Promise<AppConfig> {
