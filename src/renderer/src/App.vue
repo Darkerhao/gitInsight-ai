@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import { FolderSearch, Send, Sparkles, RefreshCw, Settings2 } from 'lucide-vue-next';
-import type { AppConfig, RepoInfo } from '@shared/types';
+import { FolderSearch, LogIn, Send, Sparkles, RefreshCw, Settings2, TestTube2 } from 'lucide-vue-next';
+import { DEFAULT_FEISHU_FORM_CONFIG } from '@shared/types';
+import type { AppConfig, FeishuProjectOption, RepoInfo } from '@shared/types';
 
 const today = new Date().toISOString().slice(0, 10);
 const loading = ref(false);
 const pushing = ref(false);
+const feishuLoading = ref(false);
+const projectLoading = ref(false);
 const repos = ref<RepoInfo[]>([]);
+const projectOptions = ref<FeishuProjectOption[]>([]);
 const selectedRepoPaths = ref<string[]>([]);
 const report = ref('');
 const status = ref('');
@@ -18,7 +22,7 @@ const config = reactive<AppConfig>({
   aiBaseUrl: 'https://api.openai.com/v1',
   aiApiKey: '',
   aiModel: 'gpt-4o-mini',
-  feishuWebhook: '',
+  feishuForm: { ...DEFAULT_FEISHU_FORM_CONFIG },
 });
 
 const form = reactive({
@@ -38,14 +42,26 @@ function getConfigPayload(): AppConfig {
     aiBaseUrl: config.aiBaseUrl,
     aiApiKey: config.aiApiKey,
     aiModel: config.aiModel,
-    feishuWebhook: config.feishuWebhook,
+    feishuForm: {
+      ...DEFAULT_FEISHU_FORM_CONFIG,
+      ...config.feishuForm,
+    },
   };
 }
 
 async function loadConfig() {
   const saved = await window.api.loadConfig();
-  Object.assign(config, saved);
+  Object.assign(config, {
+    ...saved,
+    feishuForm: {
+      ...DEFAULT_FEISHU_FORM_CONFIG,
+      ...saved.feishuForm,
+    },
+  });
   if (!form.date) form.date = today;
+  if (config.feishuForm.shareToken) {
+    await loadFeishuProjects();
+  }
   if (config.workspaceDir) {
     await refreshRepos();
   }
@@ -80,6 +96,58 @@ async function refreshRepos() {
 async function saveSettings() {
   await window.api.saveConfig(getConfigPayload());
   ElMessage.success('配置已保存');
+}
+
+async function loginFeishu() {
+  feishuLoading.value = true;
+  try {
+    await window.api.saveConfig(getConfigPayload());
+    await window.api.loginFeishu({ config: getConfigPayload().feishuForm });
+    ElMessage.success('已打开飞书登录窗口');
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '打开飞书登录失败');
+  } finally {
+    feishuLoading.value = false;
+  }
+}
+
+async function loadFeishuProjects() {
+  projectLoading.value = true;
+  try {
+    await window.api.saveConfig(getConfigPayload());
+    projectOptions.value = await window.api.listFeishuProjects({ config: getConfigPayload().feishuForm });
+    const selected = projectOptions.value.find((item) => item.id === config.feishuForm.projectOptionId);
+    if (selected) {
+      config.feishuForm.projectName = selected.name;
+    }
+    status.value = `已获取 ${projectOptions.value.length} 个飞书项目选项`;
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '获取飞书项目列表失败');
+  } finally {
+    projectLoading.value = false;
+  }
+}
+
+function selectFeishuProject(optionId: string) {
+  const selected = projectOptions.value.find((item) => item.id === optionId);
+  config.feishuForm.projectName = selected?.name ?? '';
+}
+
+async function testSubmitFeishu() {
+  feishuLoading.value = true;
+  try {
+    await window.api.saveConfig(getConfigPayload());
+    const result = await window.api.testSubmitFeishu({
+      config: getConfigPayload().feishuForm,
+      date: form.date,
+    });
+    status.value = `飞书测试提交成功：code=${result.code}`;
+    ElMessage.success('飞书测试提交成功');
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '飞书测试提交失败');
+  } finally {
+    feishuLoading.value = false;
+  }
 }
 
 async function generate() {
@@ -124,16 +192,21 @@ async function push() {
     ElMessage.warning('请先生成日报');
     return;
   }
-  if (!config.feishuWebhook) {
-    ElMessage.warning('请先填写飞书Webhook');
+  if (!config.feishuForm.cookie || !config.feishuForm.csrfToken) {
+    ElMessage.warning('请先填写飞书 Cookie 和 x-csrftoken');
     return;
   }
   pushing.value = true;
   try {
-    await window.api.pushFeishu({ webhook: config.feishuWebhook, report: report.value });
-    ElMessage.success('已推送飞书');
+    await window.api.syncFeishuDaily({
+      config: getConfigPayload().feishuForm,
+      report: report.value,
+      date: form.date,
+      reporterName: config.reporterName,
+    });
+    ElMessage.success('已同步到飞书日报表');
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '推送失败');
+    ElMessage.error(error instanceof Error ? error.message : '同步飞书失败');
   } finally {
     pushing.value = false;
   }
@@ -156,7 +229,7 @@ onMounted(loadConfig);
     <header class="topbar">
       <div>
         <h1>AI日报助手</h1>
-        <p>Git分析 → AI生成日报 → 飞书推送</p>
+        <p>Git分析 → AI生成日报 → 飞书同步</p>
       </div>
       <div class="actions">
         <el-button :icon="Settings2" @click="saveSettings">保存配置</el-button>
@@ -177,7 +250,36 @@ onMounted(loadConfig);
         <el-input v-model="config.aiBaseUrl" placeholder="OpenAI兼容接口地址" />
         <el-input v-model="config.aiModel" placeholder="模型名称" />
         <el-input v-model="config.aiApiKey" type="password" show-password placeholder="API Key" />
-        <el-input v-model="config.feishuWebhook" placeholder="飞书Webhook地址" />
+        <el-input v-model="config.feishuForm.endpoint" placeholder="飞书表单提交接口地址" />
+        <el-input v-model="config.feishuForm.shareToken" placeholder="飞书表单 shareToken" />
+        <el-input v-model="config.feishuForm.csrfToken" type="password" show-password placeholder="x-csrftoken" />
+        <el-input v-model="config.feishuForm.cookie" type="textarea" :rows="2" placeholder="Cookie（仅保存在本机配置）" />
+        <el-input v-model="config.feishuForm.reporterUserId" placeholder="飞书汇报人 userId" />
+        <el-input v-model="config.feishuForm.reporterName" placeholder="飞书汇报人名称，留空使用上方汇报人" />
+        <el-input v-model="config.feishuForm.reporterAvatarUrl" placeholder="飞书头像地址，可选" />
+        <el-select
+          v-model="config.feishuForm.projectOptionId"
+          filterable
+          placeholder="选择所属项目"
+          :loading="projectLoading"
+          @change="selectFeishuProject"
+        >
+          <el-option v-for="item in projectOptions" :key="item.id" :label="item.name" :value="item.id" />
+        </el-select>
+        <el-input v-model="config.feishuForm.projectName" placeholder="所属项目名称，仅用于备注" />
+        <el-input-number
+          v-model="config.feishuForm.defaultWorkHours"
+          :min="0.5"
+          :max="24"
+          :step="0.5"
+          controls-position="right"
+          placeholder="默认工时"
+        />
+        <div class="form-actions">
+          <el-button :icon="LogIn" :loading="feishuLoading" @click="loginFeishu">登录飞书</el-button>
+          <el-button :icon="RefreshCw" :loading="projectLoading" @click="loadFeishuProjects">刷新项目</el-button>
+          <el-button :icon="TestTube2" type="warning" :loading="feishuLoading" @click="testSubmitFeishu">测试提交</el-button>
+        </div>
       </div>
     </section>
 
@@ -210,12 +312,12 @@ onMounted(loadConfig);
           <span>日报预览</span>
           <div class="actions">
             <el-button :icon="Sparkles" type="primary" :loading="loading" @click="generate">生成日报</el-button>
-            <el-button :icon="Send" type="success" :loading="pushing" @click="push">推送飞书</el-button>
+            <el-button :icon="Send" type="success" :loading="pushing" @click="push">同步飞书</el-button>
           </div>
         </div>
         <el-input v-model="report" type="textarea" :rows="24" placeholder="生成结果会显示在这里" />
         <div class="footer-actions">
-          <el-button type="primary" :loading="loading" @click="generateAndPush">生成并推送</el-button>
+          <el-button type="primary" :loading="loading" @click="generateAndPush">生成并同步</el-button>
           <span class="status">{{ status }}</span>
         </div>
       </div>

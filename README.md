@@ -1,6 +1,6 @@
 # GitInsight AI · AI日报助手
 
-一款 Electron 桌面应用:扫描本地 Git 仓库 → 调用 OpenAI 兼容接口将当天提交汇总成中文工作日报 → 可选推送到飞书(Lark)群机器人。
+一款 Electron 桌面应用:扫描本地 Git 仓库 → 调用 OpenAI 兼容接口将当天提交汇总成中文工作日报 → 同步到飞书日报表单。
 
 技术栈:Electron + Vue 3(`<script setup>`)+ Element Plus + TypeScript,使用 electron-vite 打包。
 
@@ -12,7 +12,7 @@
 - 选定仓库与日期,提取当天提交记录、改动文件与代码变更
 - 调用 OpenAI 兼容的 `/chat/completions` 接口生成正式中文日报(今日工作 / 工作成果 / 明日计划)
 - 未配置密钥或接口失败时,自动降级为本地模板日报,界面不会报错中断
-- 一键推送日报到飞书 Webhook
+- 一键同步日报到飞书日报表单
 
 ## 命令
 
@@ -45,7 +45,7 @@ npm run typecheck  # vue-tsc --noEmit(唯一的静态检查;没有 ESLint/Pretti
 3. [src/renderer/src/env.d.ts](src/renderer/src/env.d.ts) 里 `window.api` 的方法签名。
 4. [src/shared/types.ts](src/shared/types.ts) 里共享的入参/返回类型。
 
-现有频道:`app:load-config`、`app:save-config`、`dialog:select-directory`、`repo:scan`、`report:generate`、`report:push`。
+现有频道:`app:load-config`、`app:save-config`、`dialog:select-directory`、`repo:scan`、`report:generate`、`feishu:login`、`feishu:list-projects`、`feishu:test-submit`、`report:sync-feishu`。
 
 ### 日报生成流程(核心业务,全在 main.ts)
 
@@ -61,7 +61,7 @@ npm run typecheck  # vue-tsc --noEmit(唯一的静态检查;没有 ESLint/Pretti
 
 ### 配置持久化
 
-`AppConfig`(工作目录、汇报人、AI 接口地址/密钥/模型、飞书 Webhook)以 `config.json` 存放在 Electron 的 `app.getPath('userData')` 目录里,**不在仓库内**。`loadConfig` 始终在 `DEFAULT_CONFIG` 上展开,所以新增字段天然向后兼容。
+`AppConfig`(工作目录、汇报人、AI 接口地址/密钥/模型、飞书表单配置)以 `config.json` 存放在 Electron 的 `app.getPath('userData')` 目录里,**不在仓库内**。`loadConfig` 始终在 `DEFAULT_CONFIG` 上展开,所以新增字段天然向后兼容。
 
 ### 仓库扫描
 

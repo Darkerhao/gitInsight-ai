@@ -1,6 +1,17 @@
 /// <reference types="vite/client" />
 
-import type { AppConfig, GenerateReportParams, RepoInfo, ReportResult } from '@shared/types';
+import type {
+  AppConfig,
+  FeishuLoginPayload,
+  FeishuProjectOption,
+  FeishuProjectOptionsPayload,
+  FeishuSubmitResult,
+  FeishuTestSubmitPayload,
+  GenerateReportParams,
+  RepoInfo,
+  ReportResult,
+  SyncFeishuDailyPayload,
+} from '@shared/types';
 
 declare global {
   interface Window {
@@ -10,7 +21,10 @@ declare global {
       selectDirectory: () => Promise<string | null>;
       scanRepositories: (workspaceDir: string) => Promise<RepoInfo[]>;
       generateReport: (params: GenerateReportParams) => Promise<ReportResult>;
-      pushFeishu: (payload: { webhook: string; report: string }) => Promise<boolean>;
+      loginFeishu: (payload: FeishuLoginPayload) => Promise<boolean>;
+      listFeishuProjects: (payload: FeishuProjectOptionsPayload) => Promise<FeishuProjectOption[]>;
+      testSubmitFeishu: (payload: FeishuTestSubmitPayload) => Promise<FeishuSubmitResult>;
+      syncFeishuDaily: (payload: SyncFeishuDailyPayload) => Promise<boolean>;
     };
   }
 }

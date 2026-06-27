@@ -61,6 +61,12 @@ button, input, textarea {
   gap: 12px;
 }
 
+.form-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 .layout {
   display: grid;
   grid-template-columns: 380px minmax(0, 1fr);

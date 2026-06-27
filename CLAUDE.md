@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-GitInsight AI (中文界面 "AI日报助手") is an Electron desktop app that scans local Git repositories, summarizes a day's commits into a Chinese work report via an OpenAI-compatible chat API, and optionally pushes it to a Feishu (Lark) webhook. Stack: Electron + Vue 3 (`<script setup>`) + Element Plus + TypeScript, bundled with electron-vite.
+GitInsight AI (中文界面 "AI日报助手") is an Electron desktop app that scans local Git repositories, summarizes a day's commits into a Chinese work report via an OpenAI-compatible chat API, and syncs it to a Feishu daily report form. Stack: Electron + Vue 3 (`<script setup>`) + Element Plus + TypeScript, bundled with electron-vite.
 
 ## Commands
 
@@ -37,7 +37,7 @@ To add or change a feature that crosses the process boundary, edit **four** plac
 3. The `window.api` method signature in [src/renderer/src/env.d.ts](src/renderer/src/env.d.ts).
 4. Any shared payload/return shapes in [src/shared/types.ts](src/shared/types.ts).
 
-Current channels: `app:load-config`, `app:save-config`, `dialog:select-directory`, `repo:scan`, `report:generate`, `report:push`.
+Current channels: `app:load-config`, `app:save-config`, `dialog:select-directory`, `repo:scan`, `report:generate`, `feishu:login`, `feishu:list-projects`, `feishu:test-submit`, `report:sync-feishu`.
 
 ### Report generation pipeline (the core domain logic, all in main.ts)
 
@@ -52,7 +52,7 @@ Resilience: if `config.aiApiKey` is empty, or the AI call throws, `generateRepor
 
 ### Config persistence
 
-`AppConfig` (workspace dir, reporter name, AI base URL / key / model, Feishu webhook) is stored as `config.json` in Electron's `app.getPath('userData')` — **not** in the repo. `loadConfig` always spreads over `DEFAULT_CONFIG`, so adding a field there makes it backward-compatible automatically.
+`AppConfig` (workspace dir, reporter name, AI base URL / key / model, Feishu form config) is stored as `config.json` in Electron's `app.getPath('userData')` — **not** in the repo. `loadConfig` always spreads over `DEFAULT_CONFIG`, so adding a field there makes it backward-compatible automatically.
 
 ### Repo scanning
 

@@ -1,5 +1,16 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AppConfig, GenerateReportParams, RepoInfo, ReportResult } from '../src/shared/types.js';
+import type {
+  AppConfig,
+  FeishuLoginPayload,
+  FeishuProjectOption,
+  FeishuProjectOptionsPayload,
+  FeishuSubmitResult,
+  FeishuTestSubmitPayload,
+  GenerateReportParams,
+  RepoInfo,
+  ReportResult,
+  SyncFeishuDailyPayload,
+} from '../src/shared/types.js';
 
 contextBridge.exposeInMainWorld('api', {
   loadConfig: () => ipcRenderer.invoke('app:load-config') as Promise<AppConfig>,
@@ -7,6 +18,10 @@ contextBridge.exposeInMainWorld('api', {
   selectDirectory: () => ipcRenderer.invoke('dialog:select-directory') as Promise<string | null>,
   scanRepositories: (workspaceDir: string) => ipcRenderer.invoke('repo:scan', workspaceDir) as Promise<RepoInfo[]>,
   generateReport: (params: GenerateReportParams) => ipcRenderer.invoke('report:generate', params) as Promise<ReportResult>,
-  pushFeishu: (payload: { webhook: string; report: string }) => ipcRenderer.invoke('report:push', payload) as Promise<boolean>,
+  loginFeishu: (payload: FeishuLoginPayload) => ipcRenderer.invoke('feishu:login', payload) as Promise<boolean>,
+  listFeishuProjects: (payload: FeishuProjectOptionsPayload) =>
+    ipcRenderer.invoke('feishu:list-projects', payload) as Promise<FeishuProjectOption[]>,
+  testSubmitFeishu: (payload: FeishuTestSubmitPayload) =>
+    ipcRenderer.invoke('feishu:test-submit', payload) as Promise<FeishuSubmitResult>,
+  syncFeishuDaily: (payload: SyncFeishuDailyPayload) => ipcRenderer.invoke('report:sync-feishu', payload) as Promise<boolean>,
 });
-

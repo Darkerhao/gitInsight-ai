@@ -1,9 +1,23 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { simpleGit } from 'simple-git';
-import type { AppConfig, CommitEntry, GenerateReportParams, RepoInfo, ReportResult } from '../src/shared/types.js';
+import { DEFAULT_FEISHU_FORM_CONFIG } from '../src/shared/types.js';
+import type {
+  AppConfig,
+  CommitEntry,
+  FeishuFormConfig,
+  FeishuLoginPayload,
+  FeishuProjectOption,
+  FeishuProjectOptionsPayload,
+  FeishuSubmitResult,
+  FeishuTestSubmitPayload,
+  GenerateReportParams,
+  RepoInfo,
+  ReportResult,
+  SyncFeishuDailyPayload,
+} from '../src/shared/types.js';
 
 const DEFAULT_CONFIG: AppConfig = {
   workspaceDir: '',
@@ -11,13 +25,16 @@ const DEFAULT_CONFIG: AppConfig = {
   aiBaseUrl: 'https://api.openai.com/v1',
   aiApiKey: '',
   aiModel: 'gpt-4o-mini',
-  feishuWebhook: '',
+  feishuForm: { ...DEFAULT_FEISHU_FORM_CONFIG },
 };
 
 const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'out', 'build', 'coverage', '.idea', '.vscode']);
 const CONFIG_FILE = 'config.json';
 
 let mainWindow: BrowserWindow | null = null;
+let feishuWindow: BrowserWindow | null = null;
+
+const FEISHU_PARTITION = 'persist:feishu';
 
 function getConfigPath() {
   return join(app.getPath('userData'), CONFIG_FILE);
@@ -27,19 +44,31 @@ async function ensureConfigDir() {
   await mkdir(app.getPath('userData'), { recursive: true });
 }
 
+function normalizeConfig(config?: Partial<AppConfig>): AppConfig {
+  return {
+    ...DEFAULT_CONFIG,
+    ...config,
+    feishuForm: {
+      ...DEFAULT_FEISHU_FORM_CONFIG,
+      ...(config?.feishuForm ?? {}),
+    },
+  };
+}
+
 async function loadConfig(): Promise<AppConfig> {
   try {
     const raw = await readFile(getConfigPath(), 'utf-8');
-    return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+    return normalizeConfig(JSON.parse(raw));
   } catch {
-    return { ...DEFAULT_CONFIG };
+    return normalizeConfig();
   }
 }
 
 async function saveConfig(config: AppConfig) {
   await ensureConfigDir();
-  await writeFile(getConfigPath(), JSON.stringify(config, null, 2), 'utf-8');
-  return config;
+  const normalizedConfig = normalizeConfig(config);
+  await writeFile(getConfigPath(), JSON.stringify(normalizedConfig, null, 2), 'utf-8');
+  return normalizedConfig;
 }
 
 async function hasGitMetadata(dir: string) {
@@ -424,23 +453,420 @@ async function generateReport(params: GenerateReportParams): Promise<ReportResul
   return { report, commits, repos, rawInput };
 }
 
-async function pushFeishu(webhook: string, report: string) {
-  if (!webhook) {
-    throw new Error('请先配置飞书Webhook');
+function requireFeishuConfigValue(value: string, label: string) {
+  const normalizedValue = value.trim();
+  if (!normalizedValue) {
+    throw new Error(`请先填写${label}`);
+  }
+  return normalizedValue;
+}
+
+function dateToFeishuDateValue(date: string) {
+  const [year, month, day] = date.split('-').map(Number);
+  if (!year || !month || !day) {
+    throw new Error('日报日期格式不正确');
+  }
+  return Date.UTC(year, month - 1, day);
+}
+
+function extractReportSection(report: string, sectionTitle: string) {
+  const lines = report.split(/\r?\n/);
+  const startIndex = lines.findIndex((line) => line.trim().startsWith(sectionTitle));
+  if (startIndex < 0) return '';
+
+  const sectionLines: string[] = [];
+  for (const line of lines.slice(startIndex + 1)) {
+    const trimmed = line.trim();
+    if (/^(今日工作内容|工作成果|工作时长|明日计划|汇报人|日期)[：:]/.test(trimmed)) {
+      break;
+    }
+    if (trimmed) sectionLines.push(trimmed);
+  }
+  return sectionLines.join('\n').trim();
+}
+
+function extractWorkHours(report: string, fallbackHours: number) {
+  const match = report.match(/工作时长[：:]\s*([0-9]+(?:\.[0-9]+)?)/);
+  const parsedHours = match ? Number(match[1]) : fallbackHours;
+  if (!Number.isFinite(parsedHours) || parsedHours <= 0) return fallbackHours;
+  return parsedHours;
+}
+
+function buildFeishuFormData(payload: SyncFeishuDailyPayload) {
+  const formConfig = payload.config;
+  const reporterName = formConfig.reporterName.trim() || payload.reporterName.trim();
+  const workContent = extractReportSection(payload.report, '今日工作内容') || payload.report.trim();
+  const reporterUser: { userId: string; name: string; enName: string; notify: boolean; avatarUrl?: string } = {
+    userId: requireFeishuConfigValue(formConfig.reporterUserId, '飞书汇报人 userId'),
+    name: requireFeishuConfigValue(reporterName, '飞书汇报人名称'),
+    enName: reporterName,
+    notify: false,
+  };
+
+  if (formConfig.reporterAvatarUrl.trim()) {
+    reporterUser.avatarUrl = formConfig.reporterAvatarUrl.trim();
   }
 
-  const response = await fetch(webhook, {
+  return {
+    [requireFeishuConfigValue(formConfig.dateFieldId, '日期字段 ID')]: {
+      type: 5,
+      value: dateToFeishuDateValue(payload.date),
+    },
+    [requireFeishuConfigValue(formConfig.userFieldId, '汇报人字段 ID')]: {
+      type: 11,
+      value: {
+        users: [reporterUser],
+      },
+    },
+    [requireFeishuConfigValue(formConfig.questionId, '明细表问题 ID')]: {
+      type: 21,
+      value: [
+        {
+          [requireFeishuConfigValue(formConfig.projectFieldId, '所属项目字段 ID')]: {
+            type: 4,
+            value: [requireFeishuConfigValue(formConfig.projectOptionId, '所属项目选项 ID')],
+          },
+          [requireFeishuConfigValue(formConfig.hoursFieldId, '工作时长字段 ID')]: {
+            type: 2,
+            value: extractWorkHours(payload.report, formConfig.defaultWorkHours || 8),
+          },
+          [requireFeishuConfigValue(formConfig.contentFieldId, '工作内容字段 ID')]: {
+            type: 1,
+            value: [
+              {
+                type: 'text',
+                text: workContent,
+              },
+            ],
+          },
+        },
+      ],
+    },
+  };
+}
+
+function getFeishuRequestContext(endpoint: string, shareToken: string) {
+  const url = new URL(endpoint);
+  return {
+    origin: url.origin,
+    referer: `${url.origin}/share/base/form/${shareToken}?chunked=false`,
+  };
+}
+
+function getFeishuFormPageUrl(config: FeishuFormConfig) {
+  const endpoint = requireFeishuConfigValue(config.endpoint, '飞书表单提交接口地址');
+  const shareToken = requireFeishuConfigValue(config.shareToken, '飞书表单 shareToken');
+  const { referer } = getFeishuRequestContext(endpoint, shareToken);
+  return referer;
+}
+
+function getFeishuContentMetaUrl(config: FeishuFormConfig) {
+  const endpoint = requireFeishuConfigValue(config.endpoint, '飞书表单提交接口地址');
+  const shareToken = requireFeishuConfigValue(config.shareToken, '飞书表单 shareToken');
+  const url = new URL(endpoint);
+  url.pathname = '/space/api/bitable/external/share/content_meta';
+  url.search = '';
+  url.searchParams.set('shareToken', shareToken);
+  return url.toString();
+}
+
+async function getFeishuCookieHeader(origin: string, fallbackCookie: string) {
+  const feishuSession = feishuWindow && !feishuWindow.isDestroyed() ? feishuWindow.webContents.session : session.fromPartition(FEISHU_PARTITION);
+  const cookies = await feishuSession.cookies.get({ url: origin });
+  const sessionCookie = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
+  return sessionCookie || fallbackCookie.trim();
+}
+
+function getCookieValue(cookieHeader: string, names: string[]) {
+  const cookieMap = new Map(
+    cookieHeader
+      .split(';')
+      .map((item) => {
+        const index = item.indexOf('=');
+        if (index < 0) return [item.trim(), ''] as const;
+        return [item.slice(0, index).trim(), item.slice(index + 1).trim()] as const;
+      })
+      .filter(([key]) => key),
+  );
+  const matchedValue = names.map((name) => cookieMap.get(name)).find((value) => value);
+  return matchedValue ? decodeURIComponent(matchedValue) : '';
+}
+
+function getFeishuCsrfToken(cookieHeader: string, fallbackCsrfToken: string) {
+  return getCookieValue(cookieHeader, ['_csrf_token', 'swp_csrf_token']) || fallbackCsrfToken.trim();
+}
+
+function parseFeishuProjectOptions(meta: unknown, projectFieldId: string): FeishuProjectOption[] {
+  const data = meta as { data?: { snapshot?: unknown } };
+  const snapshotRaw = data?.data?.snapshot;
+  if (typeof snapshotRaw !== 'string') {
+    throw new Error('飞书项目列表解析失败：接口未返回 snapshot');
+  }
+
+  const snapshot = JSON.parse(snapshotRaw) as {
+    fieldMap?: Record<string, { property?: { options?: Array<{ id?: unknown; name?: unknown; color?: unknown }> } }>;
+  };
+  const options = snapshot.fieldMap?.[projectFieldId]?.property?.options;
+  if (!Array.isArray(options)) {
+    throw new Error(`飞书项目列表解析失败：未找到字段 ${projectFieldId} 的 options`);
+  }
+
+  return options
+    .map((option) => ({
+      id: typeof option.id === 'string' ? option.id : '',
+      name: typeof option.name === 'string' ? option.name : '',
+      color: typeof option.color === 'number' ? option.color : undefined,
+    }))
+    .filter((option) => option.id && option.name);
+}
+
+async function listFeishuProjectOptions(payload: FeishuProjectOptionsPayload): Promise<FeishuProjectOption[]> {
+  const formConfig = {
+    ...DEFAULT_FEISHU_FORM_CONFIG,
+    ...payload.config,
+  };
+  const endpoint = requireFeishuConfigValue(formConfig.endpoint, '飞书表单提交接口地址');
+  const shareToken = requireFeishuConfigValue(formConfig.shareToken, '飞书表单 shareToken');
+  const { origin, referer } = getFeishuRequestContext(endpoint, shareToken);
+  const cookie = await getFeishuCookieHeader(origin, formConfig.cookie);
+  const headers: Record<string, string> = {
+    accept: 'application/json, text/plain, */*',
+    origin,
+    referer,
+  };
+  if (cookie) {
+    headers.cookie = cookie;
+  }
+
+  const response = await fetch(getFeishuContentMetaUrl(formConfig), {
+    headers: {
+      ...headers,
+    },
+  });
+  const detail = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`获取飞书项目列表失败：${response.status} ${response.statusText}${detail ? `，返回：${detail.slice(0, 500)}` : ''}`);
+  }
+
+  let meta: unknown;
+  try {
+    meta = JSON.parse(detail);
+  } catch {
+    throw new Error(`获取飞书项目列表失败：接口返回内容不是 JSON：${detail.slice(0, 500)}`);
+  }
+
+  const result = meta as { code?: number; msg?: string };
+  if (result.code !== 0) {
+    if (result.msg === 'Login Required') {
+      throw new Error('获取飞书项目列表失败：飞书登录态无效或已过期，请先点击“登录飞书”完成登录，或填写完整有效的飞书 Cookie');
+    }
+    throw new Error(`获取飞书项目列表失败：${result.msg || `code=${result.code}`}`);
+  }
+
+  return parseFeishuProjectOptions(meta, requireFeishuConfigValue(formConfig.projectFieldId, '所属项目字段 ID'));
+}
+
+function buildFeishuTestFormData(config: FeishuFormConfig, date: string) {
+  const reporterName = requireFeishuConfigValue(config.reporterName, '飞书汇报人名称');
+  const reporterUser: { userId: string; name: string; enName: string; notify: boolean; avatarUrl?: string } = {
+    userId: requireFeishuConfigValue(config.reporterUserId, '飞书汇报人 userId'),
+    name: reporterName,
+    enName: reporterName,
+    notify: false,
+  };
+
+  if (config.reporterAvatarUrl.trim()) {
+    reporterUser.avatarUrl = config.reporterAvatarUrl.trim();
+  }
+
+  return {
+    [requireFeishuConfigValue(config.dateFieldId, '日期字段 ID')]: {
+      type: 5,
+      value: dateToFeishuDateValue(date),
+    },
+    [requireFeishuConfigValue(config.userFieldId, '汇报人字段 ID')]: {
+      type: 11,
+      value: {
+        users: [reporterUser],
+      },
+    },
+    [requireFeishuConfigValue(config.questionId, '明细表问题 ID')]: {
+      type: 21,
+      value: [
+        {
+          [requireFeishuConfigValue(config.projectFieldId, '所属项目字段 ID')]: {
+            type: 4,
+            value: [requireFeishuConfigValue(config.projectOptionId, '所属项目选项 ID')],
+          },
+          [requireFeishuConfigValue(config.hoursFieldId, '工作时长字段 ID')]: {
+            type: 2,
+            value: config.defaultWorkHours || 8,
+          },
+          [requireFeishuConfigValue(config.contentFieldId, '工作内容字段 ID')]: {
+            type: 1,
+            value: [
+              {
+                type: 'text',
+                text: '测试提交管道：Electron persist:feishu 登录态验证。',
+              },
+            ],
+          },
+        },
+      ],
+    },
+  };
+}
+
+async function openFeishuLogin(payload: FeishuLoginPayload) {
+  const formConfig = {
+    ...DEFAULT_FEISHU_FORM_CONFIG,
+    ...payload.config,
+  };
+  const targetUrl = getFeishuFormPageUrl(formConfig);
+
+  if (feishuWindow && !feishuWindow.isDestroyed()) {
+    feishuWindow.show();
+    feishuWindow.focus();
+    await feishuWindow.loadURL(targetUrl);
+    return true;
+  }
+
+  feishuWindow = new BrowserWindow({
+    width: 1200,
+    height: 860,
+    minWidth: 960,
+    minHeight: 720,
+    title: '登录飞书',
+    webPreferences: {
+      partition: FEISHU_PARTITION,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  feishuWindow.on('closed', () => {
+    feishuWindow = null;
+  });
+
+  await feishuWindow.loadURL(targetUrl);
+  return true;
+}
+
+async function testSubmitFeishuForm(payload: FeishuTestSubmitPayload): Promise<FeishuSubmitResult> {
+  const formConfig = {
+    ...DEFAULT_FEISHU_FORM_CONFIG,
+    ...payload.config,
+  };
+  const endpoint = requireFeishuConfigValue(formConfig.endpoint, '飞书表单提交接口地址');
+  const shareToken = requireFeishuConfigValue(formConfig.shareToken, '飞书表单 shareToken');
+  const data = buildFeishuTestFormData(formConfig, payload.date);
+  const requestId = `gitinsight-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const { origin, referer } = getFeishuRequestContext(endpoint, shareToken);
+  const cookie = await getFeishuCookieHeader(origin, formConfig.cookie);
+  const csrfToken = getFeishuCsrfToken(cookie, formConfig.csrfToken);
+
+  if (!cookie) {
+    throw new Error('飞书测试提交失败：未找到飞书登录态，请先点击“登录飞书”完成登录，或填写完整有效的飞书 Cookie');
+  }
+  if (!csrfToken) {
+    throw new Error('飞书测试提交失败：未在飞书登录态中找到 _csrf_token 或 swp_csrf_token，请重新登录飞书后再试');
+  }
+
+  const response = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      accept: 'application/json, text/plain, */*',
+      'content-type': 'application/json',
+      cookie,
+      origin,
+      referer,
+      'request-id': requestId,
+      'x-csrftoken': csrfToken,
+      'x-request-id': requestId,
+    },
     body: JSON.stringify({
-      msg_type: 'text',
-      content: { text: report },
+      shareToken,
+      data: JSON.stringify(data),
+      preUploadEnable: false,
+    }),
+  });
+  const result = {
+    ok: response.ok,
+    status: response.status,
+    statusText: response.statusText,
+    text: await response.text(),
+  };
+
+  if (!result.ok) {
+    throw new Error(`飞书测试提交失败：${result.status} ${result.statusText}${result.text ? `，返回：${result.text.slice(0, 500)}` : ''}`);
+  }
+
+  let parsed: FeishuSubmitResult;
+  try {
+    parsed = JSON.parse(result.text) as FeishuSubmitResult;
+  } catch {
+    throw new Error(`飞书测试提交失败：接口返回内容不是 JSON：${result.text.slice(0, 500)}`);
+  }
+
+  if (parsed.code !== 0) {
+    if (parsed.msg === 'Login Required') {
+      throw new Error('飞书测试提交失败：飞书登录态无效或已过期，请重新点击“登录飞书”完成登录');
+    }
+    throw new Error(`飞书测试提交失败：${parsed.msg || `code=${parsed.code}`}`);
+  }
+
+  return parsed;
+}
+
+async function syncFeishuDaily(payload: SyncFeishuDailyPayload) {
+  const formConfig: FeishuFormConfig = {
+    ...DEFAULT_FEISHU_FORM_CONFIG,
+    ...payload.config,
+  };
+  const endpoint = requireFeishuConfigValue(formConfig.endpoint, '飞书表单接口地址');
+  const shareToken = requireFeishuConfigValue(formConfig.shareToken, '飞书 shareToken');
+  const csrfToken = requireFeishuConfigValue(formConfig.csrfToken, '飞书 x-csrftoken');
+  const cookie = requireFeishuConfigValue(formConfig.cookie, '飞书 Cookie');
+  const requestId = `gitinsight-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const { origin, referer } = getFeishuRequestContext(endpoint, shareToken);
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json, text/plain, */*',
+      'content-type': 'application/json',
+      cookie,
+      origin,
+      referer,
+      'request-id': requestId,
+      'x-csrftoken': csrfToken,
+      'x-request-id': requestId,
+    },
+    body: JSON.stringify({
+      shareToken,
+      data: JSON.stringify(buildFeishuFormData({ ...payload, config: formConfig })),
+      preUploadEnable: false,
     }),
   });
 
+  const detail = await response.text();
   if (!response.ok) {
-    throw new Error(`飞书推送失败：${response.status} ${response.statusText}`);
+    throw new Error(`同步飞书日报失败：${response.status} ${response.statusText}${detail ? `，返回：${detail.slice(0, 500)}` : ''}`);
   }
+
+  let result: { code?: number; msg?: string } = {};
+  try {
+    result = JSON.parse(detail);
+  } catch {
+    throw new Error(`同步飞书日报失败：接口返回内容不是 JSON：${detail.slice(0, 500)}`);
+  }
+
+  if (result.code !== 0) {
+    throw new Error(`同步飞书日报失败：${result.msg || `code=${result.code}`}`);
+  }
+
   return true;
 }
 
@@ -481,7 +907,10 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('repo:scan', async (_event, workspaceDir: string) => scanRepositories(workspaceDir));
   ipcMain.handle('report:generate', async (_event, params: GenerateReportParams) => generateReport(params));
-  ipcMain.handle('report:push', async (_event, payload: { webhook: string; report: string }) => pushFeishu(payload.webhook, payload.report));
+  ipcMain.handle('feishu:login', async (_event, payload: FeishuLoginPayload) => openFeishuLogin(payload));
+  ipcMain.handle('feishu:list-projects', async (_event, payload: FeishuProjectOptionsPayload) => listFeishuProjectOptions(payload));
+  ipcMain.handle('feishu:test-submit', async (_event, payload: FeishuTestSubmitPayload) => testSubmitFeishuForm(payload));
+  ipcMain.handle('report:sync-feishu', async (_event, payload: SyncFeishuDailyPayload) => syncFeishuDaily(payload));
 
   createWindow();
 });
