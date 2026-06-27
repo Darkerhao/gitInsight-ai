@@ -55,12 +55,12 @@ function mergeCurrentOption(options: string[], currentValue: string) {
   return [normalizedValue, ...options];
 }
 
-function normalizeOptions(options: string[]) {
-  return Array.from(new Set(options.map((item) => item.trim()).filter(Boolean)));
+function normalizeOptions(options: unknown[]) {
+  return Array.from(new Set(options.map((item) => toPlainString(item).trim()).filter(Boolean)));
 }
 
-function normalizeWorkspaceDirs(options: string[]) {
-  return Array.from(new Set(options.map((item) => item.trim()).filter(Boolean)));
+function normalizeWorkspaceDirs(options: unknown[]) {
+  return Array.from(new Set(options.map((item) => toPlainString(item).trim()).filter(Boolean)));
 }
 
 function getWorkspaceDirs() {
@@ -87,6 +87,39 @@ function normalizeRepoSelections(paths: string[]) {
     if (path.trim()) selectedPathMap.set(getRepoKey(path), path);
   }
   return Array.from(selectedPathMap.values());
+}
+
+function toPlainString(value: unknown) {
+  return typeof value === 'string' ? value : value == null ? '' : String(value);
+}
+
+function toPlainNumber(value: unknown, fallback: number) {
+  const normalized = Number(value);
+  return Number.isFinite(normalized) ? normalized : fallback;
+}
+
+function normalizeTimeValue(value: unknown) {
+  if (typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+    return value;
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
+  }
+
+  const maybeFormatter = (value as { format?: unknown } | null)?.format;
+  if (typeof maybeFormatter === 'function') {
+    try {
+      const formatted = maybeFormatter.call(value, 'HH:mm');
+      if (typeof formatted === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(formatted)) {
+        return formatted;
+      }
+    } catch {
+      // Fall back to the default time below.
+    }
+  }
+
+  return DEFAULT_AUTO_SYNC_CONFIG.time;
 }
 
 async function scanWorkspaceDirs(workspaceDirs: string[]) {
@@ -126,22 +159,43 @@ function getConfigPayload(): AppConfig {
   selectedRepoPaths.value = normalizedSelectedRepoPaths;
   config.selectedRepoPaths = normalizedSelectedRepoPaths;
   return {
-    workspaceDir: config.workspaceDir,
+    workspaceDir: toPlainString(config.workspaceDir),
     workspaceDirs,
     selectedRepoPaths: normalizedSelectedRepoPaths,
-    reporterName: config.reporterName,
-    aiBaseUrl: config.aiBaseUrl,
-    aiApiKey: config.aiApiKey,
-    aiModel: config.aiModel,
+    reporterName: toPlainString(config.reporterName),
+    aiBaseUrl: toPlainString(config.aiBaseUrl),
+    aiApiKey: toPlainString(config.aiApiKey),
+    aiModel: toPlainString(config.aiModel),
     aiBaseUrlOptions: normalizeOptions([...config.aiBaseUrlOptions, config.aiBaseUrl]),
     aiModelOptions: normalizeOptions([...config.aiModelOptions, config.aiModel]),
     feishuForm: {
-      ...DEFAULT_FEISHU_FORM_CONFIG,
-      ...config.feishuForm,
+      endpoint: toPlainString(config.feishuForm.endpoint),
+      shareToken: toPlainString(config.feishuForm.shareToken),
+      csrfToken: toPlainString(config.feishuForm.csrfToken),
+      cookie: toPlainString(config.feishuForm.cookie),
+      reporterUserId: toPlainString(config.feishuForm.reporterUserId),
+      reporterName: toPlainString(config.feishuForm.reporterName),
+      reporterAvatarUrl: toPlainString(config.feishuForm.reporterAvatarUrl),
+      projectOptionId: toPlainString(config.feishuForm.projectOptionId),
+      projectName: toPlainString(config.feishuForm.projectName),
+      defaultWorkHours: toPlainNumber(config.feishuForm.defaultWorkHours, DEFAULT_FEISHU_FORM_CONFIG.defaultWorkHours),
+      questionId: toPlainString(config.feishuForm.questionId),
+      dateFieldId: toPlainString(config.feishuForm.dateFieldId),
+      userFieldId: toPlainString(config.feishuForm.userFieldId),
+      projectFieldId: toPlainString(config.feishuForm.projectFieldId),
+      hoursFieldId: toPlainString(config.feishuForm.hoursFieldId),
+      contentFieldId: toPlainString(config.feishuForm.contentFieldId),
     },
     autoSync: {
-      ...DEFAULT_AUTO_SYNC_CONFIG,
-      ...config.autoSync,
+      enabled: Boolean(config.autoSync.enabled),
+      time: normalizeTimeValue(config.autoSync.time),
+      lastRunAt: toPlainString(config.autoSync.lastRunAt),
+      lastSuccessAt: toPlainString(config.autoSync.lastSuccessAt),
+      lastStatus: config.autoSync.lastStatus,
+      lastMessage: toPlainString(config.autoSync.lastMessage),
+      lastRunKey: toPlainString(config.autoSync.lastRunKey),
+      lastScheduledRunKey: toPlainString(config.autoSync.lastScheduledRunKey),
+      lastSuccessKey: toPlainString(config.autoSync.lastSuccessKey),
     },
   };
 }

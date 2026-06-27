@@ -56,6 +56,10 @@ function getConfigPath() {
   return join(app.getPath('userData'), CONFIG_FILE);
 }
 
+function toCloneable<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 async function ensureConfigDir() {
   await mkdir(app.getPath('userData'), { recursive: true });
 }
@@ -203,7 +207,7 @@ function getAutoSyncState(config: AppConfig): AutoSyncState {
 
 function emitAutoSyncState(config: AppConfig) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send('auto-sync:updated', getAutoSyncState(config));
+  mainWindow.webContents.send('auto-sync:updated', toCloneable(getAutoSyncState(config)));
 }
 
 function clearAutoSyncTimer() {
@@ -261,14 +265,14 @@ function buildAutoSyncRunResult(
   report?: string,
   commitsCount?: number,
 ): AutoSyncRunResult {
-  return {
+  return toCloneable({
     status,
     message,
     ranAt,
     nextRunAt: getAutoSyncState(config).nextRunAt,
     report,
     commitsCount,
-  };
+  });
 }
 
 async function hasGitMetadata(dir: string) {
