@@ -26,7 +26,7 @@ Three Electron processes, each a separate bundle target in `electron.vite.config
 
 - **Main** — [electron/main.ts](electron/main.ts): all Node/filesystem/Git/network work lives here. Owns the window and every IPC handler.
 - **Preload** — [electron/preload.ts](electron/preload.ts): `contextBridge` exposes a narrow, typed `window.api` (contextIsolation is on, nodeIntegration off). The renderer has **no** direct Node access.
-- **Renderer** — [src/renderer/src/App.vue](src/renderer/src/App.vue): the entire UI is one Vue component. No router, no store, no component library beyond Element Plus.
+- **Renderer** — [src/renderer/src/App.vue](src/renderer/src/App.vue) is a thin layout shell (sidebar + topbar + center config column + right info aside). All renderer state and logic live in a single module-level singleton composable [src/renderer/src/composables/useAssistant.ts](src/renderer/src/composables/useAssistant.ts); presentational pieces are split under `src/renderer/src/components/` (`AppSidebar`, `AppTopbar`, `panels/*`, `aside/*`, `common/SectionTitle`). No router, no store, no component library beyond Element Plus. To change behavior, edit `useAssistant.ts` (the single source of truth) — components only consume it via `useAssistant()`. The sidebar shows 5 nav items but only **日报配置** is implemented; the rest are visual placeholders (`ElMessage.info('敬请期待')`). The right aside's stat cards / sync-log history are visual — the backend only persists a single last-sync state, so they show derived-or-placeholder data, not real history.
 
 ### IPC is the only main↔renderer contract
 
@@ -61,6 +61,6 @@ Resilience: if `config.aiApiKey` is empty, or the AI call throws, `generateRepor
 ## Conventions
 
 - Path aliases (`electron.vite.config.ts` + `tsconfig.json`): `@` → `src/renderer/src`, `@shared` → `src/shared`. The renderer imports shared types as `@shared/types`; main/preload use relative `../src/shared/types.js` (note the `.js` extension required by the bundler config).
-- Renderer styling is global in [src/renderer/src/style.css](src/renderer/src/style.css); `App.vue` has no scoped `<style>`.
+- Renderer styling is global in [src/renderer/src/style.css](src/renderer/src/style.css) (a CSS-variable design-token system + Element Plus theme overrides); components use global class names and have **no** scoped `<style>`.
 - The preload file is resolved at runtime in `createWindow()` with a fallback (`../preload/index.js` then `../preload/preload.cjs`) because dev and production emit different preload filenames.
 - User-facing strings, prompts, and the generated report are all in Chinese — match that when touching UI or AI-prompt text.
