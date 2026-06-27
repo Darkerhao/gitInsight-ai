@@ -2,6 +2,9 @@
 
 import type {
   AppConfig,
+  AutoSyncRunResult,
+  AutoSyncState,
+  AutoSyncValidationResult,
   FeishuLoginPayload,
   FeishuProjectOption,
   FeishuProjectOptionsPayload,
@@ -25,6 +28,10 @@ declare global {
       listFeishuProjects: (payload: FeishuProjectOptionsPayload) => Promise<FeishuProjectOption[]>;
       testSubmitFeishu: (payload: FeishuTestSubmitPayload) => Promise<FeishuSubmitResult>;
       syncFeishuDaily: (payload: SyncFeishuDailyPayload) => Promise<boolean>;
+      getAutoSyncState: () => Promise<AutoSyncState>;
+      validateAutoSync: (config: AppConfig) => Promise<AutoSyncValidationResult>;
+      runAutoSyncNow: (config: AppConfig) => Promise<AutoSyncRunResult>;
+      onAutoSyncUpdated: (callback: (state: AutoSyncState) => void) => () => void;
     };
   }
 }

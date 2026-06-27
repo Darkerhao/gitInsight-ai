@@ -22,6 +22,20 @@ export interface FeishuFormConfig {
   contentFieldId: string;
 }
 
+export type AutoSyncStatus = 'idle' | 'running' | 'success' | 'failed' | 'skipped';
+
+export interface AutoSyncConfig {
+  enabled: boolean;
+  time: string;
+  lastRunAt: string;
+  lastSuccessAt: string;
+  lastStatus: AutoSyncStatus;
+  lastMessage: string;
+  lastRunKey: string;
+  lastScheduledRunKey: string;
+  lastSuccessKey: string;
+}
+
 export const DEFAULT_FEISHU_FORM_CONFIG: FeishuFormConfig = {
   endpoint: 'https://icnjr29mp9ya.feishu.cn/space/api/bitable/share/content',
   shareToken: '',
@@ -41,12 +55,25 @@ export const DEFAULT_FEISHU_FORM_CONFIG: FeishuFormConfig = {
   contentFieldId: 'fldCODa6wU',
 };
 
+export const DEFAULT_AUTO_SYNC_CONFIG: AutoSyncConfig = {
+  enabled: false,
+  time: '18:30',
+  lastRunAt: '',
+  lastSuccessAt: '',
+  lastStatus: 'idle',
+  lastMessage: '',
+  lastRunKey: '',
+  lastScheduledRunKey: '',
+  lastSuccessKey: '',
+};
+
 export const DEFAULT_AI_BASE_URL_OPTIONS = ['https://api.openai.com/v1', 'https://api.deepseek.com'];
 export const DEFAULT_AI_MODEL_OPTIONS = ['gpt-4o-mini', 'deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-flash'];
 
 export interface AppConfig {
   workspaceDir: string;
   workspaceDirs: string[];
+  selectedRepoPaths: string[];
   reporterName: string;
   aiBaseUrl: string;
   aiApiKey: string;
@@ -54,6 +81,7 @@ export interface AppConfig {
   aiBaseUrlOptions: string[];
   aiModelOptions: string[];
   feishuForm: FeishuFormConfig;
+  autoSync: AutoSyncConfig;
 }
 
 export interface GenerateReportParams {
@@ -112,4 +140,23 @@ export interface FeishuProjectOption {
 
 export interface FeishuProjectOptionsPayload {
   config: FeishuFormConfig;
+}
+
+export interface AutoSyncState extends AutoSyncConfig {
+  isRunning: boolean;
+  nextRunAt: string;
+}
+
+export interface AutoSyncRunResult {
+  status: AutoSyncStatus;
+  message: string;
+  ranAt: string;
+  nextRunAt: string;
+  report?: string;
+  commitsCount?: number;
+}
+
+export interface AutoSyncValidationResult {
+  valid: boolean;
+  message: string;
 }

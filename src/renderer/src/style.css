@@ -133,6 +133,57 @@ button, input, textarea {
   flex: 0 0 auto;
 }
 
+.auto-sync-config {
+  display: grid;
+  gap: 12px;
+}
+
+.auto-sync-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.auto-sync-main .el-date-editor {
+  width: 160px;
+}
+
+.auto-sync-note,
+.auto-sync-message {
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.auto-sync-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.auto-sync-status-grid > div {
+  min-width: 0;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.auto-sync-status-grid span {
+  display: block;
+  color: #6b7280;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.auto-sync-status-grid strong {
+  display: block;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .layout {
   display: grid;
   grid-template-columns: 380px minmax(0, 1fr);
@@ -199,7 +250,8 @@ button, input, textarea {
 @media (max-width: 1100px) {
   .layout,
   .common-config-grid,
-  .form-grid {
+  .form-grid,
+  .auto-sync-status-grid {
     grid-template-columns: 1fr;
   }
 

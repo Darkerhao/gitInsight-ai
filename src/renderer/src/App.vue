@@ -1,25 +1,29 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { FolderSearch, LogIn, Send, Sparkles, RefreshCw, Settings2, TestTube2, Trash2 } from 'lucide-vue-next';
-import { DEFAULT_AI_BASE_URL_OPTIONS, DEFAULT_AI_MODEL_OPTIONS, DEFAULT_FEISHU_FORM_CONFIG } from '@shared/types';
-import type { AppConfig, FeishuProjectOption, RepoInfo } from '@shared/types';
+import { DEFAULT_AI_BASE_URL_OPTIONS, DEFAULT_AI_MODEL_OPTIONS, DEFAULT_AUTO_SYNC_CONFIG, DEFAULT_FEISHU_FORM_CONFIG } from '@shared/types';
+import type { AppConfig, AutoSyncState, FeishuProjectOption, RepoInfo } from '@shared/types';
 
-const today = new Date().toISOString().slice(0, 10);
+const today = formatLocalDate(new Date());
 const loading = ref(false);
 const pushing = ref(false);
 const feishuLoading = ref(false);
 const projectLoading = ref(false);
+const autoSyncLoading = ref(false);
 const repos = ref<RepoInfo[]>([]);
 const projectOptions = ref<FeishuProjectOption[]>([]);
 const selectedRepoPaths = ref<string[]>([]);
 const report = ref('');
 const status = ref('');
+const autoSyncState = ref<AutoSyncState | null>(null);
 const advancedConfigPanels = ref<string[]>([]);
+let removeAutoSyncListener: (() => void) | null = null;
 
 const config = reactive<AppConfig>({
   workspaceDir: '',
   workspaceDirs: [],
+  selectedRepoPaths: [],
   reporterName: '',
   aiBaseUrl: 'https://api.openai.com/v1',
   aiApiKey: '',
@@ -27,11 +31,19 @@ const config = reactive<AppConfig>({
   aiBaseUrlOptions: [...DEFAULT_AI_BASE_URL_OPTIONS],
   aiModelOptions: [...DEFAULT_AI_MODEL_OPTIONS],
   feishuForm: { ...DEFAULT_FEISHU_FORM_CONFIG },
+  autoSync: { ...DEFAULT_AUTO_SYNC_CONFIG },
 });
 
 const form = reactive({
   date: today,
 });
+
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 const reporterOptions = computed(() => {
   return config.reporterName ? [config.reporterName] : [];
@@ -86,12 +98,37 @@ const aiBaseUrlOptions = computed(() => mergeCurrentOption(config.aiBaseUrlOptio
 const aiModelOptions = computed(() => mergeCurrentOption(config.aiModelOptions, config.aiModel));
 
 const selectedRepos = computed(() => repos.value.filter((item) => selectedRepoPaths.value.includes(item.path)));
+const autoSyncRunning = computed(() => autoSyncLoading.value || Boolean(autoSyncState.value?.isRunning));
+const autoSyncStatusType = computed(() => {
+  const statusValue = autoSyncState.value?.lastStatus ?? config.autoSync.lastStatus;
+  if (statusValue === 'success') return 'success';
+  if (statusValue === 'failed') return 'danger';
+  if (statusValue === 'running') return 'warning';
+  if (statusValue === 'skipped') return 'info';
+  return 'info';
+});
+
+const autoSyncStatusLabel = computed(() => {
+  const statusValue = autoSyncState.value?.lastStatus ?? config.autoSync.lastStatus;
+  const statusMap: Record<string, string> = {
+    idle: '未执行',
+    running: '执行中',
+    success: '成功',
+    failed: '失败',
+    skipped: '已跳过',
+  };
+  return statusMap[statusValue] ?? '未执行';
+});
 
 function getConfigPayload(): AppConfig {
   const workspaceDirs = getWorkspaceDirs();
+  const normalizedSelectedRepoPaths = normalizeRepoSelections(selectedRepoPaths.value);
+  selectedRepoPaths.value = normalizedSelectedRepoPaths;
+  config.selectedRepoPaths = normalizedSelectedRepoPaths;
   return {
     workspaceDir: config.workspaceDir,
     workspaceDirs,
+    selectedRepoPaths: normalizedSelectedRepoPaths,
     reporterName: config.reporterName,
     aiBaseUrl: config.aiBaseUrl,
     aiApiKey: config.aiApiKey,
@@ -102,7 +139,53 @@ function getConfigPayload(): AppConfig {
       ...DEFAULT_FEISHU_FORM_CONFIG,
       ...config.feishuForm,
     },
+    autoSync: {
+      ...DEFAULT_AUTO_SYNC_CONFIG,
+      ...config.autoSync,
+    },
   };
+}
+
+function applyAutoSyncState(state: AutoSyncState) {
+  autoSyncState.value = state;
+  Object.assign(config.autoSync, {
+    enabled: state.enabled,
+    time: state.time,
+    lastRunAt: state.lastRunAt,
+    lastSuccessAt: state.lastSuccessAt,
+    lastStatus: state.lastStatus,
+    lastMessage: state.lastMessage,
+    lastRunKey: state.lastRunKey,
+    lastScheduledRunKey: state.lastScheduledRunKey,
+    lastSuccessKey: state.lastSuccessKey,
+  });
+}
+
+async function refreshAutoSyncState() {
+  applyAutoSyncState(await window.api.getAutoSyncState());
+}
+
+function formatDateTime(value?: string) {
+  if (!value) return '暂无';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '暂无';
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+async function validateAutoSyncBeforeSave(payload: AppConfig) {
+  if (!payload.autoSync.enabled) return true;
+  const result = await window.api.validateAutoSync(payload);
+  if (result.valid) return true;
+  if (!advancedConfigPanels.value.includes('autoSync')) {
+    advancedConfigPanels.value = [...advancedConfigPanels.value, 'autoSync'];
+  }
+  ElMessage.warning(result.message);
+  return false;
 }
 
 async function loadConfig() {
@@ -113,7 +196,12 @@ async function loadConfig() {
       ...DEFAULT_FEISHU_FORM_CONFIG,
       ...saved.feishuForm,
     },
+    autoSync: {
+      ...DEFAULT_AUTO_SYNC_CONFIG,
+      ...saved.autoSync,
+    },
   });
+  selectedRepoPaths.value = normalizeRepoSelections(config.selectedRepoPaths ?? []);
   if (!form.date) form.date = today;
   config.aiBaseUrlOptions = normalizeOptions(config.aiBaseUrlOptions.length ? config.aiBaseUrlOptions : [...DEFAULT_AI_BASE_URL_OPTIONS]);
   config.aiModelOptions = normalizeOptions(config.aiModelOptions.length ? config.aiModelOptions : [...DEFAULT_AI_MODEL_OPTIONS]);
@@ -121,6 +209,7 @@ async function loadConfig() {
   advancedConfigPanels.value = [
     ...(!config.aiApiKey ? ['ai'] : []),
     ...(!config.feishuForm.shareToken || !config.feishuForm.cookie || !config.feishuForm.csrfToken ? ['feishu'] : []),
+    ...(config.autoSync.enabled ? ['autoSync'] : []),
   ];
   if (config.feishuForm.shareToken) {
     await loadFeishuProjects();
@@ -128,6 +217,7 @@ async function loadConfig() {
   if (config.workspaceDirs.length) {
     await refreshRepos();
   }
+  await refreshAutoSyncState();
 }
 
 async function chooseWorkspace() {
@@ -135,12 +225,12 @@ async function chooseWorkspace() {
   if (!dir) return;
   config.workspaceDir = dir;
   config.workspaceDirs = normalizeWorkspaceDirs([...config.workspaceDirs, dir]);
-  await window.api.saveConfig(getConfigPayload());
   loading.value = true;
   try {
     const scannedRepos = await scanWorkspaceDirs([dir]);
     repos.value = mergeRepos(repos.value, scannedRepos);
     selectedRepoPaths.value = normalizeRepoSelections([...selectedRepoPaths.value, ...scannedRepos.map((repo) => repo.path)]);
+    await window.api.saveConfig(getConfigPayload());
     status.value = `已添加 ${scannedRepos.length} 个仓库，项目列表共 ${repos.value.length} 个仓库`;
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '扫描失败');
@@ -162,6 +252,7 @@ async function refreshRepos() {
     const repoPathSet = new Set(repos.value.map((repo) => getRepoKey(repo.path)));
     const selectedPaths = selectedRepoPaths.value.filter((path) => repoPathSet.has(getRepoKey(path)));
     selectedRepoPaths.value = selectedPaths.length || !repos.value.length ? selectedPaths : [repos.value[0].path];
+    config.selectedRepoPaths = normalizeRepoSelections(selectedRepoPaths.value);
     status.value = `已扫描到 ${repos.value.length} 个仓库`;
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '扫描失败');
@@ -171,7 +262,14 @@ async function refreshRepos() {
 }
 
 async function saveSettings() {
-  await window.api.saveConfig(getConfigPayload());
+  const payload = getConfigPayload();
+  if (!(await validateAutoSyncBeforeSave(payload))) return;
+  const saved = await window.api.saveConfig(payload);
+  Object.assign(config.autoSync, {
+    ...DEFAULT_AUTO_SYNC_CONFIG,
+    ...saved.autoSync,
+  });
+  await refreshAutoSyncState();
   ElMessage.success('配置已保存');
 }
 
@@ -291,12 +389,9 @@ async function push() {
     ElMessage.warning('请先生成日报');
     return;
   }
-  if (!config.feishuForm.cookie || !config.feishuForm.csrfToken) {
-    ElMessage.warning('请先填写飞书 Cookie 和 x-csrftoken');
-    return;
-  }
   pushing.value = true;
   try {
+    await window.api.saveConfig(getConfigPayload());
     await window.api.syncFeishuDaily({
       config: getConfigPayload().feishuForm,
       report: report.value,
@@ -311,16 +406,61 @@ async function push() {
   }
 }
 
+async function runAutoSyncNow() {
+  const payload = getConfigPayload();
+  if (!(await validateAutoSyncBeforeSave(payload))) return;
+  autoSyncLoading.value = true;
+  try {
+    const result = await window.api.runAutoSyncNow(payload);
+    status.value = result.message;
+    if (result.report) {
+      report.value = result.report;
+      form.date = today;
+    }
+    if (result.status === 'success') {
+      ElMessage.success(result.message);
+    } else if (result.status === 'skipped') {
+      ElMessage.warning(result.message);
+    } else if (result.status === 'failed') {
+      ElMessage.error(result.message);
+    } else {
+      ElMessage.info(result.message);
+    }
+    await refreshAutoSyncState();
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '自动同步执行失败');
+  } finally {
+    autoSyncLoading.value = false;
+  }
+}
+
+async function saveRepoSelection() {
+  try {
+    await window.api.saveConfig(getConfigPayload());
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '保存项目选择失败');
+  }
+}
+
 function toggleRepo(path: string) {
   const hasSelected = selectedRepoPaths.value.includes(path);
   if (hasSelected) {
     selectedRepoPaths.value = selectedRepoPaths.value.filter((item) => item !== path);
-    return;
+  } else {
+    selectedRepoPaths.value = [...selectedRepoPaths.value, path];
   }
-  selectedRepoPaths.value = [...selectedRepoPaths.value, path];
+  void saveRepoSelection();
 }
 
-onMounted(loadConfig);
+onMounted(async () => {
+  removeAutoSyncListener = window.api.onAutoSyncUpdated(applyAutoSyncState);
+  await loadConfig();
+});
+
+onBeforeUnmount(() => {
+  removeAutoSyncListener?.();
+  removeAutoSyncListener = null;
+});
 </script>
 
 <template>
@@ -426,6 +566,43 @@ onMounted(loadConfig);
             <el-input v-model="config.feishuForm.reporterName" placeholder="飞书汇报人名称，留空使用上方汇报人" />
             <el-input v-model="config.feishuForm.reporterAvatarUrl" placeholder="飞书头像地址，可选" />
             <el-input v-model="config.feishuForm.projectName" placeholder="所属项目名称，仅用于备注" />
+          </div>
+        </el-collapse-item>
+        <el-collapse-item title="自动同步配置" name="autoSync">
+          <div class="auto-sync-config">
+            <div class="auto-sync-main">
+              <el-switch v-model="config.autoSync.enabled" active-text="启用自动同步" inactive-text="关闭自动同步" />
+              <el-time-picker
+                v-model="config.autoSync.time"
+                format="HH:mm"
+                value-format="HH:mm"
+                :clearable="false"
+                placeholder="同步时间"
+              />
+              <el-button :icon="Sparkles" :loading="autoSyncRunning" @click="runAutoSyncNow">立即执行一次</el-button>
+            </div>
+            <div class="auto-sync-note">仅在应用打开时生效，关闭应用不会自动提交。</div>
+            <div class="auto-sync-status-grid">
+              <div>
+                <span>下次执行</span>
+                <strong>{{ formatDateTime(autoSyncState?.nextRunAt) }}</strong>
+              </div>
+              <div>
+                <span>上次执行</span>
+                <strong>{{ formatDateTime(autoSyncState?.lastRunAt || config.autoSync.lastRunAt) }}</strong>
+              </div>
+              <div>
+                <span>上次成功</span>
+                <strong>{{ formatDateTime(autoSyncState?.lastSuccessAt || config.autoSync.lastSuccessAt) }}</strong>
+              </div>
+              <div>
+                <span>结果</span>
+                <el-tag :type="autoSyncStatusType" effect="plain">{{ autoSyncStatusLabel }}</el-tag>
+              </div>
+            </div>
+            <div v-if="autoSyncState?.lastMessage || config.autoSync.lastMessage" class="auto-sync-message">
+              {{ autoSyncState?.lastMessage || config.autoSync.lastMessage }}
+            </div>
           </div>
         </el-collapse-item>
       </el-collapse>

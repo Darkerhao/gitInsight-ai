@@ -1,11 +1,20 @@
-import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, powerMonitor, session } from 'electron';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { simpleGit } from 'simple-git';
-import { DEFAULT_AI_BASE_URL_OPTIONS, DEFAULT_AI_MODEL_OPTIONS, DEFAULT_FEISHU_FORM_CONFIG } from '../src/shared/types.js';
+import {
+  DEFAULT_AI_BASE_URL_OPTIONS,
+  DEFAULT_AI_MODEL_OPTIONS,
+  DEFAULT_AUTO_SYNC_CONFIG,
+  DEFAULT_FEISHU_FORM_CONFIG,
+} from '../src/shared/types.js';
 import type {
   AppConfig,
+  AutoSyncConfig,
+  AutoSyncRunResult,
+  AutoSyncState,
+  AutoSyncStatus,
   CommitEntry,
   FeishuFormConfig,
   FeishuLoginPayload,
@@ -22,6 +31,7 @@ import type {
 const DEFAULT_CONFIG: AppConfig = {
   workspaceDir: '',
   workspaceDirs: [],
+  selectedRepoPaths: [],
   reporterName: '',
   aiBaseUrl: 'https://api.openai.com/v1',
   aiApiKey: '',
@@ -29,6 +39,7 @@ const DEFAULT_CONFIG: AppConfig = {
   aiBaseUrlOptions: [...DEFAULT_AI_BASE_URL_OPTIONS],
   aiModelOptions: [...DEFAULT_AI_MODEL_OPTIONS],
   feishuForm: { ...DEFAULT_FEISHU_FORM_CONFIG },
+  autoSync: { ...DEFAULT_AUTO_SYNC_CONFIG },
 };
 
 const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'out', 'build', 'coverage', '.idea', '.vscode']);
@@ -36,6 +47,8 @@ const CONFIG_FILE = 'config.json';
 
 let mainWindow: BrowserWindow | null = null;
 let feishuWindow: BrowserWindow | null = null;
+let autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let autoSyncRunning = false;
 
 const FEISHU_PARTITION = 'persist:feishu';
 
@@ -54,12 +67,14 @@ function normalizeConfig(config?: Partial<AppConfig>): AppConfig {
     ...config,
     workspaceDirs,
     workspaceDir: config?.workspaceDir || workspaceDirs[0] || '',
+    selectedRepoPaths: normalizeRepoPaths(config?.selectedRepoPaths),
     aiBaseUrlOptions: normalizeOptions(config?.aiBaseUrlOptions, DEFAULT_AI_BASE_URL_OPTIONS),
     aiModelOptions: normalizeOptions(config?.aiModelOptions, DEFAULT_AI_MODEL_OPTIONS),
     feishuForm: {
       ...DEFAULT_FEISHU_FORM_CONFIG,
       ...(config?.feishuForm ?? {}),
     },
+    autoSync: normalizeAutoSyncConfig(config?.autoSync),
   };
 }
 
@@ -79,6 +94,37 @@ function normalizeOptions(options: unknown, fallbackOptions: string[]) {
   return Array.from(new Set(source.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean)));
 }
 
+function normalizeRepoPaths(options: unknown) {
+  const source = Array.isArray(options) ? options : [];
+  return Array.from(new Set(source.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean)));
+}
+
+function normalizeAutoSyncTime(time: unknown) {
+  if (typeof time !== 'string') return DEFAULT_AUTO_SYNC_CONFIG.time;
+  const normalizedTime = time.trim();
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(normalizedTime) ? normalizedTime : DEFAULT_AUTO_SYNC_CONFIG.time;
+}
+
+function normalizeAutoSyncStatus(status: unknown): AutoSyncStatus {
+  return ['idle', 'running', 'success', 'failed', 'skipped'].includes(String(status)) ? (status as AutoSyncStatus) : 'idle';
+}
+
+function normalizeAutoSyncConfig(autoSync?: Partial<AutoSyncConfig>): AutoSyncConfig {
+  return {
+    ...DEFAULT_AUTO_SYNC_CONFIG,
+    ...(autoSync ?? {}),
+    enabled: Boolean(autoSync?.enabled),
+    time: normalizeAutoSyncTime(autoSync?.time),
+    lastRunAt: typeof autoSync?.lastRunAt === 'string' ? autoSync.lastRunAt : '',
+    lastSuccessAt: typeof autoSync?.lastSuccessAt === 'string' ? autoSync.lastSuccessAt : '',
+    lastStatus: normalizeAutoSyncStatus(autoSync?.lastStatus),
+    lastMessage: typeof autoSync?.lastMessage === 'string' ? autoSync.lastMessage : '',
+    lastRunKey: typeof autoSync?.lastRunKey === 'string' ? autoSync.lastRunKey : '',
+    lastScheduledRunKey: typeof autoSync?.lastScheduledRunKey === 'string' ? autoSync.lastScheduledRunKey : '',
+    lastSuccessKey: typeof autoSync?.lastSuccessKey === 'string' ? autoSync.lastSuccessKey : '',
+  };
+}
+
 async function loadConfig(): Promise<AppConfig> {
   try {
     const raw = await readFile(getConfigPath(), 'utf-8');
@@ -88,11 +134,141 @@ async function loadConfig(): Promise<AppConfig> {
   }
 }
 
-async function saveConfig(config: AppConfig) {
+async function saveConfig(config: AppConfig, options: { reschedule?: boolean; notify?: boolean } = {}) {
+  const { reschedule = true, notify = true } = options;
   await ensureConfigDir();
   const normalizedConfig = normalizeConfig(config);
   await writeFile(getConfigPath(), JSON.stringify(normalizedConfig, null, 2), 'utf-8');
+  if (reschedule) {
+    scheduleAutoSync(normalizedConfig);
+  }
+  if (notify) {
+    emitAutoSyncState(normalizedConfig);
+  }
   return normalizedConfig;
+}
+
+function toLocalDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getScheduledDate(date: string, time: string) {
+  const [year, month, day] = date.split('-').map(Number);
+  const [hour, minute] = normalizeAutoSyncTime(time).split(':').map(Number);
+  return new Date(year, month - 1, day, hour, minute, 0, 0);
+}
+
+function buildAutoSyncTaskKey(config: AppConfig, date: string) {
+  const repoKey = normalizeRepoPaths(config.selectedRepoPaths)
+    .map((item) => item.toLocaleLowerCase())
+    .sort()
+    .join('|');
+  return [
+    date,
+    normalizeAuthorName(config.reporterName),
+    config.feishuForm.projectOptionId.trim(),
+    repoKey,
+  ].join('::');
+}
+
+function getNextAutoSyncRunDate(config: AppConfig, now = new Date()) {
+  if (!config.autoSync.enabled) return null;
+
+  const today = toLocalDateString(now);
+  const scheduledToday = getScheduledDate(today, config.autoSync.time);
+  const todayTaskKey = buildAutoSyncTaskKey(config, today);
+
+  if (now.getTime() < scheduledToday.getTime()) {
+    return scheduledToday;
+  }
+
+  if (config.autoSync.lastSuccessKey === todayTaskKey || config.autoSync.lastScheduledRunKey === todayTaskKey) {
+    return getScheduledDate(nextDateString(today), config.autoSync.time);
+  }
+
+  return now;
+}
+
+function getAutoSyncState(config: AppConfig): AutoSyncState {
+  const nextRunDate = getNextAutoSyncRunDate(config);
+  return {
+    ...config.autoSync,
+    isRunning: autoSyncRunning,
+    nextRunAt: nextRunDate ? nextRunDate.toISOString() : '',
+  };
+}
+
+function emitAutoSyncState(config: AppConfig) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('auto-sync:updated', getAutoSyncState(config));
+}
+
+function clearAutoSyncTimer() {
+  if (!autoSyncTimer) return;
+  clearTimeout(autoSyncTimer);
+  autoSyncTimer = null;
+}
+
+function scheduleAutoSync(config: AppConfig) {
+  clearAutoSyncTimer();
+  const nextRunDate = getNextAutoSyncRunDate(config);
+  emitAutoSyncState(config);
+
+  if (!nextRunDate) return;
+
+  const delay = Math.max(0, nextRunDate.getTime() - Date.now());
+  autoSyncTimer = setTimeout(() => {
+    void runAutoSync('scheduled');
+  }, Math.min(delay, 2_147_483_647));
+}
+
+async function refreshAutoSyncSchedule() {
+  scheduleAutoSync(await loadConfig());
+}
+
+async function updateAutoSyncStatus(
+  status: AutoSyncStatus,
+  message: string,
+  options: {
+    runKey: string;
+    ranAt: string;
+    scheduled: boolean;
+    success?: boolean;
+  },
+) {
+  const latestConfig = await loadConfig();
+  const autoSync: AutoSyncConfig = {
+    ...latestConfig.autoSync,
+    lastRunAt: options.ranAt,
+    lastStatus: status,
+    lastMessage: message,
+    lastRunKey: options.runKey,
+    lastScheduledRunKey: options.scheduled ? options.runKey : latestConfig.autoSync.lastScheduledRunKey,
+    lastSuccessAt: options.success ? options.ranAt : latestConfig.autoSync.lastSuccessAt,
+    lastSuccessKey: options.success ? options.runKey : latestConfig.autoSync.lastSuccessKey,
+  };
+  return saveConfig({ ...latestConfig, autoSync }, { reschedule: false });
+}
+
+function buildAutoSyncRunResult(
+  config: AppConfig,
+  status: AutoSyncStatus,
+  message: string,
+  ranAt: string,
+  report?: string,
+  commitsCount?: number,
+): AutoSyncRunResult {
+  return {
+    status,
+    message,
+    ranAt,
+    nextRunAt: getAutoSyncState(config).nextRunAt,
+    report,
+    commitsCount,
+  };
 }
 
 async function hasGitMetadata(dir: string) {
@@ -620,6 +796,54 @@ function getFeishuCsrfToken(cookieHeader: string, fallbackCsrfToken: string) {
   return getCookieValue(cookieHeader, ['_csrf_token', 'swp_csrf_token']) || fallbackCsrfToken.trim();
 }
 
+async function resolveFeishuAuth(formConfig: FeishuFormConfig, label: string) {
+  const endpoint = requireFeishuConfigValue(formConfig.endpoint, '飞书表单提交接口地址');
+  const shareToken = requireFeishuConfigValue(formConfig.shareToken, '飞书表单 shareToken');
+  const { origin, referer } = getFeishuRequestContext(endpoint, shareToken);
+  const cookie = await getFeishuCookieHeader(origin, formConfig.cookie);
+  const csrfToken = getFeishuCsrfToken(cookie, formConfig.csrfToken);
+
+  if (!cookie) {
+    throw new Error(`${label}：未找到飞书登录态，请先点击“登录飞书”完成登录，或填写完整有效的飞书 Cookie`);
+  }
+  if (!csrfToken) {
+    throw new Error(`${label}：未在飞书登录态中找到 _csrf_token 或 swp_csrf_token，请重新登录飞书后再试`);
+  }
+
+  return { endpoint, shareToken, origin, referer, cookie, csrfToken };
+}
+
+async function validateAutoSyncConfig(config: AppConfig) {
+  const repoPaths = normalizeRepoPaths(config.selectedRepoPaths);
+  if (!repoPaths.length) {
+    throw new Error('请至少选择一个项目后再启用自动同步');
+  }
+  requireFeishuConfigValue(config.reporterName, '汇报人');
+
+  const formConfig: FeishuFormConfig = {
+    ...DEFAULT_FEISHU_FORM_CONFIG,
+    ...config.feishuForm,
+  };
+  requireFeishuConfigValue(formConfig.projectOptionId, '飞书所属项目');
+  requireFeishuConfigValue(formConfig.reporterUserId, '飞书汇报人 userId');
+  requireFeishuConfigValue(formConfig.questionId, '明细表问题 ID');
+  requireFeishuConfigValue(formConfig.dateFieldId, '日期字段 ID');
+  requireFeishuConfigValue(formConfig.userFieldId, '汇报人字段 ID');
+  requireFeishuConfigValue(formConfig.projectFieldId, '所属项目字段 ID');
+  requireFeishuConfigValue(formConfig.hoursFieldId, '工作时长字段 ID');
+  requireFeishuConfigValue(formConfig.contentFieldId, '工作内容字段 ID');
+  await resolveFeishuAuth(formConfig, '自动同步配置校验失败');
+}
+
+async function validateAutoSync(config: AppConfig) {
+  try {
+    await validateAutoSyncConfig(normalizeConfig(config));
+    return { valid: true, message: '自动同步配置可用' };
+  } catch (error) {
+    return { valid: false, message: error instanceof Error ? error.message : '自动同步配置不可用' };
+  }
+}
+
 function parseFeishuProjectOptions(meta: unknown, projectFieldId: string): FeishuProjectOption[] {
   const data = meta as { data?: { snapshot?: unknown } };
   const snapshotRaw = data?.data?.snapshot;
@@ -787,27 +1011,18 @@ async function testSubmitFeishuForm(payload: FeishuTestSubmitPayload): Promise<F
   const shareToken = requireFeishuConfigValue(formConfig.shareToken, '飞书表单 shareToken');
   const data = buildFeishuTestFormData(formConfig, payload.date);
   const requestId = `gitinsight-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const { origin, referer } = getFeishuRequestContext(endpoint, shareToken);
-  const cookie = await getFeishuCookieHeader(origin, formConfig.cookie);
-  const csrfToken = getFeishuCsrfToken(cookie, formConfig.csrfToken);
-
-  if (!cookie) {
-    throw new Error('飞书测试提交失败：未找到飞书登录态，请先点击“登录飞书”完成登录，或填写完整有效的飞书 Cookie');
-  }
-  if (!csrfToken) {
-    throw new Error('飞书测试提交失败：未在飞书登录态中找到 _csrf_token 或 swp_csrf_token，请重新登录飞书后再试');
-  }
+  const auth = await resolveFeishuAuth(formConfig, '飞书测试提交失败');
 
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       accept: 'application/json, text/plain, */*',
       'content-type': 'application/json',
-      cookie,
-      origin,
-      referer,
+      cookie: auth.cookie,
+      origin: auth.origin,
+      referer: auth.referer,
       'request-id': requestId,
-      'x-csrftoken': csrfToken,
+      'x-csrftoken': auth.csrfToken,
       'x-request-id': requestId,
     },
     body: JSON.stringify({
@@ -849,27 +1064,23 @@ async function syncFeishuDaily(payload: SyncFeishuDailyPayload) {
     ...DEFAULT_FEISHU_FORM_CONFIG,
     ...payload.config,
   };
-  const endpoint = requireFeishuConfigValue(formConfig.endpoint, '飞书表单接口地址');
-  const shareToken = requireFeishuConfigValue(formConfig.shareToken, '飞书 shareToken');
-  const csrfToken = requireFeishuConfigValue(formConfig.csrfToken, '飞书 x-csrftoken');
-  const cookie = requireFeishuConfigValue(formConfig.cookie, '飞书 Cookie');
+  const auth = await resolveFeishuAuth(formConfig, '同步飞书日报失败');
   const requestId = `gitinsight-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const { origin, referer } = getFeishuRequestContext(endpoint, shareToken);
 
-  const response = await fetch(endpoint, {
+  const response = await fetch(auth.endpoint, {
     method: 'POST',
     headers: {
       accept: 'application/json, text/plain, */*',
       'content-type': 'application/json',
-      cookie,
-      origin,
-      referer,
+      cookie: auth.cookie,
+      origin: auth.origin,
+      referer: auth.referer,
       'request-id': requestId,
-      'x-csrftoken': csrfToken,
+      'x-csrftoken': auth.csrfToken,
       'x-request-id': requestId,
     },
     body: JSON.stringify({
-      shareToken,
+      shareToken: auth.shareToken,
       data: JSON.stringify(buildFeishuFormData({ ...payload, config: formConfig })),
       preUploadEnable: false,
     }),
@@ -892,6 +1103,75 @@ async function syncFeishuDaily(payload: SyncFeishuDailyPayload) {
   }
 
   return true;
+}
+
+async function runAutoSync(trigger: 'scheduled' | 'manual'): Promise<AutoSyncRunResult> {
+  const initialConfig = await loadConfig();
+  const date = toLocalDateString();
+  const runKey = buildAutoSyncTaskKey(initialConfig, date);
+  const ranAt = new Date().toISOString();
+  const isScheduled = trigger === 'scheduled';
+
+  if (autoSyncRunning) {
+    return buildAutoSyncRunResult(initialConfig, 'skipped', '已有自动同步任务正在执行', ranAt);
+  }
+
+  if (isScheduled && !initialConfig.autoSync.enabled) {
+    return buildAutoSyncRunResult(initialConfig, 'skipped', '自动同步未启用', ranAt);
+  }
+
+  if (initialConfig.autoSync.lastSuccessKey === runKey) {
+    const savedConfig = await updateAutoSyncStatus('skipped', '今日相同配置已成功同步，本次跳过', {
+      runKey,
+      ranAt,
+      scheduled: isScheduled,
+    });
+    return buildAutoSyncRunResult(savedConfig, 'skipped', '今日相同配置已成功同步，本次跳过', ranAt);
+  }
+
+  autoSyncRunning = true;
+  await updateAutoSyncStatus('running', '自动同步执行中', { runKey, ranAt, scheduled: isScheduled });
+
+  try {
+    const config = await loadConfig();
+    await validateAutoSyncConfig(config);
+
+    const repoPaths = normalizeRepoPaths(config.selectedRepoPaths);
+    const result = await generateReport({
+      repoPaths,
+      date,
+      reporterName: config.reporterName,
+    });
+
+    if (!result.commits.length) {
+      const message = '跳过：未匹配到可生成日报的提交记录';
+      const savedConfig = await updateAutoSyncStatus('skipped', message, { runKey, ranAt, scheduled: isScheduled });
+      return buildAutoSyncRunResult(savedConfig, 'skipped', message, ranAt, result.report, 0);
+    }
+
+    await syncFeishuDaily({
+      config: config.feishuForm,
+      report: result.report,
+      date,
+      reporterName: config.reporterName,
+    });
+
+    const message = `已自动同步 ${result.commits.length} 条记录到飞书日报表`;
+    const savedConfig = await updateAutoSyncStatus('success', message, {
+      runKey,
+      ranAt,
+      scheduled: isScheduled,
+      success: true,
+    });
+    return buildAutoSyncRunResult(savedConfig, 'success', message, ranAt, result.report, result.commits.length);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '自动同步失败';
+    const savedConfig = await updateAutoSyncStatus('failed', message, { runKey, ranAt, scheduled: isScheduled });
+    return buildAutoSyncRunResult(savedConfig, 'failed', message, ranAt);
+  } finally {
+    autoSyncRunning = false;
+    await refreshAutoSyncSchedule();
+  }
 }
 
 function createWindow() {
@@ -920,7 +1200,7 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   ipcMain.handle('app:load-config', async () => loadConfig());
   ipcMain.handle('app:save-config', async (_event, config: AppConfig) => saveConfig(config));
   ipcMain.handle('dialog:select-directory', async () => {
@@ -935,14 +1215,29 @@ app.whenReady().then(() => {
   ipcMain.handle('feishu:list-projects', async (_event, payload: FeishuProjectOptionsPayload) => listFeishuProjectOptions(payload));
   ipcMain.handle('feishu:test-submit', async (_event, payload: FeishuTestSubmitPayload) => testSubmitFeishuForm(payload));
   ipcMain.handle('report:sync-feishu', async (_event, payload: SyncFeishuDailyPayload) => syncFeishuDaily(payload));
+  ipcMain.handle('auto-sync:get-state', async () => getAutoSyncState(await loadConfig()));
+  ipcMain.handle('auto-sync:validate', async (_event, config: AppConfig) => validateAutoSync(config));
+  ipcMain.handle('auto-sync:run-now', async (_event, config: AppConfig) => {
+    await saveConfig(config, { reschedule: false });
+    return runAutoSync('manual');
+  });
 
   createWindow();
+  await refreshAutoSyncSchedule();
+
+  powerMonitor.on('resume', () => {
+    void refreshAutoSyncSchedule();
+  });
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('before-quit', () => {
+  clearAutoSyncTimer();
 });
 
 app.on('activate', () => {
