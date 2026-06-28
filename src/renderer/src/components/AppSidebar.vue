@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Bot, ClipboardList, FileCog, FileText, History, Home, Plus, Settings, Sparkles, Trash2 } from 'lucide-vue-next';
+import { Bot, ClipboardList, FileCog, FileText, History, Home, Pin, Plus, Settings, Sparkles, Trash2 } from 'lucide-vue-next';
 import { useAssistant } from '@/composables/useAssistant';
 import type { RepoInfo } from '@shared/types';
 
@@ -13,10 +13,10 @@ const emit = defineEmits<{
 }>();
 
 const assistant = useAssistant();
-const { repos, selectedRepoPaths, toggleRepo, chooseWorkspace, removeRepo } = assistant;
+const { sortedRepos, selectedRepoPaths, toggleRepo, isRepoPinned, toggleRepoPin, chooseWorkspace, removeRepo } = assistant;
 
 const navItems = [
-  { key: 'dashboard', label: '工作台', icon: Home, enabled: false },
+  { key: 'dashboard', label: '工作台', icon: Home, enabled: true },
   { key: 'config', label: '日报配置', icon: FileCog, enabled: true },
   { key: 'generate', label: '日报生成', icon: FileText, enabled: true },
   { key: 'sync', label: '同步任务', icon: ClipboardList, enabled: true },
@@ -69,17 +69,17 @@ void props;
     <div class="sidebar-projects">
       <div class="sidebar-projects-head">
         <span>项目列表</span>
-        <span v-if="repos.length" class="sidebar-projects-count">{{ repos.length }} 个</span>
+        <span v-if="sortedRepos.length" class="sidebar-projects-count">{{ sortedRepos.length }} 个</span>
         <el-button link type="primary" size="small" :icon="Plus" @click="chooseWorkspace">
           新建项目
         </el-button>
       </div>
       <div class="sidebar-projects-list">
         <div
-          v-for="item in repos"
+          v-for="item in sortedRepos"
           :key="item.path"
           class="project-card"
-          :class="{ active: selectedRepoPaths.includes(item.path) }"
+          :class="{ active: selectedRepoPaths.includes(item.path), pinned: isRepoPinned(item.path) }"
         >
           <button type="button" class="project-card-main" @click="toggleRepo(item.path)">
             <div class="project-card-head">
@@ -88,13 +88,25 @@ void props;
             </div>
             <span class="project-path">{{ item.path }}</span>
           </button>
+          <el-tooltip :content="isRepoPinned(item.path) ? '取消置顶' : '置顶项目'" placement="right">
+            <button
+              type="button"
+              class="project-pin"
+              :class="{ active: isRepoPinned(item.path) }"
+              :aria-label="isRepoPinned(item.path) ? `取消置顶 ${item.name}` : `置顶 ${item.name}`"
+              :aria-pressed="isRepoPinned(item.path)"
+              @click.stop="toggleRepoPin(item.path)"
+            >
+              <Pin :size="14" />
+            </button>
+          </el-tooltip>
           <el-tooltip content="从列表移除" placement="right">
-            <button type="button" class="project-delete" :aria-label="`移除 ${item.name}`" @click="confirmRemoveRepo(item)">
+            <button type="button" class="project-delete" :aria-label="`移除 ${item.name}`" @click.stop="confirmRemoveRepo(item)">
               <Trash2 :size="14" />
             </button>
           </el-tooltip>
         </div>
-        <button v-if="!repos.length" class="project-empty" @click="chooseWorkspace">
+        <button v-if="!sortedRepos.length" class="project-empty" @click="chooseWorkspace">
           暂无仓库，点击选择工作目录
         </button>
       </div>

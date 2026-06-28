@@ -21,6 +21,7 @@
   "dependencies": {
     "@vueuse/core": "^13.5.0",
     "dayjs": "^1.11.13",
+    "echarts": "^6.1.0",
     "electron-updater": "^6.6.2",
     "element-plus": "^2.10.4",
     "lucide-vue-next": "^0.548.0",

@@ -75,6 +75,7 @@ export interface AppConfig {
   workspaceDirs: string[];
   selectedRepoPaths: string[];
   ignoredRepoPaths: string[];
+  pinnedRepoPaths: string[];
   reporterName: string;
   aiBaseUrl: string;
   aiApiKey: string;

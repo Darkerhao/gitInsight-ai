@@ -52,6 +52,7 @@ function createAssistant() {
     workspaceDirs: [],
     selectedRepoPaths: [],
     ignoredRepoPaths: [],
+    pinnedRepoPaths: [],
     reporterName: '',
     aiBaseUrl: 'https://api.openai.com/v1',
     aiApiKey: '',
@@ -115,6 +116,18 @@ function createAssistant() {
     return repoItems.filter((repo) => !ignoredRepoKeys.has(getRepoKey(repo.path)));
   }
 
+  function sortReposForDisplay(repoItems: RepoInfo[]) {
+    const pinnedOrder = new Map(normalizeRepoSelections(config.pinnedRepoPaths ?? []).map((path, index) => [getRepoKey(path), index]));
+    return [...repoItems].sort((a, b) => {
+      const pinnedA = pinnedOrder.get(getRepoKey(a.path));
+      const pinnedB = pinnedOrder.get(getRepoKey(b.path));
+      if (pinnedA !== undefined && pinnedB !== undefined) return pinnedA - pinnedB;
+      if (pinnedA !== undefined) return -1;
+      if (pinnedB !== undefined) return 1;
+      return a.name.localeCompare(b.name, 'zh-Hans-CN');
+    });
+  }
+
   function toPlainString(value: unknown) {
     return typeof value === 'string' ? value : value == null ? '' : String(value);
   }
@@ -157,7 +170,9 @@ function createAssistant() {
   const aiBaseUrlOptions = computed(() => mergeCurrentOption(config.aiBaseUrlOptions, config.aiBaseUrl));
   const aiModelOptions = computed(() => mergeCurrentOption(config.aiModelOptions, config.aiModel));
 
-  const selectedRepos = computed(() => repos.value.filter((item) => selectedRepoPaths.value.includes(item.path)));
+  const pinnedRepoKeys = computed(() => new Set(normalizeRepoSelections(config.pinnedRepoPaths ?? []).map(getRepoKey)));
+  const sortedRepos = computed(() => sortReposForDisplay(repos.value));
+  const selectedRepos = computed(() => sortedRepos.value.filter((item) => selectedRepoPaths.value.includes(item.path)));
   const autoSyncRunning = computed(() => autoSyncLoading.value || Boolean(autoSyncState.value?.isRunning));
   const autoSyncStatusType = computed(() => {
     const statusValue = autoSyncState.value?.lastStatus ?? config.autoSync.lastStatus;
@@ -184,14 +199,20 @@ function createAssistant() {
     const workspaceDirs = getWorkspaceDirs();
     const normalizedSelectedRepoPaths = normalizeRepoSelections(selectedRepoPaths.value);
     const normalizedIgnoredRepoPaths = normalizeRepoSelections(config.ignoredRepoPaths ?? []);
+    const ignoredRepoKeys = new Set(normalizedIgnoredRepoPaths.map(getRepoKey));
+    const normalizedPinnedRepoPaths = normalizeRepoSelections(config.pinnedRepoPaths ?? []).filter(
+      (path) => !ignoredRepoKeys.has(getRepoKey(path)),
+    );
     selectedRepoPaths.value = normalizedSelectedRepoPaths;
     config.selectedRepoPaths = normalizedSelectedRepoPaths;
     config.ignoredRepoPaths = normalizedIgnoredRepoPaths;
+    config.pinnedRepoPaths = normalizedPinnedRepoPaths;
     return {
       workspaceDir: toPlainString(config.workspaceDir),
       workspaceDirs,
       selectedRepoPaths: normalizedSelectedRepoPaths,
       ignoredRepoPaths: normalizedIgnoredRepoPaths,
+      pinnedRepoPaths: normalizedPinnedRepoPaths,
       reporterName: toPlainString(config.reporterName),
       aiBaseUrl: toPlainString(config.aiBaseUrl),
       aiApiKey: toPlainString(config.aiApiKey),
@@ -309,6 +330,7 @@ function createAssistant() {
     });
     selectedRepoPaths.value = normalizeRepoSelections(config.selectedRepoPaths ?? []);
     config.ignoredRepoPaths = normalizeRepoSelections(config.ignoredRepoPaths ?? []);
+    config.pinnedRepoPaths = normalizeRepoSelections(config.pinnedRepoPaths ?? []);
     if (!form.date) form.date = today;
     config.aiBaseUrlOptions = normalizeOptions(config.aiBaseUrlOptions.length ? config.aiBaseUrlOptions : [...DEFAULT_AI_BASE_URL_OPTIONS]);
     config.aiModelOptions = normalizeOptions(config.aiModelOptions.length ? config.aiModelOptions : [...DEFAULT_AI_MODEL_OPTIONS]);
@@ -365,7 +387,8 @@ function createAssistant() {
       repos.value = mergeRepos([], await scanWorkspaceDirs(workspaceDirs));
       const repoPathSet = new Set(repos.value.map((repo) => getRepoKey(repo.path)));
       const selectedPaths = selectedRepoPaths.value.filter((path) => repoPathSet.has(getRepoKey(path)));
-      selectedRepoPaths.value = selectedPaths.length || !repos.value.length ? selectedPaths : [repos.value[0].path];
+      const firstDisplayRepo = sortReposForDisplay(repos.value)[0];
+      selectedRepoPaths.value = selectedPaths.length || !firstDisplayRepo ? selectedPaths : [firstDisplayRepo.path];
       config.selectedRepoPaths = normalizeRepoSelections(selectedRepoPaths.value);
       status.value = `已扫描到 ${repos.value.length} 个仓库`;
     } catch (error) {
@@ -575,6 +598,28 @@ function createAssistant() {
     void saveRepoSelection();
   }
 
+  function isRepoPinned(path: string) {
+    return pinnedRepoKeys.value.has(getRepoKey(path));
+  }
+
+  async function toggleRepoPin(path: string) {
+    const repo = repos.value.find((item) => getRepoKey(item.path) === getRepoKey(path));
+    const repoPath = repo?.path ?? path;
+    const repoKey = getRepoKey(repoPath);
+    const pinnedRepoPaths = normalizeRepoSelections(config.pinnedRepoPaths ?? []);
+    const alreadyPinned = pinnedRepoPaths.some((item) => getRepoKey(item) === repoKey);
+    config.pinnedRepoPaths = alreadyPinned
+      ? pinnedRepoPaths.filter((item) => getRepoKey(item) !== repoKey)
+      : [repoPath, ...pinnedRepoPaths.filter((item) => getRepoKey(item) !== repoKey)];
+
+    try {
+      await window.api.saveConfig(getConfigPayload());
+      ElMessage.success(alreadyPinned ? '已取消置顶项目' : '项目已置顶');
+    } catch (error) {
+      ElMessage.error(error instanceof Error ? error.message : '保存项目置顶状态失败');
+    }
+  }
+
   async function removeRepo(path: string) {
     const repo = repos.value.find((item) => getRepoKey(item.path) === getRepoKey(path));
     const repoPath = repo?.path ?? path;
@@ -583,6 +628,7 @@ function createAssistant() {
     selectedRepoPaths.value = selectedRepoPaths.value.filter((item) => getRepoKey(item) !== repoKey);
     config.selectedRepoPaths = normalizeRepoSelections(selectedRepoPaths.value);
     config.ignoredRepoPaths = normalizeRepoSelections([...(config.ignoredRepoPaths ?? []), repoPath]);
+    config.pinnedRepoPaths = normalizeRepoSelections(config.pinnedRepoPaths ?? []).filter((item) => getRepoKey(item) !== repoKey);
     config.workspaceDirs = normalizeWorkspaceDirs((config.workspaceDirs ?? []).filter((item) => getRepoKey(item) !== repoKey));
     if (getRepoKey(config.workspaceDir) === repoKey) {
       config.workspaceDir = config.workspaceDirs[0] ?? '';
@@ -656,6 +702,7 @@ function createAssistant() {
     reporterOptions,
     aiBaseUrlOptions,
     aiModelOptions,
+    sortedRepos,
     selectedRepos,
     autoSyncRunning,
     autoSyncStatusType,
@@ -681,6 +728,8 @@ function createAssistant() {
     refreshLocalData,
     saveCurrentReport,
     toggleRepo,
+    isRepoPinned,
+    toggleRepoPin,
     removeRepo,
     init,
     dispose,

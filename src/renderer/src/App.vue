@@ -4,6 +4,7 @@ import { useAssistant } from '@/composables/useAssistant';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppTopbar from '@/components/AppTopbar.vue';
 import WelcomeGate from '@/components/WelcomeGate.vue';
+import DashboardView from '@/views/DashboardView.vue';
 import ReportConfigView from '@/views/ReportConfigView.vue';
 import ReportGenerateView from '@/views/ReportGenerateView.vue';
 import SyncTasksView from '@/views/SyncTasksView.vue';
@@ -11,10 +12,11 @@ import HistoryLogsView from '@/views/HistoryLogsView.vue';
 import SystemSettingsView from '@/views/SystemSettingsView.vue';
 
 const assistant = useAssistant();
-const activeNav = ref('system');
+const activeNav = ref('dashboard');
 const showWelcome = ref(true);
 
 const viewMap = {
+  dashboard: DashboardView,
   config: ReportConfigView,
   generate: ReportGenerateView,
   sync: SyncTasksView,
@@ -22,7 +24,7 @@ const viewMap = {
   system: SystemSettingsView,
 };
 
-const activeView = computed(() => viewMap[activeNav.value as keyof typeof viewMap] ?? SystemSettingsView);
+const activeView = computed(() => viewMap[activeNav.value as keyof typeof viewMap] ?? DashboardView);
 
 onMounted(async () => {
   await assistant.init();
@@ -43,7 +45,7 @@ onBeforeUnmount(() => {
       <AppTopbar />
 
       <div class="app-scroll">
-        <component :is="activeView" />
+        <component :is="activeView" @navigate="(value: string) => (activeNav = value)" />
 
         <footer class="app-footer">
           AI日报助手 v1.0.0 · 让技术日报生成更简单、更智能

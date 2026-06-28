@@ -39,6 +39,7 @@ const DEFAULT_CONFIG: AppConfig = {
   workspaceDirs: [],
   selectedRepoPaths: [],
   ignoredRepoPaths: [],
+  pinnedRepoPaths: [],
   reporterName: '',
   aiBaseUrl: 'https://api.openai.com/v1',
   aiApiKey: '',
@@ -150,6 +151,7 @@ function normalizeConfig(config?: Partial<AppConfig>): AppConfig {
     workspaceDir: config?.workspaceDir || workspaceDirs[0] || '',
     selectedRepoPaths: normalizeRepoPaths(config?.selectedRepoPaths).filter((item) => !ignoredRepoPathSet.has(item.toLocaleLowerCase())),
     ignoredRepoPaths,
+    pinnedRepoPaths: normalizeRepoPaths(config?.pinnedRepoPaths).filter((item) => !ignoredRepoPathSet.has(item.toLocaleLowerCase())),
     aiBaseUrlOptions: normalizeOptions(config?.aiBaseUrlOptions, DEFAULT_AI_BASE_URL_OPTIONS),
     aiModelOptions: normalizeOptions(config?.aiModelOptions, DEFAULT_AI_MODEL_OPTIONS),
     feishuForm: {
