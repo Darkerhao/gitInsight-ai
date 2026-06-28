@@ -114,7 +114,7 @@ textarea {
   position: sticky;
   top: 0;
   height: 100vh;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .sidebar-brand {
@@ -192,6 +192,7 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 1 1 auto;
   min-height: 0;
 }
 
@@ -199,30 +200,40 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   font-size: 13px;
   font-weight: 600;
   color: var(--c-text);
   padding: 0 4px;
+  flex: 0 0 auto;
+}
+
+.sidebar-projects-count {
+  margin-left: auto;
+  color: var(--c-text-faint);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .sidebar-projects-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1 1 auto;
+  min-height: 120px;
   overflow-y: auto;
-  max-height: 38vh;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
 }
 
 .project-card {
-  text-align: left;
   border: 1px solid var(--c-border);
   border-radius: 10px;
   background: #fff;
-  padding: 10px 12px;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  position: relative;
+  flex: 0 0 auto;
+  overflow: hidden;
   transition: border-color 0.15s, background 0.15s;
 }
 
@@ -235,12 +246,37 @@ textarea {
   background: var(--c-primary-soft);
 }
 
+.project-card-main {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 40px 10px 12px;
+  text-align: left;
+}
+
+.project-card-main:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: -2px;
+}
+
 .project-card-head {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 13px;
   color: var(--c-text);
+  min-width: 0;
+}
+
+.project-card-head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .project-dot {
@@ -262,6 +298,35 @@ textarea {
   line-height: 1.4;
 }
 
+.project-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--c-text-faint);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+}
+
+.project-card:hover .project-delete,
+.project-delete:focus-visible {
+  opacity: 1;
+}
+
+.project-delete:hover,
+.project-delete:focus-visible {
+  background: var(--tone-red-bg);
+  color: var(--tone-red);
+  outline: none;
+}
+
 .project-empty {
   border: 1px dashed var(--c-border-strong);
   border-radius: 10px;
@@ -273,7 +338,7 @@ textarea {
 }
 
 .sidebar-tip {
-  margin-top: auto;
+  flex: 0 0 auto;
   border-radius: 14px;
   padding: 16px;
   background: linear-gradient(150deg, #6a5cff 0%, #4f7bff 100%);
@@ -566,6 +631,56 @@ textarea {
   line-height: 1.9;
 }
 
+.editable-report .el-textarea__inner {
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  color: #263244;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.9;
+}
+
+.data-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.data-list-item {
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-block);
+  background: #fbfcff;
+  padding: 12px 14px;
+}
+
+.data-list-item strong,
+.data-list-item span {
+  display: block;
+}
+
+.data-list-item strong {
+  color: var(--c-text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.data-list-item span {
+  margin-top: 5px;
+  color: var(--c-text-faint);
+  font-size: 12px;
+}
+
+.empty-state {
+  border: 1px dashed var(--c-border-strong);
+  border-radius: var(--radius-block);
+  background: #fbfcff;
+  color: var(--c-text-faint);
+  font-size: 13px;
+  padding: 18px;
+  text-align: center;
+}
+
 .between {
   justify-content: space-between;
 }
@@ -739,6 +854,17 @@ textarea {
   font-size: 15px;
 }
 
+.log-detail-text {
+  max-height: 280px;
+  overflow: auto;
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--c-text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .settings-section {
   border-top: 1px solid var(--c-border);
   padding-top: 18px;
@@ -774,6 +900,46 @@ textarea {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.storage-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-block);
+  overflow: hidden;
+}
+
+.storage-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 90px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--c-border);
+  background: #fff;
+}
+
+.storage-row:last-child {
+  border-bottom: 0;
+}
+
+.storage-row strong {
+  color: var(--c-text);
+  font-size: 13px;
+}
+
+.storage-row span {
+  color: var(--c-text-faint);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.storage-row em {
+  color: var(--c-text-muted);
+  font-size: 12px;
+  font-style: normal;
+  text-align: right;
 }
 
 .operation-card {
@@ -1459,8 +1625,17 @@ textarea {
   .sidebar {
     position: static;
     height: auto;
+    overflow: visible;
     border-right: 0;
     border-bottom: 1px solid var(--c-border);
+  }
+
+  .sidebar-projects {
+    flex: none;
+  }
+
+  .sidebar-projects-list {
+    max-height: 320px;
   }
 
   .sidebar-tip {

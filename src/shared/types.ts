@@ -74,6 +74,7 @@ export interface AppConfig {
   workspaceDir: string;
   workspaceDirs: string[];
   selectedRepoPaths: string[];
+  ignoredRepoPaths: string[];
   reporterName: string;
   aiBaseUrl: string;
   aiApiKey: string;
@@ -103,6 +104,8 @@ export interface ReportResult {
   report: string;
   commits: CommitEntry[];
   repos: RepoInfo[];
+  generatedAt: string;
+  historyId?: number;
   rawInput: {
     gitLogs: string;
     files: string;
@@ -110,11 +113,75 @@ export interface ReportResult {
   };
 }
 
+export interface DailyReportRecord {
+  id: number;
+  date: string;
+  reporterName: string;
+  repoNames: string[];
+  repoPaths: string[];
+  report: string;
+  status: 'draft' | 'success' | 'failed';
+  commitsCount: number;
+  filesCount: number;
+  generatedAt: string;
+  updatedAt: string;
+}
+
+export interface SyncLogRecord {
+  id: number;
+  reportId?: number;
+  date: string;
+  triggerType: 'manual' | 'scheduled';
+  status: AutoSyncStatus | 'success' | 'failed';
+  message: string;
+  ranAt: string;
+  durationMs?: number;
+}
+
+export interface ErrorLogRecord {
+  id: number;
+  scope: string;
+  message: string;
+  detail: string;
+  createdAt: string;
+}
+
+export interface StorageInfo {
+  appVersion: string;
+  userDataPath: string;
+  configPath: string;
+  secretsPath: string;
+  databasePath: string;
+  configSize: number;
+  secretsSize: number;
+  databaseSize: number;
+  reportsCount: number;
+  syncLogsCount: number;
+  errorLogsCount: number;
+  encryptionAvailable: boolean;
+}
+
+export interface SaveDailyReportPayload {
+  id?: number;
+  date: string;
+  reporterName: string;
+  repoNames: string[];
+  repoPaths: string[];
+  report: string;
+  status: DailyReportRecord['status'];
+  commitsCount: number;
+  filesCount: number;
+  generatedAt?: string;
+  rawInput?: ReportResult['rawInput'];
+}
+
 export interface SyncFeishuDailyPayload {
   config: FeishuFormConfig;
   report: string;
   date: string;
   reporterName: string;
+  reportId?: number;
+  triggerType?: 'manual' | 'scheduled';
 }
 
 export interface FeishuLoginPayload {

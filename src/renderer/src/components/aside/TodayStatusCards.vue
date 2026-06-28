@@ -4,14 +4,24 @@ import { CircleCheck, CircleX, Loader, Timer } from 'lucide-vue-next';
 import { useAssistant } from '@/composables/useAssistant';
 
 const assistant = useAssistant();
-const { autoSyncRunning } = assistant;
+const { autoSyncRunning, dailyReports, syncLogs } = assistant;
 
-// 后端暂无每日执行统计数据，此处为占位示例值；「执行中」反映真实自动同步状态。
+const today = computed(() => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+});
+
+const todayReports = computed(() => dailyReports.value.filter((item) => item.date === today.value));
+const todaySyncLogs = computed(() => syncLogs.value.filter((item) => item.date === today.value));
+
 const cards = computed(() => [
-  { key: 'pending', label: '待执行', value: 2, icon: Timer, tone: 'blue' },
+  { key: 'pending', label: '待同步', value: todayReports.value.filter((item) => item.status !== 'failed').length, icon: Timer, tone: 'blue' },
   { key: 'running', label: '执行中', value: autoSyncRunning.value ? 1 : 0, icon: Loader, tone: 'green' },
-  { key: 'done', label: '已完成', value: 12, icon: CircleCheck, tone: 'amber' },
-  { key: 'failed', label: '失败', value: 1, icon: CircleX, tone: 'red' },
+  { key: 'done', label: '已完成', value: todaySyncLogs.value.filter((item) => item.status === 'success').length, icon: CircleCheck, tone: 'amber' },
+  { key: 'failed', label: '失败', value: todaySyncLogs.value.filter((item) => item.status === 'failed').length, icon: CircleX, tone: 'red' },
 ]);
 </script>
 
@@ -27,6 +37,6 @@ const cards = computed(() => [
         <span class="status-card-label">{{ card.label }}</span>
       </div>
     </div>
-    <p class="aside-card-note">统计功能开发中，当前为示例数据</p>
+    <p class="aside-card-note">基于本地数据库中今日日报和同步记录统计</p>
   </section>
 </template>

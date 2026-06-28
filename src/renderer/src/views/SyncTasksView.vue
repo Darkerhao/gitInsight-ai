@@ -12,8 +12,8 @@ const {
   projectOptions,
   autoSyncRunning,
   autoSyncStatusLabel,
-  autoSyncStatusType,
   autoSyncState,
+  syncLogs,
   formatDateTime,
   runAutoSyncNow,
   saveSettings,
@@ -25,31 +25,35 @@ const frequency = ref('daily');
 const retryOnFail = ref(true);
 const syncAfterGenerate = ref(true);
 const skipHoliday = ref(false);
+const cardMode = ref('summary');
+const retryCount = ref(3);
+const syncContentScope = ref('full');
+const notificationEnabled = ref(true);
+const notificationByFeishu = ref(true);
+const notificationByEmail = ref(false);
+const systemTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai';
 
-const currentProjectName = computed(() => selectedRepos.value[0]?.name || 'integrated-platform-web');
+const currentProjectName = computed(() => selectedRepos.value.map((repo) => repo.name).join('、') || '未选择项目');
 const selectedConfigName = computed(() => {
   const selected = projectOptions.value.find((item) => item.id === config.feishuForm.projectOptionId);
-  return selected?.name || '默认配置（8号）';
+  return selected?.name || `默认配置（${config.feishuForm.defaultWorkHours || 8}小时）`;
 });
+const taskName = computed(() => `${currentProjectName.value}日报同步`);
+const taskDescription = computed(() => {
+  if (!selectedRepos.value.length) return '请先选择需要同步日报的项目';
+  return `每天 ${config.autoSync.time} 生成 ${currentProjectName.value} 日报并同步到飞书`;
+});
+const successSyncCount = computed(() => syncLogs.value.filter((item) => item.status === 'success').length);
+const failedSyncCount = computed(() => syncLogs.value.filter((item) => item.status === 'failed').length);
 
 const statusCards = computed(() => [
-  { label: '启用中', value: config.autoSync.enabled ? 2 : 0, icon: Clock, tone: 'blue' },
-  { label: '执行中', value: autoSyncRunning.value ? 1 : 3, icon: Loader, tone: 'green' },
-  { label: '已完成', value: 12, icon: CircleCheck, tone: 'amber' },
-  { label: '失败', value: autoSyncStatusType.value === 'danger' ? 1 : 0, icon: CircleX, tone: 'red' },
+  { label: '启用中', value: config.autoSync.enabled ? 1 : 0, icon: Clock, tone: 'blue' },
+  { label: '执行中', value: autoSyncRunning.value ? 1 : 0, icon: Loader, tone: 'green' },
+  { label: '已完成', value: successSyncCount.value, icon: CircleCheck, tone: 'amber' },
+  { label: '失败', value: failedSyncCount.value, icon: CircleX, tone: 'red' },
 ]);
 
-const recentRuns = computed(() => [
-  {
-    title: '集成平台项目日报同步',
-    time: formatDateTime(autoSyncState.value?.lastRunAt || config.autoSync.lastRunAt) || '06/27 14:30',
-    status: config.autoSync.lastStatus === 'failed' ? 'failed' : 'success',
-  },
-  { title: '集成平台项目日报同步', time: '06/27 14:20', status: 'success' },
-  { title: '集成平台项目日报同步', time: '06/27 14:10', status: 'success' },
-  { title: '集成平台项目日报同步', time: '06/27 14:00', status: 'failed' },
-  { title: '集成平台项目日报同步', time: '06/27 13:50', status: 'success' },
-]);
+const recentRuns = computed(() => syncLogs.value.slice(0, 5));
 
 const guideSteps = [
   { title: '创建任务', desc: '选择项目和日报配置，设置同步目标' },
@@ -57,6 +61,17 @@ const guideSteps = [
   { title: '启用任务', desc: '保存并启用后，系统将按计划自动执行' },
   { title: '查看结果', desc: '在历史日志中查看执行详情和同步结果' },
 ];
+
+function syncStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    success: '成功',
+    failed: '失败',
+    running: '执行中',
+    skipped: '已跳过',
+    idle: '未执行',
+  };
+  return labels[status] || status;
+}
 </script>
 
 <template>
@@ -83,7 +98,7 @@ const guideSteps = [
           <div class="field-grid">
             <div class="field">
               <label>任务名称 *</label>
-              <el-input model-value="集成平台项目日报同步" />
+              <el-input :model-value="taskName" readonly />
             </div>
             <div class="field">
               <label>关联项目 *</label>
@@ -103,7 +118,7 @@ const guideSteps = [
             </div>
             <div class="field field-span-2">
               <label>任务描述</label>
-              <el-input model-value="每天生成项目日报并同步到飞书群" type="textarea" :rows="2" />
+              <el-input :model-value="taskDescription" type="textarea" :rows="2" readonly />
             </div>
           </div>
         </div>
@@ -121,13 +136,12 @@ const guideSteps = [
             <div class="field field-span-2">
               <label>选择群聊 *</label>
               <el-select v-model="config.feishuForm.projectOptionId" filterable>
-                <el-option label="项目日报群（#integrated-platform）" value="default-group" />
                 <el-option v-for="item in projectOptions" :key="item.id" :label="item.name" :value="item.id" />
               </el-select>
             </div>
             <div class="field">
               <label>卡片展示方式</label>
-              <el-select model-value="summary">
+              <el-select v-model="cardMode">
                 <el-option label="将卡片消息格式发送到群飞书群" value="summary" />
               </el-select>
             </div>
@@ -158,8 +172,8 @@ const guideSteps = [
             </div>
             <div class="field field-span-2">
               <label>时区</label>
-              <el-select model-value="UTC+08:00">
-                <el-option label="(UTC+08:00) 北京、上海、香港" value="UTC+08:00" />
+              <el-select :model-value="systemTimezone">
+                <el-option :label="systemTimezone" :value="systemTimezone" />
               </el-select>
             </div>
           </div>
@@ -171,7 +185,7 @@ const guideSteps = [
             </div>
             <div class="field">
               <label>重试次数</label>
-              <el-input-number :model-value="3" :min="0" :max="10" controls-position="right" />
+              <el-input-number v-model="retryCount" :min="0" :max="10" controls-position="right" />
             </div>
             <div class="field">
               <label>其他规则</label>
@@ -188,18 +202,18 @@ const guideSteps = [
           <div class="field-grid">
             <div class="field">
               <label>同步内容范围</label>
-              <el-select model-value="full">
+              <el-select v-model="syncContentScope">
                 <el-option label="完整日报（包含详情）" value="full" />
               </el-select>
             </div>
             <div class="field">
               <label>失败通知</label>
-              <el-switch model-value />
+              <el-switch v-model="notificationEnabled" />
             </div>
             <div class="field">
               <label>通知方式</label>
-              <el-checkbox model-value>飞书消息</el-checkbox>
-              <el-checkbox>邮件</el-checkbox>
+              <el-checkbox v-model="notificationByFeishu">飞书消息</el-checkbox>
+              <el-checkbox v-model="notificationByEmail">邮件</el-checkbox>
             </div>
           </div>
         </div>
@@ -231,15 +245,18 @@ const guideSteps = [
             <el-button link type="primary">查看全部</el-button>
           </div>
           <div class="record-list">
-            <div v-for="item in recentRuns" :key="`${item.title}-${item.time}`" class="record-item">
-              <StatusBadge :status="item.status === 'success' ? 'success' : 'failed'" :label="item.status === 'success' ? '成功' : '失败'" />
+            <div v-if="!recentRuns.length" class="empty-state">暂无同步记录</div>
+            <div v-for="item in recentRuns" :key="item.id" class="record-item">
+              <StatusBadge :status="item.status === 'success' ? 'success' : item.status === 'failed' ? 'failed' : 'info'" :label="syncStatusLabel(item.status)" />
               <div>
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.time }}</span>
+                <strong>{{ item.triggerType === 'scheduled' ? '自动同步执行' : '手动同步执行' }}</strong>
+                <span>{{ formatDateTime(item.ranAt) }} · {{ item.message }}</span>
               </div>
             </div>
           </div>
-          <p class="muted-text">当前状态：{{ autoSyncStatusLabel }}</p>
+          <p class="muted-text">
+            当前状态：{{ autoSyncStatusLabel }}；下次执行：{{ formatDateTime(autoSyncState?.nextRunAt || '') }}
+          </p>
         </section>
 
         <section class="surface-card">

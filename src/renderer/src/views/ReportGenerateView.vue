@@ -1,61 +1,70 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { CalendarDays, ClipboardCopy, Download, FileText, RotateCcw, Send, Sparkles } from 'lucide-vue-next';
+import { CalendarDays, ClipboardCopy, Download, FileText, RotateCcw, Save, Send, Sparkles } from 'lucide-vue-next';
 import { ElMessage } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import { useAssistant } from '@/composables/useAssistant';
 
 const assistant = useAssistant();
-const { config, form, report, status, loading, pushing, selectedRepos, projectOptions, generate, push } = assistant;
+const {
+  config,
+  form,
+  repos,
+  report,
+  status,
+  loading,
+  pushing,
+  selectedRepoPaths,
+  selectedRepos,
+  projectOptions,
+  lastReportResult,
+  dailyReports,
+  generate,
+  push,
+  saveCurrentReport,
+} = assistant;
 
 const activePreviewTab = ref('report');
 const dateShortcut = ref('today');
 
-const selectedProjectName = computed(() => selectedRepos.value[0]?.name || 'integrated-platform-web');
+const selectedProjectText = computed(() => {
+  if (!selectedRepos.value.length) return '未选择项目';
+  return selectedRepos.value.map((repo) => repo.name).join('、');
+});
+
 const selectedConfigName = computed(() => {
   const selected = projectOptions.value.find((item) => item.id === config.feishuForm.projectOptionId);
-  return selected?.name || '默认配置（8号）';
+  return selected?.name || `默认配置（${config.feishuForm.defaultWorkHours || 8}小时）`;
 });
 
-const reportContent = computed(() => {
-  return (
-    report.value ||
-    `集成平台项目组 ${form.date} 日报
-
-一、工作概览
-今日团队整体进展顺利，各项开发任务按计划推进。
-
-二、主要工作内容
-- 完成用户中心模块接口开发及联调
-- 修复了登录态失效问题
-- 优化了列表页加载性能
-- 编写单元测试用例 15 条
-
-三、问题与风险
-- 第三方接口偶发超时，已联系相关团队排查
-
-四、明日计划
-- 继续完善用户中心相关功能
-- 处理接口超时问题
-- 进行版本自测`
-  );
-});
+const generatedAtText = computed(() => formatDateTime(lastReportResult.value?.generatedAt || dailyReports.value[0]?.generatedAt));
+const commitCount = computed(() => lastReportResult.value?.commits.length ?? 0);
+const touchedFiles = computed(() => Array.from(new Set(lastReportResult.value?.commits.flatMap((commit) => commit.files) ?? [])));
+const reportLineCount = computed(() => report.value.split(/\r?\n/).filter((line) => line.trim()).length);
 
 const metrics = computed(() => [
-  { label: '提交次数', value: 23, trend: '+12%' },
-  { label: '合并请求', value: 8, trend: '+5%' },
-  { label: '新增代码行', value: '1,286', trend: '+18%' },
-  { label: '问题&缺陷', value: 3, trend: '+25%' },
+  { label: '选中仓库', value: selectedRepos.value.length },
+  { label: '提交记录', value: commitCount.value },
+  { label: '影响文件', value: touchedFiles.value.length },
+  { label: '日报行数', value: report.value ? reportLineCount.value : 0 },
 ]);
 
-const generationRecords = [
-  { date: '2024-06-27', time: '15:30:45', status: 'success' as const },
-  { date: '2024-06-26', time: '14:25:18', status: 'success' as const },
-  { date: '2024-06-25', time: '09:15:32', status: 'success' as const },
-  { date: '2024-06-24', time: '18:45:06', status: 'failed' as const },
-  { date: '2024-06-23', time: '18:30:20', status: 'success' as const },
-];
+const generationRecords = computed(() => dailyReports.value.slice(0, 5));
+
+function formatDateTime(value?: string) {
+  if (!value) return '暂无';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '暂无';
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(date);
+}
 
 function setDateShortcut(value: string) {
   dateShortcut.value = value;
@@ -70,12 +79,20 @@ function setDateShortcut(value: string) {
 }
 
 async function copyReport() {
-  await navigator.clipboard.writeText(reportContent.value);
+  if (!report.value.trim()) {
+    ElMessage.warning('当前没有可复制的日报内容');
+    return;
+  }
+  await navigator.clipboard.writeText(report.value);
   ElMessage.success('日报内容已复制');
 }
 
 function exportMarkdown() {
-  const blob = new Blob([reportContent.value], { type: 'text/markdown;charset=utf-8' });
+  if (!report.value.trim()) {
+    ElMessage.warning('当前没有可导出的日报内容');
+    return;
+  }
+  const blob = new Blob([report.value], { type: 'text/markdown;charset=utf-8' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = `项目日报-${form.date}.md`;
@@ -87,7 +104,7 @@ function exportMarkdown() {
 
 <template>
   <div class="view-stack">
-    <PageHeader title="日报生成" subtitle="基于配置自动生成日报，支持预览、导出和同步飞书">
+    <PageHeader title="日报生成" subtitle="基于当前仓库和配置生成日报，支持直接修改、保存、导出和同步飞书">
       <template #actions>
         <el-button :icon="FileText" plain>生成记录</el-button>
         <el-button :icon="CalendarDays" plain>批量生成</el-button>
@@ -104,9 +121,8 @@ function exportMarkdown() {
           <div class="field-grid">
             <div class="field">
               <label>选择项目</label>
-              <el-select :model-value="selectedProjectName" placeholder="选择项目">
-                <el-option v-for="repo in selectedRepos" :key="repo.path" :label="repo.name" :value="repo.name" />
-                <el-option v-if="!selectedRepos.length" label="integrated-platform-web" value="integrated-platform-web" />
+              <el-select v-model="selectedRepoPaths" multiple collapse-tags collapse-tags-tooltip placeholder="选择项目">
+                <el-option v-for="repo in repos" :key="repo.path" :label="repo.name" :value="repo.path" />
               </el-select>
             </div>
             <div class="field">
@@ -133,36 +149,67 @@ function exportMarkdown() {
           <div class="step-title with-action">
             <div>
               <span>2</span>
-              <strong>生成预览</strong>
+              <strong>生成与编辑</strong>
             </div>
             <el-button :icon="Sparkles" type="primary" :loading="loading" @click="generate">开始生成</el-button>
           </div>
           <div class="notice-line">
-            <StatusBadge status="success" label="预计生成 1 份日报，耗时约 30-60 秒" />
+            <StatusBadge
+              status="info"
+              :label="selectedRepos.length ? `将基于 ${selectedRepos.length} 个已选仓库生成日报` : '请先在左侧项目列表或当前下拉框选择仓库'"
+            />
           </div>
           <div class="metric-grid">
             <div v-for="item in metrics" :key="item.label" class="metric-card">
               <span>{{ item.label }}</span>
               <strong>{{ item.value }}</strong>
-              <small>较昨日 {{ item.trend }}</small>
             </div>
           </div>
           <el-tabs v-model="activePreviewTab" class="clean-tabs">
-            <el-tab-pane label="日报预览" name="report" />
-            <el-tab-pane label="提交记录 (23)" name="commits" />
-            <el-tab-pane label="合并请求 (8)" name="mrs" />
-            <el-tab-pane label="问题&缺陷 (3)" name="issues" />
+            <el-tab-pane label="日报正文" name="report" />
+            <el-tab-pane :label="`提交记录 (${commitCount})`" name="commits" />
+            <el-tab-pane :label="`影响文件 (${touchedFiles.length})`" name="files" />
+            <el-tab-pane label="原始摘要" name="raw" />
           </el-tabs>
+
           <article class="report-preview">
             <div class="report-preview-head">
-              <h2>集成平台项目组 {{ form.date }} 日报</h2>
-              <span>生成时间：2024-06-27 15:30:45</span>
+              <h2>{{ selectedProjectText }} {{ form.date }} 日报</h2>
+              <span>生成时间：{{ generatedAtText }}</span>
             </div>
-            <pre>{{ reportContent }}</pre>
+
+            <el-input
+              v-if="activePreviewTab === 'report'"
+              v-model="report"
+              class="editable-report"
+              type="textarea"
+              :rows="18"
+              resize="vertical"
+              placeholder="生成后的日报会显示在这里，可直接修改后保存"
+            />
+
+            <div v-else-if="activePreviewTab === 'commits'" class="data-list">
+              <div v-if="!lastReportResult?.commits.length" class="empty-state">暂无提交记录</div>
+              <div v-for="commit in lastReportResult?.commits" :key="commit.hash" class="data-list-item">
+                <strong>{{ commit.message }}</strong>
+                <span>{{ commit.author }} · {{ formatDateTime(commit.date) }} · {{ commit.hash.slice(0, 8) }}</span>
+              </div>
+            </div>
+
+            <div v-else-if="activePreviewTab === 'files'" class="data-list">
+              <div v-if="!touchedFiles.length" class="empty-state">暂无影响文件</div>
+              <div v-for="file in touchedFiles" :key="file" class="data-list-item">
+                <strong>{{ file }}</strong>
+              </div>
+            </div>
+
+            <pre v-else>{{ lastReportResult?.rawInput.gitLogs || '暂无原始摘要' }}</pre>
           </article>
+
           <div class="button-row between">
             <el-button :icon="RotateCcw" plain :loading="loading" @click="generate">重新生成</el-button>
             <div class="button-row">
+              <el-button :icon="Save" plain @click="saveCurrentReport">保存修改</el-button>
               <el-button :icon="ClipboardCopy" plain @click="copyReport">复制内容</el-button>
               <el-button :icon="Download" type="primary" plain @click="exportMarkdown">导出为 Markdown</el-button>
             </div>
@@ -184,13 +231,12 @@ function exportMarkdown() {
           </div>
           <div class="field">
             <label>选择目标</label>
-            <el-select v-model="config.feishuForm.projectOptionId" placeholder="项目日报群">
+            <el-select v-model="config.feishuForm.projectOptionId" placeholder="请先获取飞书项目选项">
               <el-option v-for="item in projectOptions" :key="item.id" :label="item.name" :value="item.id" />
-              <el-option label="项目日报群（#integrated-platform）" value="default-group" />
             </el-select>
           </div>
-          <el-button :icon="Send" type="primary" :loading="pushing" @click="push">立即发布到飞书</el-button>
-          <el-button plain>仅保存日报</el-button>
+          <el-button :icon="Send" type="primary" :loading="pushing" :disabled="!report.trim()" @click="push">立即发布到飞书</el-button>
+          <el-button plain :icon="Save" :disabled="!report.trim()" @click="saveCurrentReport">仅保存日报</el-button>
         </section>
 
         <section class="surface-card">
@@ -199,11 +245,12 @@ function exportMarkdown() {
             <el-button link type="primary">查看全部</el-button>
           </div>
           <div class="record-list">
-            <div v-for="item in generationRecords" :key="`${item.date}-${item.time}`" class="record-item">
-              <StatusBadge :status="item.status" :label="item.status === 'success' ? '成功' : '失败'" />
+            <div v-if="!generationRecords.length" class="empty-state">暂无生成记录</div>
+            <div v-for="item in generationRecords" :key="item.id" class="record-item">
+              <StatusBadge :status="item.status === 'failed' ? 'failed' : 'success'" :label="item.status === 'draft' ? '草稿' : item.status === 'success' ? '成功' : '失败'" />
               <div>
                 <strong>{{ item.date }} 日报</strong>
-                <span>{{ selectedProjectName }} · {{ item.time }}</span>
+                <span>{{ item.repoNames.join('、') || '未记录项目' }} · {{ formatDateTime(item.generatedAt) }}</span>
               </div>
             </div>
           </div>

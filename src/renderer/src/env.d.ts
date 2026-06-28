@@ -31,6 +31,11 @@ declare global {
       getAutoSyncState: () => Promise<AutoSyncState>;
       validateAutoSync: (config: AppConfig) => Promise<AutoSyncValidationResult>;
       runAutoSyncNow: (config: AppConfig) => Promise<AutoSyncRunResult>;
+      listDailyReports: (limit?: number) => Promise<import('@shared/types').DailyReportRecord[]>;
+      listSyncLogs: (limit?: number) => Promise<import('@shared/types').SyncLogRecord[]>;
+      listErrorLogs: (limit?: number) => Promise<import('@shared/types').ErrorLogRecord[]>;
+      getStorageInfo: () => Promise<import('@shared/types').StorageInfo>;
+      saveDailyReport: (payload: import('@shared/types').SaveDailyReportPayload) => Promise<import('@shared/types').DailyReportRecord>;
       onAutoSyncUpdated: (callback: (state: AutoSyncState) => void) => () => void;
     };
   }

@@ -3,7 +3,6 @@ import PageHeader from '@/components/common/PageHeader.vue';
 import BasicConfigCard from '@/components/panels/BasicConfigCard.vue';
 import AdvancedConfigPanels from '@/components/panels/AdvancedConfigPanels.vue';
 import AutoSyncCard from '@/components/panels/AutoSyncCard.vue';
-import ReportPreviewCard from '@/components/panels/ReportPreviewCard.vue';
 import TodayStatusCards from '@/components/aside/TodayStatusCards.vue';
 import SyncLogFeed from '@/components/aside/SyncLogFeed.vue';
 import UsageGuide from '@/components/aside/UsageGuide.vue';
@@ -19,7 +18,6 @@ import UsageGuide from '@/components/aside/UsageGuide.vue';
           <BasicConfigCard />
           <AdvancedConfigPanels />
           <AutoSyncCard />
-          <ReportPreviewCard />
         </section>
       </div>
 

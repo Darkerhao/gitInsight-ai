@@ -5,11 +5,11 @@ import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import { useAssistant } from '@/composables/useAssistant';
 
-type LogStatus = 'success' | 'failed';
-type LogType = '日报生成' | '手动同步' | '同步任务';
+type LogStatus = 'success' | 'failed' | 'info';
+type LogType = '日报生成' | '手动同步' | '同步任务' | '错误日志';
 
 interface HistoryLog {
-  id: number;
+  id: string;
   time: string;
   type: LogType;
   project: string;
@@ -19,87 +19,87 @@ interface HistoryLog {
   operator: string;
   trigger: string;
   file?: string;
+  detail: string;
 }
 
 const assistant = useAssistant();
-const { selectedRepos, config } = assistant;
+const { repos, selectedRepos, config, dailyReports, syncLogs, errorLogs } = assistant;
 
 const keyword = ref('');
+const selectedProject = ref('全部项目');
 const selectedType = ref('全部类型');
 const selectedStatus = ref('全部状态');
 const selectedLog = ref<HistoryLog | null>(null);
+const timeRange = ref<[string, string] | null>(null);
 
-const projectName = computed(() => selectedRepos.value[0]?.name || 'integrated-platform-web');
+const projectOptions = computed(() => {
+  const names = new Set<string>();
+  for (const repo of repos.value) names.add(repo.name);
+  for (const report of dailyReports.value) report.repoNames.forEach((name) => names.add(name));
+  return Array.from(names);
+});
 
-const logs = computed<HistoryLog[]>(() => [
-  {
-    id: 1,
-    time: '2024-06-27 15:30:45',
+const logs = computed<HistoryLog[]>(() => {
+  const reportLogs = dailyReports.value.map((item): HistoryLog => ({
+    id: `report-${item.id}`,
+    time: item.updatedAt || item.generatedAt,
     type: '日报生成',
-    project: projectName.value,
-    action: '生成 2024-06-27 日报',
-    status: 'success',
-    duration: '30-60秒',
-    operator: config.reporterName || '贾浩特',
+    project: item.repoNames.join('、') || '未记录项目',
+    action: `${item.date} 日报${item.status === 'draft' ? '草稿保存' : '生成'}`,
+    status: item.status === 'failed' ? 'failed' : 'success',
+    duration: '-',
+    operator: item.reporterName || config.reporterName || '未设置',
     trigger: '手动触发',
-    file: '项目日报-2024-06-27.md',
-  },
-  {
-    id: 2,
-    time: '2024-06-27 15:29:12',
-    type: '手动同步',
-    project: projectName.value,
-    action: '执行代码同步',
-    status: 'success',
-    duration: '14:41',
-    operator: config.reporterName || '贾浩特',
-    trigger: '手动触发',
-  },
-  {
-    id: 3,
-    time: '2024-06-27 14:20:33',
-    type: '日报生成',
-    project: projectName.value,
-    action: '生成 2024-06-27 日报',
-    status: 'success',
-    duration: '28秒',
-    operator: config.reporterName || '贾浩特',
-    trigger: '手动触发',
-    file: '项目日报-2024-06-27.md',
-  },
-  {
-    id: 4,
-    time: '2024-06-27 08:30:11',
-    type: '日报生成',
-    project: projectName.value,
-    action: '生成 2024-06-27 日报',
+    file: `项目日报-${item.date}.md`,
+    detail: item.report,
+  }));
+
+  const syncRecords = syncLogs.value.map((item): HistoryLog => ({
+    id: `sync-${item.id}`,
+    time: item.ranAt,
+    type: item.triggerType === 'scheduled' ? '同步任务' : '手动同步',
+    project: selectedRepos.value.map((repo) => repo.name).join('、') || '当前配置项目',
+    action: item.message,
+    status: item.status === 'success' ? 'success' : item.status === 'failed' ? 'failed' : 'info',
+    duration: item.durationMs == null ? '-' : `${Math.round(item.durationMs / 1000)}秒`,
+    operator: item.triggerType === 'scheduled' ? '系统' : config.reporterName || '未设置',
+    trigger: item.triggerType === 'scheduled' ? '自动触发' : '手动触发',
+    detail: item.message,
+  }));
+
+  const errors = errorLogs.value.map((item): HistoryLog => ({
+    id: `error-${item.id}`,
+    time: item.createdAt,
+    type: '错误日志',
+    project: '系统',
+    action: item.message,
     status: 'failed',
-    duration: '45秒',
-    operator: config.reporterName || '贾浩特',
-    trigger: '手动触发',
-  },
-  {
-    id: 5,
-    time: '2024-06-24 10:10:05',
-    type: '同步任务',
-    project: projectName.value,
-    action: '自动同步执行',
-    status: 'success',
-    duration: '12:05',
+    duration: '-',
     operator: '系统',
-    trigger: '自动触发',
-  },
-]);
+    trigger: item.scope,
+    detail: item.detail || item.message,
+  }));
+
+  return [...reportLogs, ...syncRecords, ...errors].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+});
 
 const filteredLogs = computed(() => {
   return logs.value.filter((item) => {
-    const matchKeyword = !keyword.value || `${item.action}${item.project}${item.type}`.includes(keyword.value);
+    const text = `${item.action}${item.project}${item.type}${item.detail}`;
+    const matchKeyword = !keyword.value || text.includes(keyword.value);
+    const matchProject = selectedProject.value === '全部项目' || item.project.includes(selectedProject.value);
     const matchType = selectedType.value === '全部类型' || item.type === selectedType.value;
     const matchStatus =
       selectedStatus.value === '全部状态' ||
       (selectedStatus.value === '成功' && item.status === 'success') ||
       (selectedStatus.value === '失败' && item.status === 'failed');
-    return matchKeyword && matchType && matchStatus;
+    const itemTime = new Date(item.time).getTime();
+    const matchTime =
+      !timeRange.value ||
+      (!Number.isNaN(itemTime) &&
+        itemTime >= new Date(timeRange.value[0]).getTime() &&
+        itemTime <= new Date(`${timeRange.value[1]} 23:59:59`).getTime());
+    return matchKeyword && matchProject && matchType && matchStatus && matchTime;
   });
 });
 
@@ -107,14 +107,29 @@ const activeLog = computed(() => selectedLog.value || filteredLogs.value[0]);
 
 function resetFilters() {
   keyword.value = '';
+  selectedProject.value = '全部项目';
   selectedType.value = '全部类型';
   selectedStatus.value = '全部状态';
+  timeRange.value = null;
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '暂无';
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(date);
 }
 </script>
 
 <template>
   <div class="view-stack">
-    <PageHeader title="历史日志" subtitle="查看所有日报生成、同步及相关操作的历史记录" />
+    <PageHeader title="历史日志" subtitle="查看所有日报生成、同步及错误记录" />
 
     <div class="content-grid history-layout">
       <div class="view-stack">
@@ -122,8 +137,9 @@ function resetFilters() {
           <div class="field-grid">
             <div class="field">
               <label>项目</label>
-              <el-select :model-value="projectName">
-                <el-option :label="projectName" :value="projectName" />
+              <el-select v-model="selectedProject">
+                <el-option label="全部项目" value="全部项目" />
+                <el-option v-for="item in projectOptions" :key="item" :label="item" :value="item" />
               </el-select>
             </div>
             <div class="field">
@@ -133,6 +149,7 @@ function resetFilters() {
                 <el-option label="日报生成" value="日报生成" />
                 <el-option label="手动同步" value="手动同步" />
                 <el-option label="同步任务" value="同步任务" />
+                <el-option label="错误日志" value="错误日志" />
               </el-select>
             </div>
             <div class="field">
@@ -145,7 +162,7 @@ function resetFilters() {
             </div>
             <div class="field">
               <label>时间范围</label>
-              <el-date-picker type="daterange" start-placeholder="2024-06-20" end-placeholder="2024-06-27" />
+              <el-date-picker v-model="timeRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" />
             </div>
           </div>
           <div class="filter-actions">
@@ -158,20 +175,23 @@ function resetFilters() {
         <section class="surface-card log-table-card">
           <div class="table-summary">共 {{ filteredLogs.length }} 条日志</div>
           <el-table :data="filteredLogs" class="log-table" @row-click="(row: HistoryLog) => (selectedLog = row)">
-            <el-table-column prop="time" label="时间" min-width="150" />
+            <el-table-column label="时间" min-width="170">
+              <template #default="{ row }">{{ formatDateTime(row.time) }}</template>
+            </el-table-column>
             <el-table-column prop="type" label="日志类型" width="120" />
             <el-table-column prop="project" label="项目" min-width="160" />
-            <el-table-column prop="action" label="操作内容" min-width="180" />
+            <el-table-column prop="action" label="操作内容" min-width="220" />
             <el-table-column label="状态" width="100">
               <template #default="{ row }">
-                <StatusBadge :status="row.status" :label="row.status === 'success' ? '成功' : '失败'" />
+                <StatusBadge :status="row.status" :label="row.status === 'success' ? '成功' : row.status === 'failed' ? '失败' : '信息'" />
               </template>
             </el-table-column>
-            <el-table-column prop="duration" label="耗时" width="110" />
+            <el-table-column prop="duration" label="耗时" width="100" />
             <el-table-column prop="operator" label="操作人" width="110" />
           </el-table>
+          <div v-if="!filteredLogs.length" class="empty-state">暂无匹配日志</div>
           <div class="pagination-row">
-            <el-pagination layout="prev, pager, next, sizes, total" :total="28" :page-size="10" />
+            <el-pagination layout="prev, pager, next, sizes, total" :total="filteredLogs.length" :page-size="10" />
           </div>
         </section>
       </div>
@@ -181,7 +201,7 @@ function resetFilters() {
           <h3>日志详情</h3>
           <el-button :icon="X" link @click="selectedLog = null" />
         </div>
-        <StatusBadge :status="activeLog.status" :label="activeLog.status === 'success' ? '成功' : '失败'" />
+        <StatusBadge :status="activeLog.status" :label="activeLog.status === 'success' ? '成功' : activeLog.status === 'failed' ? '失败' : '信息'" />
         <dl class="detail-list">
           <dt>日志类型</dt>
           <dd>{{ activeLog.type }}</dd>
@@ -190,7 +210,7 @@ function resetFilters() {
           <dt>项目</dt>
           <dd>{{ activeLog.project }}</dd>
           <dt>执行时间</dt>
-          <dd>{{ activeLog.time }}</dd>
+          <dd>{{ formatDateTime(activeLog.time) }}</dd>
           <dt>执行时长</dt>
           <dd>{{ activeLog.duration }}</dd>
           <dt>操作人</dt>
@@ -201,12 +221,9 @@ function resetFilters() {
           <dd>{{ activeLog.file || '-' }}</dd>
         </dl>
         <div class="process-list">
-          <h4>执行过程</h4>
-          <div v-for="item in ['开始生成日报', '数据收集与分析', '内容生成', '格式转换', '文件保存', '生成完成']" :key="item">
-            <StatusBadge status="success" :label="item" />
-          </div>
+          <h4>详情内容</h4>
+          <pre class="log-detail-text">{{ activeLog.detail || '-' }}</pre>
         </div>
-        <el-button class="full-width" plain>查看生成结果</el-button>
       </aside>
     </div>
   </div>

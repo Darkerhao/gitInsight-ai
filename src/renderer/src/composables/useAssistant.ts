@@ -6,7 +6,17 @@ import {
   DEFAULT_AUTO_SYNC_CONFIG,
   DEFAULT_FEISHU_FORM_CONFIG,
 } from '@shared/types';
-import type { AppConfig, AutoSyncState, FeishuProjectOption, RepoInfo } from '@shared/types';
+import type {
+  AppConfig,
+  AutoSyncState,
+  DailyReportRecord,
+  ErrorLogRecord,
+  FeishuProjectOption,
+  RepoInfo,
+  ReportResult,
+  StorageInfo,
+  SyncLogRecord,
+} from '@shared/types';
 
 function formatLocalDate(date: Date) {
   const year = date.getFullYear();
@@ -26,6 +36,12 @@ function createAssistant() {
   const projectOptions = ref<FeishuProjectOption[]>([]);
   const selectedRepoPaths = ref<string[]>([]);
   const report = ref('');
+  const currentReportId = ref<number | null>(null);
+  const lastReportResult = ref<ReportResult | null>(null);
+  const dailyReports = ref<DailyReportRecord[]>([]);
+  const syncLogs = ref<SyncLogRecord[]>([]);
+  const errorLogs = ref<ErrorLogRecord[]>([]);
+  const storageInfo = ref<StorageInfo | null>(null);
   const status = ref('');
   const autoSyncState = ref<AutoSyncState | null>(null);
   const advancedConfigPanels = ref<string[]>([]);
@@ -35,6 +51,7 @@ function createAssistant() {
     workspaceDir: '',
     workspaceDirs: [],
     selectedRepoPaths: [],
+    ignoredRepoPaths: [],
     reporterName: '',
     aiBaseUrl: 'https://api.openai.com/v1',
     aiApiKey: '',
@@ -93,6 +110,11 @@ function createAssistant() {
     return Array.from(selectedPathMap.values());
   }
 
+  function filterIgnoredRepos(repoItems: RepoInfo[]) {
+    const ignoredRepoKeys = new Set(normalizeRepoSelections(config.ignoredRepoPaths ?? []).map(getRepoKey));
+    return repoItems.filter((repo) => !ignoredRepoKeys.has(getRepoKey(repo.path)));
+  }
+
   function toPlainString(value: unknown) {
     return typeof value === 'string' ? value : value == null ? '' : String(value);
   }
@@ -126,9 +148,10 @@ function createAssistant() {
     return DEFAULT_AUTO_SYNC_CONFIG.time;
   }
 
-  async function scanWorkspaceDirs(workspaceDirs: string[]) {
+  async function scanWorkspaceDirs(workspaceDirs: string[], options: { includeIgnored?: boolean } = {}) {
     const scannedGroups = await Promise.all(workspaceDirs.map((workspaceDir) => window.api.scanRepositories(workspaceDir)));
-    return scannedGroups.flat();
+    const scannedRepos = scannedGroups.flat();
+    return options.includeIgnored ? scannedRepos : filterIgnoredRepos(scannedRepos);
   }
 
   const aiBaseUrlOptions = computed(() => mergeCurrentOption(config.aiBaseUrlOptions, config.aiBaseUrl));
@@ -160,12 +183,15 @@ function createAssistant() {
   function getConfigPayload(): AppConfig {
     const workspaceDirs = getWorkspaceDirs();
     const normalizedSelectedRepoPaths = normalizeRepoSelections(selectedRepoPaths.value);
+    const normalizedIgnoredRepoPaths = normalizeRepoSelections(config.ignoredRepoPaths ?? []);
     selectedRepoPaths.value = normalizedSelectedRepoPaths;
     config.selectedRepoPaths = normalizedSelectedRepoPaths;
+    config.ignoredRepoPaths = normalizedIgnoredRepoPaths;
     return {
       workspaceDir: toPlainString(config.workspaceDir),
       workspaceDirs,
       selectedRepoPaths: normalizedSelectedRepoPaths,
+      ignoredRepoPaths: normalizedIgnoredRepoPaths,
       reporterName: toPlainString(config.reporterName),
       aiBaseUrl: toPlainString(config.aiBaseUrl),
       aiApiKey: toPlainString(config.aiApiKey),
@@ -202,6 +228,28 @@ function createAssistant() {
         lastSuccessKey: toPlainString(config.autoSync.lastSuccessKey),
       },
     };
+  }
+
+  function countResultFiles(result: ReportResult | null) {
+    if (!result) return 0;
+    return Array.from(new Set(result.commits.flatMap((commit) => commit.files))).length;
+  }
+
+  async function refreshDailyReports() {
+    dailyReports.value = await window.api.listDailyReports(10);
+  }
+
+  async function refreshLocalData() {
+    const [reports, syncRecords, errorRecords, storage] = await Promise.all([
+      window.api.listDailyReports(50),
+      window.api.listSyncLogs(50),
+      window.api.listErrorLogs(50),
+      window.api.getStorageInfo(),
+    ]);
+    dailyReports.value = reports;
+    syncLogs.value = syncRecords;
+    errorLogs.value = errorRecords;
+    storageInfo.value = storage;
   }
 
   function applyAutoSyncState(state: AutoSyncState) {
@@ -260,6 +308,7 @@ function createAssistant() {
       },
     });
     selectedRepoPaths.value = normalizeRepoSelections(config.selectedRepoPaths ?? []);
+    config.ignoredRepoPaths = normalizeRepoSelections(config.ignoredRepoPaths ?? []);
     if (!form.date) form.date = today;
     config.aiBaseUrlOptions = normalizeOptions(config.aiBaseUrlOptions.length ? config.aiBaseUrlOptions : [...DEFAULT_AI_BASE_URL_OPTIONS]);
     config.aiModelOptions = normalizeOptions(config.aiModelOptions.length ? config.aiModelOptions : [...DEFAULT_AI_MODEL_OPTIONS]);
@@ -281,11 +330,18 @@ function createAssistant() {
   async function chooseWorkspace() {
     const dir = await window.api.selectDirectory();
     if (!dir) return;
-    config.workspaceDir = dir;
-    config.workspaceDirs = normalizeWorkspaceDirs([...config.workspaceDirs, dir]);
     loading.value = true;
     try {
-      const scannedRepos = await scanWorkspaceDirs([dir]);
+      const scannedRepos = await scanWorkspaceDirs([dir], { includeIgnored: true });
+      if (!scannedRepos.length) {
+        status.value = '所选目录下未识别到 Git 仓库';
+        ElMessage.warning('未在所选目录下识别到 Git 仓库，请选择包含 .git 的项目目录或工作区');
+        return;
+      }
+      config.workspaceDir = dir;
+      config.workspaceDirs = normalizeWorkspaceDirs([...config.workspaceDirs, dir]);
+      const scannedRepoKeys = new Set(scannedRepos.map((repo) => getRepoKey(repo.path)));
+      config.ignoredRepoPaths = normalizeRepoSelections((config.ignoredRepoPaths ?? []).filter((path) => !scannedRepoKeys.has(getRepoKey(path))));
       repos.value = mergeRepos(repos.value, scannedRepos);
       selectedRepoPaths.value = normalizeRepoSelections([...selectedRepoPaths.value, ...scannedRepos.map((repo) => repo.path)]);
       await window.api.saveConfig(getConfigPayload());
@@ -422,8 +478,11 @@ function createAssistant() {
         date: form.date,
         reporterName: config.reporterName,
       });
+      lastReportResult.value = result;
+      currentReportId.value = result.historyId ?? null;
       report.value = result.report;
       status.value = `已汇总 ${result.repos.length} 个仓库，生成 ${result.commits.length} 条记录`;
+      await refreshLocalData();
       if (!result.commits.length) {
         ElMessage.warning('未匹配到可用于生成日报的提交记录');
         return;
@@ -455,8 +514,11 @@ function createAssistant() {
         report: report.value,
         date: form.date,
         reporterName: config.reporterName,
+        reportId: currentReportId.value ?? undefined,
+        triggerType: 'manual',
       });
       ElMessage.success('已同步到飞书日报表');
+      await refreshLocalData();
     } catch (error) {
       ElMessage.error(error instanceof Error ? error.message : '同步飞书失败');
     } finally {
@@ -473,6 +535,8 @@ function createAssistant() {
       status.value = result.message;
       if (result.report) {
         report.value = result.report;
+        lastReportResult.value = null;
+        currentReportId.value = null;
         form.date = today;
       }
       if (result.status === 'success') {
@@ -485,6 +549,7 @@ function createAssistant() {
         ElMessage.info(result.message);
       }
       await refreshAutoSyncState();
+      await refreshLocalData();
     } catch (error) {
       ElMessage.error(error instanceof Error ? error.message : '自动同步执行失败');
     } finally {
@@ -510,9 +575,52 @@ function createAssistant() {
     void saveRepoSelection();
   }
 
+  async function removeRepo(path: string) {
+    const repo = repos.value.find((item) => getRepoKey(item.path) === getRepoKey(path));
+    const repoPath = repo?.path ?? path;
+    const repoKey = getRepoKey(repoPath);
+    repos.value = repos.value.filter((item) => getRepoKey(item.path) !== repoKey);
+    selectedRepoPaths.value = selectedRepoPaths.value.filter((item) => getRepoKey(item) !== repoKey);
+    config.selectedRepoPaths = normalizeRepoSelections(selectedRepoPaths.value);
+    config.ignoredRepoPaths = normalizeRepoSelections([...(config.ignoredRepoPaths ?? []), repoPath]);
+    config.workspaceDirs = normalizeWorkspaceDirs((config.workspaceDirs ?? []).filter((item) => getRepoKey(item) !== repoKey));
+    if (getRepoKey(config.workspaceDir) === repoKey) {
+      config.workspaceDir = config.workspaceDirs[0] ?? '';
+    }
+    await window.api.saveConfig(getConfigPayload());
+    status.value = `已从项目列表移除 ${repo?.name ?? repoPath}`;
+    ElMessage.success('项目已从列表移除，本地文件不会被删除');
+  }
+
+  async function saveCurrentReport() {
+    if (!report.value.trim()) {
+      ElMessage.warning('当前没有可保存的日报内容');
+      return;
+    }
+    const selected = selectedRepos.value;
+    const result = lastReportResult.value;
+    const record = await window.api.saveDailyReport({
+      id: currentReportId.value ?? undefined,
+      date: form.date,
+      reporterName: config.reporterName,
+      repoNames: result?.repos.map((item) => item.name) ?? selected.map((item) => item.name),
+      repoPaths: result?.repos.map((item) => item.path) ?? selected.map((item) => item.path),
+      report: report.value,
+      status: result?.commits.length ? 'success' : 'draft',
+      commitsCount: result?.commits.length ?? 0,
+      filesCount: countResultFiles(result),
+      generatedAt: result?.generatedAt,
+      rawInput: result?.rawInput,
+    });
+    currentReportId.value = record.id;
+    await refreshLocalData();
+    ElMessage.success('日报已保存');
+  }
+
   async function init() {
     removeAutoSyncListener = window.api.onAutoSyncUpdated(applyAutoSyncState);
     await loadConfig();
+    await refreshLocalData();
   }
 
   function dispose() {
@@ -533,6 +641,12 @@ function createAssistant() {
     projectOptions,
     selectedRepoPaths,
     report,
+    currentReportId,
+    lastReportResult,
+    dailyReports,
+    syncLogs,
+    errorLogs,
+    storageInfo,
     status,
     autoSyncState,
     advancedConfigPanels,
@@ -563,7 +677,11 @@ function createAssistant() {
     generateAndPush,
     push,
     runAutoSyncNow,
+    refreshDailyReports,
+    refreshLocalData,
+    saveCurrentReport,
     toggleRepo,
+    removeRepo,
     init,
     dispose,
   };

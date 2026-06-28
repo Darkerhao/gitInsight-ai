@@ -1,8 +1,9 @@
-import { app, BrowserWindow, dialog, ipcMain, powerMonitor, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, powerMonitor, safeStorage, session } from 'electron';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { simpleGit } from 'simple-git';
+import initSqlJs from 'sql.js';
 import {
   DEFAULT_AI_BASE_URL_OPTIONS,
   DEFAULT_AI_MODEL_OPTIONS,
@@ -16,6 +17,8 @@ import type {
   AutoSyncState,
   AutoSyncStatus,
   CommitEntry,
+  DailyReportRecord,
+  ErrorLogRecord,
   FeishuFormConfig,
   FeishuLoginPayload,
   FeishuProjectOption,
@@ -25,6 +28,9 @@ import type {
   GenerateReportParams,
   RepoInfo,
   ReportResult,
+  SaveDailyReportPayload,
+  StorageInfo,
+  SyncLogRecord,
   SyncFeishuDailyPayload,
 } from '../src/shared/types.js';
 
@@ -32,6 +38,7 @@ const DEFAULT_CONFIG: AppConfig = {
   workspaceDir: '',
   workspaceDirs: [],
   selectedRepoPaths: [],
+  ignoredRepoPaths: [],
   reporterName: '',
   aiBaseUrl: 'https://api.openai.com/v1',
   aiApiKey: '',
@@ -44,16 +51,27 @@ const DEFAULT_CONFIG: AppConfig = {
 
 const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'out', 'build', 'coverage', '.idea', '.vscode']);
 const CONFIG_FILE = 'config.json';
+const SECRETS_FILE = 'secrets.json';
+const DB_FILE = 'gitinsight.db';
 
 let mainWindow: BrowserWindow | null = null;
 let feishuWindow: BrowserWindow | null = null;
 let autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
 let autoSyncRunning = false;
+let sqlDatabase: import('sql.js').Database | null = null;
 
 const FEISHU_PARTITION = 'persist:feishu';
 
 function getConfigPath() {
   return join(app.getPath('userData'), CONFIG_FILE);
+}
+
+function getSecretsPath() {
+  return join(app.getPath('userData'), SECRETS_FILE);
+}
+
+function getDatabasePath() {
+  return join(app.getPath('userData'), DB_FILE);
 }
 
 function toCloneable<T>(value: T): T {
@@ -64,14 +82,74 @@ async function ensureConfigDir() {
   await mkdir(app.getPath('userData'), { recursive: true });
 }
 
+function pickSensitiveConfig(config: AppConfig) {
+  return {
+    aiApiKey: config.aiApiKey,
+    feishuForm: {
+      cookie: config.feishuForm.cookie,
+      csrfToken: config.feishuForm.csrfToken,
+    },
+  };
+}
+
+function stripSensitiveConfig(config: AppConfig): AppConfig {
+  return {
+    ...config,
+    aiApiKey: '',
+    feishuForm: {
+      ...config.feishuForm,
+      cookie: '',
+      csrfToken: '',
+    },
+  };
+}
+
+function mergeSensitiveConfig(config: AppConfig, sensitiveConfig: ReturnType<typeof pickSensitiveConfig>): AppConfig {
+  return {
+    ...config,
+    aiApiKey: sensitiveConfig.aiApiKey || config.aiApiKey,
+    feishuForm: {
+      ...config.feishuForm,
+      cookie: sensitiveConfig.feishuForm.cookie || config.feishuForm.cookie,
+      csrfToken: sensitiveConfig.feishuForm.csrfToken || config.feishuForm.csrfToken,
+    },
+  };
+}
+
+async function loadSensitiveConfig() {
+  try {
+    const encrypted = JSON.parse(await readFile(getSecretsPath(), 'utf-8')) as { payload?: string };
+    if (!encrypted.payload || !safeStorage.isEncryptionAvailable()) return pickSensitiveConfig(normalizeConfig());
+    const raw = safeStorage.decryptString(Buffer.from(encrypted.payload, 'base64'));
+    return pickSensitiveConfig(normalizeConfig(JSON.parse(raw)));
+  } catch {
+    return pickSensitiveConfig(normalizeConfig());
+  }
+}
+
+async function saveSensitiveConfig(config: AppConfig) {
+  const sensitiveConfig = pickSensitiveConfig(config);
+  if (!safeStorage.isEncryptionAvailable()) return;
+  await ensureConfigDir();
+  const encrypted = safeStorage.encryptString(JSON.stringify(sensitiveConfig)).toString('base64');
+  await writeFile(getSecretsPath(), JSON.stringify({ payload: encrypted }, null, 2), 'utf-8');
+}
+
+function countRawInputFiles(rawInput?: ReportResult['rawInput']) {
+  return rawInput?.files.split(/\r?\n/).filter(Boolean).length ?? 0;
+}
+
 function normalizeConfig(config?: Partial<AppConfig>): AppConfig {
   const workspaceDirs = normalizeWorkspaceDirs(config?.workspaceDirs, config?.workspaceDir);
+  const ignoredRepoPaths = normalizeRepoPaths(config?.ignoredRepoPaths);
+  const ignoredRepoPathSet = new Set(ignoredRepoPaths.map((item) => item.toLocaleLowerCase()));
   return {
     ...DEFAULT_CONFIG,
     ...config,
     workspaceDirs,
     workspaceDir: config?.workspaceDir || workspaceDirs[0] || '',
-    selectedRepoPaths: normalizeRepoPaths(config?.selectedRepoPaths),
+    selectedRepoPaths: normalizeRepoPaths(config?.selectedRepoPaths).filter((item) => !ignoredRepoPathSet.has(item.toLocaleLowerCase())),
+    ignoredRepoPaths,
     aiBaseUrlOptions: normalizeOptions(config?.aiBaseUrlOptions, DEFAULT_AI_BASE_URL_OPTIONS),
     aiModelOptions: normalizeOptions(config?.aiModelOptions, DEFAULT_AI_MODEL_OPTIONS),
     feishuForm: {
@@ -132,9 +210,11 @@ function normalizeAutoSyncConfig(autoSync?: Partial<AutoSyncConfig>): AutoSyncCo
 async function loadConfig(): Promise<AppConfig> {
   try {
     const raw = await readFile(getConfigPath(), 'utf-8');
-    return normalizeConfig(JSON.parse(raw));
+    const diskConfig = normalizeConfig(JSON.parse(raw));
+    const sensitiveConfig = await loadSensitiveConfig();
+    return mergeSensitiveConfig(diskConfig, sensitiveConfig);
   } catch {
-    return normalizeConfig();
+    return mergeSensitiveConfig(normalizeConfig(), await loadSensitiveConfig());
   }
 }
 
@@ -142,7 +222,8 @@ async function saveConfig(config: AppConfig, options: { reschedule?: boolean; no
   const { reschedule = true, notify = true } = options;
   await ensureConfigDir();
   const normalizedConfig = normalizeConfig(config);
-  await writeFile(getConfigPath(), JSON.stringify(normalizedConfig, null, 2), 'utf-8');
+  await saveSensitiveConfig(normalizedConfig);
+  await writeFile(getConfigPath(), JSON.stringify(stripSensitiveConfig(normalizedConfig), null, 2), 'utf-8');
   if (reschedule) {
     scheduleAutoSync(normalizedConfig);
   }
@@ -150,6 +231,327 @@ async function saveConfig(config: AppConfig, options: { reschedule?: boolean; no
     emitAutoSyncState(normalizedConfig);
   }
   return normalizedConfig;
+}
+
+async function getDatabase() {
+  if (sqlDatabase) return sqlDatabase;
+  await ensureConfigDir();
+  const SQL = await initSqlJs({
+    locateFile: (file) => {
+      const unpackedPath = join(process.resourcesPath, 'app.asar.unpacked', 'node_modules/sql.js/dist', file);
+      if (existsSync(unpackedPath)) return unpackedPath;
+      return join(process.cwd(), 'node_modules/sql.js/dist', file);
+    },
+  });
+  const databasePath = getDatabasePath();
+  sqlDatabase = existsSync(databasePath) ? new SQL.Database(await readFile(databasePath)) : new SQL.Database();
+  sqlDatabase.run(`
+    CREATE TABLE IF NOT EXISTS daily_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
+      reporter_name TEXT NOT NULL,
+      repo_names_json TEXT NOT NULL,
+      repo_paths_json TEXT NOT NULL,
+      report TEXT NOT NULL,
+      status TEXT NOT NULL,
+      commits_count INTEGER NOT NULL DEFAULT 0,
+      files_count INTEGER NOT NULL DEFAULT 0,
+      generated_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      raw_input_json TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_daily_reports_date ON daily_reports(date);
+    CREATE INDEX IF NOT EXISTS idx_daily_reports_updated_at ON daily_reports(updated_at);
+
+    CREATE TABLE IF NOT EXISTS sync_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      report_id INTEGER,
+      date TEXT NOT NULL,
+      trigger_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      message TEXT NOT NULL,
+      ran_at TEXT NOT NULL,
+      duration_ms INTEGER,
+      FOREIGN KEY(report_id) REFERENCES daily_reports(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_sync_logs_ran_at ON sync_logs(ran_at);
+
+    CREATE TABLE IF NOT EXISTS error_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      scope TEXT NOT NULL,
+      message TEXT NOT NULL,
+      detail TEXT,
+      created_at TEXT NOT NULL
+    );
+  `);
+  await persistDatabase();
+  return sqlDatabase;
+}
+
+async function persistDatabase() {
+  if (!sqlDatabase) return;
+  await ensureConfigDir();
+  await writeFile(getDatabasePath(), sqlDatabase.export());
+}
+
+function parseJsonArray(value: unknown) {
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function rowToDailyReportRecord(row: Record<string, unknown>): DailyReportRecord {
+  return {
+    id: Number(row.id) || 0,
+    date: String(row.date || ''),
+    reporterName: String(row.reporter_name || ''),
+    repoNames: parseJsonArray(row.repo_names_json),
+    repoPaths: parseJsonArray(row.repo_paths_json),
+    report: String(row.report || ''),
+    status: ['draft', 'success', 'failed'].includes(String(row.status)) ? (String(row.status) as DailyReportRecord['status']) : 'draft',
+    commitsCount: Number(row.commits_count) || 0,
+    filesCount: Number(row.files_count) || 0,
+    generatedAt: String(row.generated_at || ''),
+    updatedAt: String(row.updated_at || ''),
+  };
+}
+
+function normalizeSyncTrigger(value: unknown): SyncLogRecord['triggerType'] {
+  return value === 'scheduled' ? 'scheduled' : 'manual';
+}
+
+function normalizeSyncStatus(value: unknown): SyncLogRecord['status'] {
+  return ['idle', 'running', 'success', 'failed', 'skipped'].includes(String(value))
+    ? (String(value) as SyncLogRecord['status'])
+    : 'failed';
+}
+
+function rowToSyncLogRecord(row: Record<string, unknown>): SyncLogRecord {
+  const reportId = Number(row.report_id);
+  const durationMs = Number(row.duration_ms);
+  return {
+    id: Number(row.id) || 0,
+    reportId: Number.isFinite(reportId) && reportId > 0 ? reportId : undefined,
+    date: String(row.date || ''),
+    triggerType: normalizeSyncTrigger(row.trigger_type),
+    status: normalizeSyncStatus(row.status),
+    message: String(row.message || ''),
+    ranAt: String(row.ran_at || ''),
+    durationMs: Number.isFinite(durationMs) ? durationMs : undefined,
+  };
+}
+
+function rowToErrorLogRecord(row: Record<string, unknown>): ErrorLogRecord {
+  return {
+    id: Number(row.id) || 0,
+    scope: String(row.scope || ''),
+    message: String(row.message || ''),
+    detail: String(row.detail || ''),
+    createdAt: String(row.created_at || ''),
+  };
+}
+
+async function getDailyReportById(id: number) {
+  const db = await getDatabase();
+  const statement = db.prepare('SELECT * FROM daily_reports WHERE id = ? LIMIT 1');
+  try {
+    statement.bind([id]);
+    return statement.step() ? rowToDailyReportRecord(statement.getAsObject()) : null;
+  } finally {
+    statement.free();
+  }
+}
+
+async function saveDailyReport(payload: SaveDailyReportPayload): Promise<DailyReportRecord> {
+  const db = await getDatabase();
+  const now = new Date().toISOString();
+  const generatedAt = payload.generatedAt || now;
+  const repoNamesJson = JSON.stringify(payload.repoNames);
+  const repoPathsJson = JSON.stringify(payload.repoPaths);
+  const rawInputJson = payload.rawInput ? JSON.stringify(payload.rawInput) : null;
+
+  if (payload.id) {
+    db.run(
+      `UPDATE daily_reports
+       SET date = ?, reporter_name = ?, repo_names_json = ?, repo_paths_json = ?, report = ?, status = ?,
+           commits_count = ?, files_count = ?, generated_at = ?, updated_at = ?, raw_input_json = COALESCE(?, raw_input_json)
+       WHERE id = ?`,
+      [
+        payload.date,
+        payload.reporterName,
+        repoNamesJson,
+        repoPathsJson,
+        payload.report,
+        payload.status,
+        payload.commitsCount,
+        payload.filesCount,
+        generatedAt,
+        now,
+        rawInputJson,
+        payload.id,
+      ],
+    );
+    await persistDatabase();
+    return (await getDailyReportById(payload.id)) as DailyReportRecord;
+  }
+
+  db.run(
+    `INSERT INTO daily_reports
+      (date, reporter_name, repo_names_json, repo_paths_json, report, status, commits_count, files_count, generated_at, updated_at, raw_input_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      payload.date,
+      payload.reporterName,
+      repoNamesJson,
+      repoPathsJson,
+      payload.report,
+      payload.status,
+      payload.commitsCount,
+      payload.filesCount,
+      generatedAt,
+      now,
+      rawInputJson,
+    ],
+  );
+  const idResult = db.exec('SELECT last_insert_rowid() AS id');
+  const id = Number(idResult[0]?.values[0]?.[0]) || 0;
+  await persistDatabase();
+  return (await getDailyReportById(id)) as DailyReportRecord;
+}
+
+async function listDailyReports(limit = 10): Promise<DailyReportRecord[]> {
+  const db = await getDatabase();
+  const statement = db.prepare('SELECT * FROM daily_reports ORDER BY updated_at DESC LIMIT ?');
+  const records: DailyReportRecord[] = [];
+  try {
+    statement.bind([Math.max(1, Math.min(Number(limit) || 10, 100))]);
+    while (statement.step()) {
+      records.push(rowToDailyReportRecord(statement.getAsObject()));
+    }
+  } finally {
+    statement.free();
+  }
+  return records;
+}
+
+async function listSyncLogs(limit = 20): Promise<SyncLogRecord[]> {
+  const db = await getDatabase();
+  const statement = db.prepare('SELECT * FROM sync_logs ORDER BY ran_at DESC LIMIT ?');
+  const records: SyncLogRecord[] = [];
+  try {
+    statement.bind([Math.max(1, Math.min(Number(limit) || 20, 200))]);
+    while (statement.step()) {
+      records.push(rowToSyncLogRecord(statement.getAsObject()));
+    }
+  } finally {
+    statement.free();
+  }
+  return records;
+}
+
+async function listErrorLogs(limit = 20): Promise<ErrorLogRecord[]> {
+  const db = await getDatabase();
+  const statement = db.prepare('SELECT * FROM error_logs ORDER BY created_at DESC LIMIT ?');
+  const records: ErrorLogRecord[] = [];
+  try {
+    statement.bind([Math.max(1, Math.min(Number(limit) || 20, 200))]);
+    while (statement.step()) {
+      records.push(rowToErrorLogRecord(statement.getAsObject()));
+    }
+  } finally {
+    statement.free();
+  }
+  return records;
+}
+
+async function countTableRows(tableName: 'daily_reports' | 'sync_logs' | 'error_logs') {
+  const db = await getDatabase();
+  const result = db.exec(`SELECT COUNT(*) AS count FROM ${tableName}`);
+  return Number(result[0]?.values[0]?.[0]) || 0;
+}
+
+async function getFileSize(filePath: string) {
+  try {
+    return (await stat(filePath)).size;
+  } catch {
+    return 0;
+  }
+}
+
+async function getStorageInfo(): Promise<StorageInfo> {
+  await getDatabase();
+  return {
+    appVersion: app.getVersion(),
+    userDataPath: app.getPath('userData'),
+    configPath: getConfigPath(),
+    secretsPath: getSecretsPath(),
+    databasePath: getDatabasePath(),
+    configSize: await getFileSize(getConfigPath()),
+    secretsSize: await getFileSize(getSecretsPath()),
+    databaseSize: await getFileSize(getDatabasePath()),
+    reportsCount: await countTableRows('daily_reports'),
+    syncLogsCount: await countTableRows('sync_logs'),
+    errorLogsCount: await countTableRows('error_logs'),
+    encryptionAvailable: safeStorage.isEncryptionAvailable(),
+  };
+}
+
+async function recordGeneratedReport(params: GenerateReportParams, result: ReportResult) {
+  return saveDailyReport({
+    date: params.date,
+    reporterName: params.reporterName,
+    repoNames: result.repos.map((item) => item.name),
+    repoPaths: result.repos.map((item) => item.path),
+    report: result.report,
+    status: result.commits.length ? 'success' : 'failed',
+    commitsCount: result.commits.length,
+    filesCount: countRawInputFiles(result.rawInput),
+    generatedAt: result.generatedAt,
+    rawInput: result.rawInput,
+  });
+}
+
+async function recordSyncLog(payload: {
+  reportId?: number;
+  date: string;
+  triggerType: string;
+  status: AutoSyncStatus | 'success' | 'failed';
+  message: string;
+  ranAt?: string;
+  durationMs?: number;
+}) {
+  const db = await getDatabase();
+  db.run(
+    `INSERT INTO sync_logs (report_id, date, trigger_type, status, message, ran_at, duration_ms)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      payload.reportId ?? null,
+      payload.date,
+      payload.triggerType,
+      payload.status,
+      payload.message,
+      payload.ranAt || new Date().toISOString(),
+      payload.durationMs ?? null,
+    ],
+  );
+  await persistDatabase();
+}
+
+async function recordErrorLog(scope: string, error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '未知错误');
+  const detail = error instanceof Error ? error.stack || '' : '';
+  const db = await getDatabase();
+  db.run('INSERT INTO error_logs (scope, message, detail, created_at) VALUES (?, ?, ?, ?)', [
+    scope,
+    message,
+    detail,
+    new Date().toISOString(),
+  ]);
+  await persistDatabase();
 }
 
 function toLocalDateString(date = new Date()) {
@@ -598,6 +1000,7 @@ function fallbackReport(repoNames: string[], date: string, reporterName: string,
 
 async function generateReport(params: GenerateReportParams): Promise<ReportResult> {
   const config = await loadConfig();
+  const generatedAt = new Date().toISOString();
   const repos = params.repoPaths.map((repoPath) => ({ name: basename(repoPath), path: repoPath }));
   const allRepoDataList = await Promise.all(params.repoPaths.map((repoPath) => collectGitData(repoPath, params.date)));
   const repoDataList = allRepoDataList.map((item) => {
@@ -638,7 +1041,9 @@ async function generateReport(params: GenerateReportParams): Promise<ReportResul
       `日期：${params.date}`,
     ].join('\n');
 
-    return { report, commits, repos, rawInput };
+    const result = { report, commits, repos, generatedAt, rawInput };
+    const record = await recordGeneratedReport(params, result);
+    return { ...result, historyId: record.id };
   }
 
   let report = '';
@@ -654,7 +1059,9 @@ async function generateReport(params: GenerateReportParams): Promise<ReportResul
     report = `${report}\n\nAI提示：请先在设置中配置 OpenAI 兼容接口。`;
   }
 
-  return { report, commits, repos, rawInput };
+  const result = { report, commits, repos, generatedAt, rawInput };
+  const record = await recordGeneratedReport(params, result);
+  return { ...result, historyId: record.id };
 }
 
 function requireFeishuConfigValue(value: string, label: string) {
@@ -1068,45 +1475,67 @@ async function syncFeishuDaily(payload: SyncFeishuDailyPayload) {
     ...DEFAULT_FEISHU_FORM_CONFIG,
     ...payload.config,
   };
-  const auth = await resolveFeishuAuth(formConfig, '同步飞书日报失败');
-  const requestId = `gitinsight-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-  const response = await fetch(auth.endpoint, {
-    method: 'POST',
-    headers: {
-      accept: 'application/json, text/plain, */*',
-      'content-type': 'application/json',
-      cookie: auth.cookie,
-      origin: auth.origin,
-      referer: auth.referer,
-      'request-id': requestId,
-      'x-csrftoken': auth.csrfToken,
-      'x-request-id': requestId,
-    },
-    body: JSON.stringify({
-      shareToken: auth.shareToken,
-      data: JSON.stringify(buildFeishuFormData({ ...payload, config: formConfig })),
-      preUploadEnable: false,
-    }),
-  });
-
-  const detail = await response.text();
-  if (!response.ok) {
-    throw new Error(`同步飞书日报失败：${response.status} ${response.statusText}${detail ? `，返回：${detail.slice(0, 500)}` : ''}`);
-  }
-
-  let result: { code?: number; msg?: string } = {};
+  const startedAt = Date.now();
   try {
-    result = JSON.parse(detail);
-  } catch {
-    throw new Error(`同步飞书日报失败：接口返回内容不是 JSON：${detail.slice(0, 500)}`);
-  }
+    const auth = await resolveFeishuAuth(formConfig, '同步飞书日报失败');
+    const requestId = `gitinsight-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-  if (result.code !== 0) {
-    throw new Error(`同步飞书日报失败：${result.msg || `code=${result.code}`}`);
-  }
+    const response = await fetch(auth.endpoint, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json, text/plain, */*',
+        'content-type': 'application/json',
+        cookie: auth.cookie,
+        origin: auth.origin,
+        referer: auth.referer,
+        'request-id': requestId,
+        'x-csrftoken': auth.csrfToken,
+        'x-request-id': requestId,
+      },
+      body: JSON.stringify({
+        shareToken: auth.shareToken,
+        data: JSON.stringify(buildFeishuFormData({ ...payload, config: formConfig })),
+        preUploadEnable: false,
+      }),
+    });
 
-  return true;
+    const detail = await response.text();
+    if (!response.ok) {
+      throw new Error(`同步飞书日报失败：${response.status} ${response.statusText}${detail ? `，返回：${detail.slice(0, 500)}` : ''}`);
+    }
+
+    let result: { code?: number; msg?: string } = {};
+    try {
+      result = JSON.parse(detail);
+    } catch {
+      throw new Error(`同步飞书日报失败：接口返回内容不是 JSON：${detail.slice(0, 500)}`);
+    }
+
+    if (result.code !== 0) {
+      throw new Error(`同步飞书日报失败：${result.msg || `code=${result.code}`}`);
+    }
+
+    await recordSyncLog({
+      reportId: payload.reportId,
+      date: payload.date,
+      triggerType: payload.triggerType || 'manual',
+      status: 'success',
+      message: '同步飞书日报成功',
+      durationMs: Date.now() - startedAt,
+    });
+    return true;
+  } catch (error) {
+    await recordSyncLog({
+      reportId: payload.reportId,
+      date: payload.date,
+      triggerType: payload.triggerType || 'manual',
+      status: 'failed',
+      message: error instanceof Error ? error.message : '同步飞书失败',
+      durationMs: Date.now() - startedAt,
+    });
+    await recordErrorLog('syncFeishuDaily', error);
+    throw error;
+  }
 }
 
 async function runAutoSync(trigger: 'scheduled' | 'manual'): Promise<AutoSyncRunResult> {
@@ -1158,6 +1587,8 @@ async function runAutoSync(trigger: 'scheduled' | 'manual'): Promise<AutoSyncRun
       report: result.report,
       date,
       reporterName: config.reporterName,
+      reportId: result.historyId,
+      triggerType: trigger,
     });
 
     const message = `已自动同步 ${result.commits.length} 条记录到飞书日报表`;
@@ -1215,6 +1646,11 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle('repo:scan', async (_event, workspaceDir: string) => scanRepositories(workspaceDir));
   ipcMain.handle('report:generate', async (_event, params: GenerateReportParams) => generateReport(params));
+  ipcMain.handle('daily-report:list', async (_event, limit?: number) => listDailyReports(limit));
+  ipcMain.handle('daily-report:save', async (_event, payload: SaveDailyReportPayload) => saveDailyReport(payload));
+  ipcMain.handle('sync-log:list', async (_event, limit?: number) => listSyncLogs(limit));
+  ipcMain.handle('error-log:list', async (_event, limit?: number) => listErrorLogs(limit));
+  ipcMain.handle('storage:info', async () => getStorageInfo());
   ipcMain.handle('feishu:login', async (_event, payload: FeishuLoginPayload) => openFeishuLogin(payload));
   ipcMain.handle('feishu:list-projects', async (_event, payload: FeishuProjectOptionsPayload) => listFeishuProjectOptions(payload));
   ipcMain.handle('feishu:test-submit', async (_event, payload: FeishuTestSubmitPayload) => testSubmitFeishuForm(payload));

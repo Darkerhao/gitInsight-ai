@@ -4,6 +4,8 @@ import type {
   AutoSyncRunResult,
   AutoSyncState,
   AutoSyncValidationResult,
+  DailyReportRecord,
+  ErrorLogRecord,
   FeishuLoginPayload,
   FeishuProjectOption,
   FeishuProjectOptionsPayload,
@@ -12,6 +14,9 @@ import type {
   GenerateReportParams,
   RepoInfo,
   ReportResult,
+  SaveDailyReportPayload,
+  StorageInfo,
+  SyncLogRecord,
   SyncFeishuDailyPayload,
 } from '../src/shared/types.js';
 
@@ -30,6 +35,12 @@ contextBridge.exposeInMainWorld('api', {
   getAutoSyncState: () => ipcRenderer.invoke('auto-sync:get-state') as Promise<AutoSyncState>,
   validateAutoSync: (config: AppConfig) => ipcRenderer.invoke('auto-sync:validate', config) as Promise<AutoSyncValidationResult>,
   runAutoSyncNow: (config: AppConfig) => ipcRenderer.invoke('auto-sync:run-now', config) as Promise<AutoSyncRunResult>,
+  listDailyReports: (limit?: number) => ipcRenderer.invoke('daily-report:list', limit) as Promise<DailyReportRecord[]>,
+  listSyncLogs: (limit?: number) => ipcRenderer.invoke('sync-log:list', limit) as Promise<SyncLogRecord[]>,
+  listErrorLogs: (limit?: number) => ipcRenderer.invoke('error-log:list', limit) as Promise<ErrorLogRecord[]>,
+  getStorageInfo: () => ipcRenderer.invoke('storage:info') as Promise<StorageInfo>,
+  saveDailyReport: (payload: SaveDailyReportPayload) =>
+    ipcRenderer.invoke('daily-report:save', payload) as Promise<DailyReportRecord>,
   onAutoSyncUpdated: (callback: (state: AutoSyncState) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: AutoSyncState) => callback(state);
     ipcRenderer.on('auto-sync:updated', listener);

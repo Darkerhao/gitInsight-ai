@@ -5,7 +5,10 @@ directories:
 files:
   - out/**/*
   - package.json
+  - node_modules/sql.js/**/*
 asar: true
+asarUnpack:
+  - node_modules/sql.js/dist/*.wasm
 npmRebuild: false
 compression: maximum
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}

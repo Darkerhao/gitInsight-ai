@@ -1,8 +1,8 @@
 {
   "name": "gitinsight-ai",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "AI daily report assistant for Git repositories",
-  "author": "SHUZHI",
+  "author": "JIAZI ANG <17600157636@163.com>",
   "private": true,
   "type": "module",
   "main": "out/main/main.js",
@@ -25,6 +25,7 @@
     "element-plus": "^2.10.4",
     "lucide-vue-next": "^0.548.0",
     "simple-git": "^3.27.0",
+    "sql.js": "^1.14.1",
     "vue": "^3.5.17",
     "vue-router": "^4.5.1"
   },

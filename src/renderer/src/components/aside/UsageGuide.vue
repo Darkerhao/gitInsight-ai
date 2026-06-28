@@ -23,6 +23,6 @@ const steps = [
         </div>
       </li>
     </ol>
-    <button class="usage-guide-btn" @click="ElMessage.info('敬请期待')">查看详细教程</button>
+    <button class="usage-guide-btn" @click="ElMessage.info('请按左侧导航进入对应功能页查看完整流程')">查看详细教程</button>
   </section>
 </template>
