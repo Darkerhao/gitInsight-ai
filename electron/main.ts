@@ -63,6 +63,37 @@ let sqlDatabase: import('sql.js').Database | null = null;
 
 const FEISHU_PARTITION = 'persist:feishu';
 
+function getWindowIconPath() {
+  const platformCandidates = process.platform === 'darwin'
+    ? [
+        join(process.cwd(), 'build/icons/mac/icon.icns'),
+        join(process.resourcesPath, 'build/icons/mac/icon.icns'),
+        join(process.cwd(), 'build', 'icon_2.png'),
+        join(process.resourcesPath, 'build', 'icon_2.png'),
+      ]
+    : process.platform === 'linux'
+    ? [
+        join(process.cwd(), 'build/icon_4.png'),
+        join(process.resourcesPath, 'build/icon_4.png'),
+        join(process.cwd(), 'build/icons/win/icon.ico'),
+        join(process.resourcesPath, 'build/icons/win/icon.ico'),
+      ]
+    : [
+        join(process.cwd(), 'build/icons/win/icon.ico'),
+        join(process.resourcesPath, 'build/icons/win/icon.ico'),
+        join(process.cwd(), 'build', 'icon_1.png'),
+        join(process.resourcesPath, 'build', 'icon_1.png'),
+      ];
+  const uniqueCandidates = [
+    ...new Set(platformCandidates),
+  ];
+  return uniqueCandidates.find((item) => existsSync(item));
+}
+
+function getWindowOptionsIcon() {
+  return getWindowIconPath() || undefined;
+}
+
 function getConfigPath() {
   return join(app.getPath('userData'), CONFIG_FILE);
 }
@@ -1399,6 +1430,7 @@ async function openFeishuLogin(payload: FeishuLoginPayload) {
     minWidth: 960,
     minHeight: 720,
     title: '登录飞书',
+    icon: getWindowOptionsIcon(),
     webPreferences: {
       partition: FEISHU_PARTITION,
       contextIsolation: true,
@@ -1621,6 +1653,7 @@ function createWindow() {
     height: 900,
     minWidth: 1200,
     minHeight: 780,
+    icon: getWindowOptionsIcon(),
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,

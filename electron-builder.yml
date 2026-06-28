@@ -4,6 +4,7 @@ directories:
   output: release/${version}
 files:
   - out/**/*
+  - build/**
   - package.json
   - node_modules/sql.js/**/*
 asar: true
@@ -16,6 +17,7 @@ publish:
   provider: github
   releaseType: release
 win:
+  icon: build/icons/win/icon.ico
   target:
     - target: nsis
       arch:
@@ -39,6 +41,7 @@ nsis:
 portable:
   artifactName: ${productName}-${version}-${os}-${arch}-portable.${ext}
 mac:
+  icon: build/icons/mac/icon.icns
   target:
     - target: dmg
       arch:
@@ -53,6 +56,7 @@ mac:
   hardenedRuntime: false
   gatekeeperAssess: false
 linux:
+  icon: build/icon_4.png
   target:
     - target: AppImage
       arch:
