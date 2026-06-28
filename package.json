@@ -1,6 +1,6 @@
 {
   "name": "gitinsight-ai",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "AI daily report assistant for Git repositories",
   "author": "JIAZI ANG <17600157636@163.com>",
   "private": true,

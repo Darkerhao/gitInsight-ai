@@ -68,6 +68,7 @@ async function resetSettings() {
   config.autoSync.enabled = false;
   config.autoSync.time = '18:30';
   config.feishuForm.defaultWorkHours = 8;
+  config.feishuForm.projectWorkHours = {};
   ElMessage.success('已恢复默认配置，请保存后生效');
 }
 </script>

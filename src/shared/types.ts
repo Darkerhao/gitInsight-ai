@@ -14,6 +14,7 @@ export interface FeishuFormConfig {
   projectOptionId: string;
   projectName: string;
   defaultWorkHours: number;
+  projectWorkHours: Record<string, number>;
   questionId: string;
   dateFieldId: string;
   userFieldId: string;
@@ -47,6 +48,7 @@ export const DEFAULT_FEISHU_FORM_CONFIG: FeishuFormConfig = {
   projectOptionId: '',
   projectName: '',
   defaultWorkHours: 8,
+  projectWorkHours: {},
   questionId: 'tableQuestion_7a05c16c-6fcc-43be-bf96-455d85da6751',
   dateFieldId: 'fldQ6sCh5m',
   userFieldId: 'fldkcFfIZ7',
@@ -181,6 +183,7 @@ export interface SyncFeishuDailyPayload {
   report: string;
   date: string;
   reporterName: string;
+  workHours?: number;
   reportId?: number;
   triggerType?: 'manual' | 'scheduled';
 }

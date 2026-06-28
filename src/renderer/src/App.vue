@@ -10,6 +10,9 @@ import ReportGenerateView from '@/views/ReportGenerateView.vue';
 import SyncTasksView from '@/views/SyncTasksView.vue';
 import HistoryLogsView from '@/views/HistoryLogsView.vue';
 import SystemSettingsView from '@/views/SystemSettingsView.vue';
+import AboutUsView from '@/views/AboutUsView.vue';
+import UsageHelpView from '@/views/UsageHelpView.vue';
+import MessageCenterView from '@/views/MessageCenterView.vue';
 
 const assistant = useAssistant();
 const activeNav = ref('dashboard');
@@ -17,14 +20,21 @@ const showWelcome = ref(true);
 
 const viewMap = {
   dashboard: DashboardView,
+  about: AboutUsView,
+  help: UsageHelpView,
   config: ReportConfigView,
   generate: ReportGenerateView,
+  messages: MessageCenterView,
   sync: SyncTasksView,
   history: HistoryLogsView,
   system: SystemSettingsView,
 };
 
 const activeView = computed(() => viewMap[activeNav.value as keyof typeof viewMap] ?? DashboardView);
+
+function handleNavigate(value: string) {
+  activeNav.value = value;
+}
 
 onMounted(async () => {
   await assistant.init();
@@ -42,10 +52,10 @@ onBeforeUnmount(() => {
     <AppSidebar v-model:active-nav="activeNav" />
 
     <main class="app-main">
-      <AppTopbar />
+      <AppTopbar @navigate="handleNavigate" />
 
       <div class="app-scroll">
-        <component :is="activeView" @navigate="(value: string) => (activeNav = value)" />
+        <component :is="activeView" @navigate="handleNavigate" />
 
         <footer class="app-footer">
           AI日报助手 v1.0.0 · 让技术日报生成更简单、更智能

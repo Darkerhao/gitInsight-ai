@@ -132,9 +132,19 @@ function createAssistant() {
     return typeof value === 'string' ? value : value == null ? '' : String(value);
   }
 
-  function toPlainNumber(value: unknown, fallback: number) {
+  function normalizeWorkHours(value: unknown, fallback = DEFAULT_FEISHU_FORM_CONFIG.defaultWorkHours) {
     const normalized = Number(value);
-    return Number.isFinite(normalized) ? normalized : fallback;
+    if (!Number.isFinite(normalized) || normalized <= 0) return fallback;
+    return Math.min(Math.max(normalized, 0.5), 24);
+  }
+
+  function normalizeProjectWorkHours(value: unknown) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .map(([key, hours]) => [key.trim(), normalizeWorkHours(hours)] as const)
+        .filter(([key]) => key),
+    );
   }
 
   function normalizeTimeValue(value: unknown) {
@@ -229,7 +239,8 @@ function createAssistant() {
         reporterAvatarUrl: toPlainString(config.feishuForm.reporterAvatarUrl),
         projectOptionId: toPlainString(config.feishuForm.projectOptionId),
         projectName: toPlainString(config.feishuForm.projectName),
-        defaultWorkHours: toPlainNumber(config.feishuForm.defaultWorkHours, DEFAULT_FEISHU_FORM_CONFIG.defaultWorkHours),
+        defaultWorkHours: normalizeWorkHours(config.feishuForm.defaultWorkHours),
+        projectWorkHours: normalizeProjectWorkHours(config.feishuForm.projectWorkHours),
         questionId: toPlainString(config.feishuForm.questionId),
         dateFieldId: toPlainString(config.feishuForm.dateFieldId),
         userFieldId: toPlainString(config.feishuForm.userFieldId),
@@ -322,6 +333,7 @@ function createAssistant() {
       feishuForm: {
         ...DEFAULT_FEISHU_FORM_CONFIG,
         ...saved.feishuForm,
+        projectWorkHours: normalizeProjectWorkHours(saved.feishuForm?.projectWorkHours),
       },
       autoSync: {
         ...DEFAULT_AUTO_SYNC_CONFIG,
@@ -465,6 +477,19 @@ function createAssistant() {
   function selectFeishuProject(optionId: string) {
     const selected = projectOptions.value.find((item) => item.id === optionId);
     config.feishuForm.projectName = selected?.name ?? '';
+    const projectHours = config.feishuForm.projectWorkHours?.[optionId];
+    config.feishuForm.defaultWorkHours = normalizeWorkHours(projectHours, config.feishuForm.defaultWorkHours);
+  }
+
+  function updateProjectWorkHours(value: number | undefined) {
+    const hours = normalizeWorkHours(value, config.feishuForm.defaultWorkHours);
+    config.feishuForm.defaultWorkHours = hours;
+    const optionId = config.feishuForm.projectOptionId.trim();
+    if (!optionId) return;
+    config.feishuForm.projectWorkHours = {
+      ...normalizeProjectWorkHours(config.feishuForm.projectWorkHours),
+      [optionId]: hours,
+    };
   }
 
   async function testSubmitFeishu() {
@@ -537,6 +562,7 @@ function createAssistant() {
         report: report.value,
         date: form.date,
         reporterName: config.reporterName,
+        workHours: normalizeWorkHours(config.feishuForm.defaultWorkHours),
         reportId: currentReportId.value ?? undefined,
         triggerType: 'manual',
       });
@@ -719,6 +745,7 @@ function createAssistant() {
     loginFeishu,
     loadFeishuProjects,
     selectFeishuProject,
+    updateProjectWorkHours,
     testSubmitFeishu,
     generate,
     generateAndPush,

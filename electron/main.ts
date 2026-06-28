@@ -188,6 +188,8 @@ function normalizeConfig(config?: Partial<AppConfig>): AppConfig {
     feishuForm: {
       ...DEFAULT_FEISHU_FORM_CONFIG,
       ...(config?.feishuForm ?? {}),
+      defaultWorkHours: normalizeWorkHours(config?.feishuForm?.defaultWorkHours),
+      projectWorkHours: normalizeProjectWorkHours(config?.feishuForm?.projectWorkHours),
     },
     autoSync: normalizeAutoSyncConfig(config?.autoSync),
   };
@@ -207,6 +209,21 @@ function normalizeWorkspaceDirs(options: unknown, currentWorkspaceDir?: string) 
 function normalizeOptions(options: unknown, fallbackOptions: string[]) {
   const source = Array.isArray(options) ? options : fallbackOptions;
   return Array.from(new Set(source.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean)));
+}
+
+function normalizeWorkHours(value: unknown, fallback = DEFAULT_FEISHU_FORM_CONFIG.defaultWorkHours) {
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized) || normalized <= 0) return fallback;
+  return Math.min(Math.max(normalized, 0.5), 24);
+}
+
+function normalizeProjectWorkHours(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .map(([key, hours]) => [key.trim(), normalizeWorkHours(hours)] as const)
+      .filter(([key]) => key),
+  );
 }
 
 function normalizeRepoPaths(options: unknown) {
@@ -1129,17 +1146,11 @@ function extractReportSection(report: string, sectionTitle: string) {
   return sectionLines.join('\n').trim();
 }
 
-function extractWorkHours(report: string, fallbackHours: number) {
-  const match = report.match(/工作时长[：:]\s*([0-9]+(?:\.[0-9]+)?)/);
-  const parsedHours = match ? Number(match[1]) : fallbackHours;
-  if (!Number.isFinite(parsedHours) || parsedHours <= 0) return fallbackHours;
-  return parsedHours;
-}
-
 function buildFeishuFormData(payload: SyncFeishuDailyPayload) {
   const formConfig = payload.config;
   const reporterName = formConfig.reporterName.trim() || payload.reporterName.trim();
   const workContent = extractReportSection(payload.report, '今日工作内容') || payload.report.trim();
+  const selectedWorkHours = normalizeWorkHours(payload.workHours, formConfig.defaultWorkHours || DEFAULT_FEISHU_FORM_CONFIG.defaultWorkHours);
   const reporterUser: { userId: string; name: string; enName: string; notify: boolean; avatarUrl?: string } = {
     userId: requireFeishuConfigValue(formConfig.reporterUserId, '飞书汇报人 userId'),
     name: requireFeishuConfigValue(reporterName, '飞书汇报人名称'),
@@ -1172,7 +1183,7 @@ function buildFeishuFormData(payload: SyncFeishuDailyPayload) {
           },
           [requireFeishuConfigValue(formConfig.hoursFieldId, '工作时长字段 ID')]: {
             type: 2,
-            value: extractWorkHours(payload.report, formConfig.defaultWorkHours || 8),
+            value: selectedWorkHours,
           },
           [requireFeishuConfigValue(formConfig.contentFieldId, '工作内容字段 ID')]: {
             type: 1,

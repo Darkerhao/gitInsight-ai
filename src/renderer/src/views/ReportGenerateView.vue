@@ -23,10 +23,13 @@ const {
   generate,
   push,
   saveCurrentReport,
+  selectFeishuProject,
+  updateProjectWorkHours,
 } = assistant;
 
 const activePreviewTab = ref('report');
 const dateShortcut = ref('today');
+const workHourPresets = [4, 6, 7.5, 8];
 
 const selectedProjectText = computed(() => {
   if (!selectedRepos.value.length) return '未选择项目';
@@ -231,9 +234,35 @@ function exportMarkdown() {
           </div>
           <div class="field">
             <label>选择目标</label>
-            <el-select v-model="config.feishuForm.projectOptionId" placeholder="请先获取飞书项目选项">
+            <el-select v-model="config.feishuForm.projectOptionId" placeholder="请先获取飞书项目选项" @change="selectFeishuProject">
               <el-option v-for="item in projectOptions" :key="item.id" :label="item.name" :value="item.id" />
             </el-select>
+          </div>
+          <div class="field">
+            <label>工作时长</label>
+            <div class="hour-field">
+              <el-input-number
+                v-model="config.feishuForm.defaultWorkHours"
+                :min="0.5"
+                :max="24"
+                :step="0.5"
+                :precision="1"
+                controls-position="right"
+                @change="updateProjectWorkHours"
+              />
+              <span>小时</span>
+            </div>
+            <div class="hour-presets">
+              <button
+                v-for="hours in workHourPresets"
+                :key="hours"
+                type="button"
+                :class="{ active: Number(config.feishuForm.defaultWorkHours) === hours }"
+                @click="updateProjectWorkHours(hours)"
+              >
+                {{ hours }}h
+              </button>
+            </div>
           </div>
           <el-button :icon="Send" type="primary" :loading="pushing" :disabled="!report.trim()" @click="push">立即发布到飞书</el-button>
           <el-button plain :icon="Save" :disabled="!report.trim()" @click="saveCurrentReport">仅保存日报</el-button>
