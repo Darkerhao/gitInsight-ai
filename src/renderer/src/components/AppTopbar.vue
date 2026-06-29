@@ -2,9 +2,11 @@
 import { computed } from 'vue';
 import { ChevronDown, CircleHelp, MessageCircleMore } from 'lucide-vue-next';
 import { useAssistant } from '@/composables/useAssistant';
+import { useMessages } from '@/composables/useMessages';
 
 const assistant = useAssistant();
-const { config, syncLogs, errorLogs, autoSyncState } = assistant;
+const { config } = assistant;
+const { unreadCount } = useMessages();
 
 const emit = defineEmits<{
   (e: 'navigate', value: string): void;
@@ -18,11 +20,6 @@ const greetingText = computed(() => {
   if (hour < 12) return '上午好';
   if (hour < 18) return '下午好';
   return '晚上好';
-});
-
-const unreadCount = computed(() => {
-  const running = autoSyncState.value?.lastStatus === 'running' ? 1 : 0;
-  return Math.min(syncLogs.value.length + errorLogs.value.length + running, 99);
 });
 
 function navigateToHelp() {

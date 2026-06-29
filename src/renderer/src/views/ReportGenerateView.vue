@@ -29,7 +29,8 @@ const {
 
 const activePreviewTab = ref('report');
 const dateShortcut = ref('today');
-const workHourPresets = [4, 6, 7.5, 8];
+const workHourPresets = [1, 2, 4, 6, 7, 7.5, 8];
+const workHourOptions = Array.from({ length: 48 }, (_, index) => (index + 1) * 0.5);
 
 const selectedProjectText = computed(() => {
   if (!selectedRepos.value.length) return '未选择项目';
@@ -252,6 +253,18 @@ function exportMarkdown() {
               />
               <span>小时</span>
             </div>
+            <el-select
+              :model-value="Number(config.feishuForm.defaultWorkHours)"
+              placeholder="选择工作时长"
+              @change="updateProjectWorkHours"
+            >
+              <el-option
+                v-for="hours in workHourOptions"
+                :key="hours"
+                :label="`${hours}h`"
+                :value="hours"
+              />
+            </el-select>
             <div class="hour-presets">
               <button
                 v-for="hours in workHourPresets"
