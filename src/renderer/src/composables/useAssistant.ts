@@ -347,9 +347,23 @@ function createAssistant() {
     config.aiBaseUrlOptions = normalizeOptions(config.aiBaseUrlOptions.length ? config.aiBaseUrlOptions : [...DEFAULT_AI_BASE_URL_OPTIONS]);
     config.aiModelOptions = normalizeOptions(config.aiModelOptions.length ? config.aiModelOptions : [...DEFAULT_AI_MODEL_OPTIONS]);
     config.workspaceDirs = normalizeWorkspaceDirs([...(config.workspaceDirs ?? []), config.workspaceDir]);
+    const feishuAuthIncomplete =
+      !config.feishuForm.endpoint ||
+      !config.feishuForm.shareToken ||
+      !config.feishuForm.cookie ||
+      !config.feishuForm.csrfToken;
+    const feishuMappingIncomplete =
+      !config.feishuForm.reporterUserId ||
+      !config.feishuForm.questionId ||
+      !config.feishuForm.dateFieldId ||
+      !config.feishuForm.userFieldId ||
+      !config.feishuForm.projectFieldId ||
+      !config.feishuForm.hoursFieldId ||
+      !config.feishuForm.contentFieldId;
     advancedConfigPanels.value = [
       ...(!config.aiApiKey ? ['ai'] : []),
-      ...(!config.feishuForm.shareToken || !config.feishuForm.cookie || !config.feishuForm.csrfToken ? ['feishu'] : []),
+      ...(feishuAuthIncomplete ? ['feishu'] : []),
+      ...(feishuMappingIncomplete ? ['mapping'] : []),
       ...(config.autoSync.enabled ? ['autoSync'] : []),
     ];
     if (config.feishuForm.shareToken) {

@@ -38,23 +38,23 @@ export interface AutoSyncConfig {
 }
 
 export const DEFAULT_FEISHU_FORM_CONFIG: FeishuFormConfig = {
-  endpoint: 'https://icnjr29mp9ya.feishu.cn/space/api/bitable/share/content',
+  endpoint: '',
   shareToken: '',
   csrfToken: '',
   cookie: '',
-  reporterUserId: '7626227711668767954',
-  reporterName: '贾浩',
+  reporterUserId: '',
+  reporterName: '',
   reporterAvatarUrl: '',
   projectOptionId: '',
   projectName: '',
   defaultWorkHours: 8,
   projectWorkHours: {},
-  questionId: 'tableQuestion_7a05c16c-6fcc-43be-bf96-455d85da6751',
-  dateFieldId: 'fldQ6sCh5m',
-  userFieldId: 'fldkcFfIZ7',
-  projectFieldId: 'fldGVvQPfg',
-  hoursFieldId: 'fldtg8B2x4',
-  contentFieldId: 'fldCODa6wU',
+  questionId: '',
+  dateFieldId: '',
+  userFieldId: '',
+  projectFieldId: '',
+  hoursFieldId: '',
+  contentFieldId: '',
 };
 
 export const DEFAULT_AUTO_SYNC_CONFIG: AutoSyncConfig = {
