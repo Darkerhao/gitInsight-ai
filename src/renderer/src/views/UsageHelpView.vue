@@ -1,6 +1,18 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { CheckCircle2, CircleAlert, RefreshCw } from 'lucide-vue-next';
+import {
+  BookOpen,
+  CalendarClock,
+  CheckCircle2,
+  CircleAlert,
+  ClipboardCheck,
+  FileText,
+  History,
+  RefreshCw,
+  Rocket,
+  Settings2,
+  Sparkles,
+} from 'lucide-vue-next';
 import { ElMessage } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
@@ -64,24 +76,49 @@ const quickStarts = [
     title: '快速开始',
     desc: '先配置工作目录、汇报人和 AI，再生成第一份日报。',
     action: 'config',
+    icon: Rocket,
   },
   {
     key: 'generate',
     title: '日报生成',
     desc: '从选中的仓库提取 Git 记录，生成日报正文并支持编辑。',
     action: 'generate',
+    icon: Sparkles,
   },
   {
     key: 'sync',
     title: '同步任务',
     desc: '配置飞书字段和自动同步时间，按计划推送日报。',
     action: 'sync',
+    icon: CalendarClock,
   },
   {
     key: 'history',
     title: '历史日志',
     desc: '查看日报、同步与错误记录，定位失败原因。',
     action: 'history',
+    icon: History,
+  },
+];
+
+const moduleGuides = [
+  {
+    title: '日报配置',
+    desc: '配置工作区、汇报人、AI 接入与飞书字段',
+    action: 'config',
+    icon: Settings2,
+  },
+  {
+    title: '日报生成',
+    desc: '生成日报正文，查看提交记录与影响文件',
+    action: 'generate',
+    icon: FileText,
+  },
+  {
+    title: '同步任务',
+    desc: '查看同步计划、执行记录和任务日历',
+    action: 'sync',
+    icon: ClipboardCheck,
   },
 ];
 
@@ -141,37 +178,65 @@ async function runHealthCheck() {
     </section>
 
     <el-collapse v-model="activeNames" class="help-collapse">
-      <el-collapse-item title="新手入门" name="intro">
+      <el-collapse-item name="intro">
+        <template #title>
+          <div class="help-section-title">
+            <span><BookOpen :size="16" /></span>
+            <div>
+              <strong>新手入门</strong>
+              <small>从配置到第一份日报的最短路径</small>
+            </div>
+          </div>
+        </template>
         <div class="help-card-grid">
           <button v-for="item in quickStarts" :key="item.key" class="help-module-card" @click="emit('navigate', item.action)">
-            <strong>{{ item.title }}</strong>
-            <span>{{ item.desc }}</span>
+            <span class="help-card-icon"><component :is="item.icon" :size="18" /></span>
+            <span class="help-card-copy">
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.desc }}</span>
+            </span>
           </button>
         </div>
       </el-collapse-item>
 
-      <el-collapse-item title="功能指南" name="modules">
+      <el-collapse-item name="modules">
+        <template #title>
+          <div class="help-section-title">
+            <span><Settings2 :size="16" /></span>
+            <div>
+              <strong>功能指南</strong>
+              <small>按模块进入对应功能页处理</small>
+            </div>
+          </div>
+        </template>
         <div class="help-action-list">
-          <button class="help-list-item" @click="emit('navigate', 'config')">
-            <strong>日报配置</strong>
-            <span>配置工作区、汇报人、AI 接入与飞书字段</span>
-          </button>
-          <button class="help-list-item" @click="emit('navigate', 'generate')">
-            <strong>日报生成</strong>
-            <span>生成日报正文，查看提交记录与影响文件</span>
-          </button>
-          <button class="help-list-item" @click="emit('navigate', 'sync')">
-            <strong>同步任务</strong>
-            <span>查看同步计划、执行记录和任务日历</span>
+          <button v-for="item in moduleGuides" :key="item.title" class="help-list-item" @click="emit('navigate', item.action)">
+            <span class="help-card-icon"><component :is="item.icon" :size="18" /></span>
+            <span class="help-card-copy">
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.desc }}</span>
+            </span>
           </button>
         </div>
       </el-collapse-item>
 
-      <el-collapse-item title="常见问题" name="faq">
+      <el-collapse-item name="faq">
+        <template #title>
+          <div class="help-section-title">
+            <span><CircleAlert :size="16" /></span>
+            <div>
+              <strong>常见问题</strong>
+              <small>常见配置和运行状态说明</small>
+            </div>
+          </div>
+        </template>
         <div class="help-faq-list">
           <div v-for="item in faqItems" :key="item.q" class="help-faq-item">
-            <strong>{{ item.q }}</strong>
-            <span>{{ item.a }}</span>
+            <span>Q</span>
+            <div>
+              <strong>{{ item.q }}</strong>
+              <span>{{ item.a }}</span>
+            </div>
           </div>
         </div>
       </el-collapse-item>

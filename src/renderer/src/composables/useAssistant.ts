@@ -563,8 +563,9 @@ function createAssistant() {
     await push();
   }
 
-  async function push() {
-    if (!report.value) {
+  async function push(reportContent = report.value) {
+    const content = reportContent.trim();
+    if (!content) {
       ElMessage.warning('请先生成日报');
       return;
     }
@@ -573,7 +574,7 @@ function createAssistant() {
       await window.api.saveConfig(getConfigPayload());
       await window.api.syncFeishuDaily({
         config: getConfigPayload().feishuForm,
-        report: report.value,
+        report: content,
         date: form.date,
         reporterName: config.reporterName,
         workHours: normalizeWorkHours(config.feishuForm.defaultWorkHours),

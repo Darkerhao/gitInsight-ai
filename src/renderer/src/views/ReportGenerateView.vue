@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { CalendarDays, CheckCircle2, ClipboardCopy, Download, FileText, Pin, Plus, RotateCcw, Save, Search, Send, Sparkles, Trash2 } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
+import { CalendarDays, CheckCircle2, CircleAlert, ClipboardCopy, Download, FileText, Gamepad2, Pin, Plus, RotateCcw, Save, Search, Send, Sparkles, Trash2 } from 'lucide-vue-next';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import { useAssistant } from '@/composables/useAssistant';
 import type { RepoInfo } from '@shared/types';
+
+const emit = defineEmits<{
+  (e: 'navigate', value: string): void;
+}>();
 
 const assistant = useAssistant();
 const {
@@ -34,25 +38,38 @@ const {
 } = assistant;
 
 const activePreviewTab = ref('report');
+const reportMode = ref<'concise' | 'full'>('concise');
+const conciseReportDraft = ref('');
+const conciseDirty = ref(false);
 const dateShortcut = ref('today');
 const repoKeyword = ref('');
+const gameScore = ref(0);
+const gameStreak = ref(0);
+const gameTarget = ref({ x: 52, y: 48 });
 const workHourPresets = [1, 2, 4, 6, 7, 7.5, 8];
 const workHourOptions = Array.from({ length: 48 }, (_, index) => (index + 1) * 0.5);
+const loadingTips = [
+  '正在读取提交记录和影响文件',
+  '正在整理今日工作内容',
+  '正在压缩上下文并生成日报',
+  '快点中间的小光标，给等待加一点手感',
+];
 
 const selectedProjectText = computed(() => {
   if (!selectedRepos.value.length) return '未选择项目';
   return selectedRepos.value.map((repo) => repo.name).join('、');
 });
 
-const selectedConfigName = computed(() => {
-  const selected = projectOptions.value.find((item) => item.id === config.feishuForm.projectOptionId);
-  return selected?.name || `默认配置（${config.feishuForm.defaultWorkHours || 8}小时）`;
-});
-
 const generatedAtText = computed(() => formatDateTime(lastReportResult.value?.generatedAt || dailyReports.value[0]?.generatedAt));
 const commitCount = computed(() => lastReportResult.value?.commits.length ?? 0);
 const touchedFiles = computed(() => Array.from(new Set(lastReportResult.value?.commits.flatMap((commit) => commit.files) ?? [])));
 const reportLineCount = computed(() => report.value.split(/\r?\n/).filter((line) => line.trim()).length);
+const activeReportContent = computed(() => (reportMode.value === 'concise' ? conciseReportDraft.value : report.value));
+const loadingTip = computed(() => loadingTips[gameScore.value % loadingTips.length]);
+const gameTargetStyle = computed(() => ({
+  left: `${gameTarget.value.x}%`,
+  top: `${gameTarget.value.y}%`,
+}));
 
 const metrics = computed(() => [
   { label: '选中仓库', value: selectedRepos.value.length },
@@ -72,6 +89,97 @@ const filteredRepos = computed(() => {
   if (!keyword) return sortedRepos.value;
   return sortedRepos.value.filter((repo) => `${repo.name} ${repo.path}`.toLocaleLowerCase().includes(keyword));
 });
+const generationChecks = computed(() => [
+  {
+    key: 'repo',
+    label: '仓库范围',
+    ok: selectedRepos.value.length > 0,
+    detail: selectedRepos.value.length ? `已选择 ${selectedRepos.value.length} 个仓库` : '未选择仓库',
+    action: 'repositories',
+    required: true,
+  },
+  {
+    key: 'date',
+    label: '日报日期',
+    ok: Boolean(form.date),
+    detail: form.date || '未选择日期',
+    action: '',
+    required: true,
+  },
+  {
+    key: 'reporter',
+    label: '汇报人',
+    ok: Boolean(config.reporterName),
+    detail: config.reporterName || '未设置汇报人',
+    action: 'config',
+    required: true,
+  },
+  {
+    key: 'ai',
+    label: 'AI 接入',
+    ok: Boolean(config.aiBaseUrl && config.aiModel && config.aiApiKey),
+    detail: config.aiApiKey ? config.aiModel : '未配置时将使用基础日报模板',
+    action: 'config',
+    required: false,
+  },
+]);
+const blockedGenerationCheck = computed(() => generationChecks.value.find((item) => item.required && !item.ok));
+
+function extractReportSection(reportText: string, sectionTitle: string) {
+  const lines = reportText.split(/\r?\n/);
+  const startIndex = lines.findIndex((line) => line.trim().replace(/^#+\s*/, '').startsWith(sectionTitle));
+  if (startIndex < 0) return '';
+
+  const sectionLines: string[] = [];
+  for (const line of lines.slice(startIndex + 1)) {
+    const trimmed = line.trim();
+    if (/^(今日工作内容|工作成果|工作时长|明日计划|汇报人|日期)[：:]/.test(trimmed)) {
+      break;
+    }
+    if (trimmed) sectionLines.push(trimmed);
+  }
+  return sectionLines.join('\n').trim();
+}
+
+function buildConciseReport(reportText: string) {
+  const workContent = extractReportSection(reportText, '今日工作内容') || reportText.trim();
+  return workContent
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^[-*]\s+/, ''))
+    .filter(Boolean)
+    .join('\n');
+}
+
+function moveGameTarget() {
+  gameTarget.value = {
+    x: Math.round(12 + Math.random() * 76),
+    y: Math.round(18 + Math.random() * 58),
+  };
+}
+
+function hitGameTarget() {
+  gameScore.value += 1;
+  gameStreak.value += 1;
+  moveGameTarget();
+}
+
+function markConciseDirty() {
+  conciseDirty.value = true;
+}
+
+watch(report, (value) => {
+  if (!conciseDirty.value) {
+    conciseReportDraft.value = buildConciseReport(value);
+  }
+  if (value.trim()) reportMode.value = 'concise';
+});
+
+watch(loading, (isLoading) => {
+  if (!isLoading) return;
+  gameScore.value = 0;
+  gameStreak.value = 0;
+  moveGameTarget();
+});
 
 function formatDateTime(value?: string) {
   if (!value) return '暂无';
@@ -89,37 +197,57 @@ function formatDateTime(value?: string) {
 
 function setDateShortcut(value: string) {
   dateShortcut.value = value;
+  if (value === 'custom') return;
   const date = new Date();
   if (value === 'yesterday') date.setDate(date.getDate() - 1);
-  if (value === 'week') date.setDate(date.getDate() - 6);
-  if (value === 'month') date.setDate(date.getDate() - 29);
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   form.date = `${year}-${month}-${day}`;
 }
 
+function handleDateChange() {
+  dateShortcut.value = 'custom';
+}
+
+async function handleGenerate() {
+  const blocked = blockedGenerationCheck.value;
+  if (blocked) {
+    ElMessage.warning(`请先完善：${blocked.label}`);
+    return;
+  }
+  if (!config.aiApiKey) {
+    ElMessage.info('未配置 AI 接入，将使用基础日报模板生成');
+  }
+  conciseDirty.value = false;
+  await generate();
+}
+
 async function copyReport() {
-  if (!report.value.trim()) {
+  if (!activeReportContent.value.trim()) {
     ElMessage.warning('当前没有可复制的日报内容');
     return;
   }
-  await navigator.clipboard.writeText(report.value);
+  await navigator.clipboard.writeText(activeReportContent.value);
   ElMessage.success('日报内容已复制');
 }
 
 function exportMarkdown() {
-  if (!report.value.trim()) {
+  if (!activeReportContent.value.trim()) {
     ElMessage.warning('当前没有可导出的日报内容');
     return;
   }
-  const blob = new Blob([report.value], { type: 'text/markdown;charset=utf-8' });
+  const blob = new Blob([activeReportContent.value], { type: 'text/markdown;charset=utf-8' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  link.download = `项目日报-${form.date}.md`;
+  link.download = `项目日报-${reportMode.value === 'concise' ? '简洁版-' : ''}${form.date}.md`;
   link.click();
   URL.revokeObjectURL(link.href);
   ElMessage.success('Markdown 已导出');
+}
+
+async function publishActiveReport() {
+  await push(activeReportContent.value);
 }
 
 async function confirmRemoveRepo(item: RepoInfo) {
@@ -139,10 +267,48 @@ async function confirmRemoveRepo(item: RepoInfo) {
 
 <template>
   <div class="view-stack">
+    <div v-if="loading" class="generation-loading-overlay" aria-live="polite">
+      <div class="generation-loading-shell">
+        <div class="generation-loading-copy">
+          <span class="loading-eyebrow">
+            <Sparkles :size="16" />
+            生成中
+          </span>
+          <h2>AI 正在整理今日日报</h2>
+          <p>{{ loadingTip }}</p>
+          <div class="loading-progress">
+            <i />
+          </div>
+        </div>
+
+        <div class="loading-game-panel">
+          <div class="loading-game-head">
+            <div>
+              <strong>等待小游戏</strong>
+              <span>点击光标收集灵感点</span>
+            </div>
+            <div class="loading-game-score">
+              <Gamepad2 :size="16" />
+              {{ gameScore }}
+            </div>
+          </div>
+          <div class="loading-game-board">
+            <span class="loading-game-chip chip-a">commit</span>
+            <span class="loading-game-chip chip-b">diff</span>
+            <span class="loading-game-chip chip-c">report</span>
+            <button type="button" class="loading-game-target" :style="gameTargetStyle" @click="hitGameTarget">
+              <Sparkles :size="20" />
+            </button>
+          </div>
+          <p>连续命中 {{ gameStreak }} 次，日报生成完成后会自动关闭。</p>
+        </div>
+      </div>
+    </div>
+
     <PageHeader title="日报生成" subtitle="基于当前仓库和配置生成日报，支持直接修改、保存、导出和同步飞书">
       <template #actions>
-        <el-button :icon="FileText" plain>生成记录</el-button>
-        <el-button :icon="CalendarDays" plain>批量生成</el-button>
+        <el-button :icon="FileText" plain @click="emit('navigate', 'history')">生成记录</el-button>
+        <el-button :icon="CalendarDays" plain @click="emit('navigate', 'sync:list')">同步任务</el-button>
       </template>
     </PageHeader>
 
@@ -228,21 +394,13 @@ async function confirmRemoveRepo(item: RepoInfo) {
             </div>
             <div class="field">
               <label>选择日期</label>
-              <el-date-picker v-model="form.date" type="date" value-format="YYYY-MM-DD" />
-            </div>
-            <div class="field">
-              <label>选择配置</label>
-              <el-select :model-value="selectedConfigName">
-                <el-option :label="selectedConfigName" :value="selectedConfigName" />
-              </el-select>
+              <el-date-picker v-model="form.date" type="date" value-format="YYYY-MM-DD" @change="handleDateChange" />
             </div>
           </div>
           <div class="segmented-actions">
             <button :class="{ active: dateShortcut === 'today' }" @click="setDateShortcut('today')">今天</button>
             <button :class="{ active: dateShortcut === 'yesterday' }" @click="setDateShortcut('yesterday')">昨天</button>
-            <button :class="{ active: dateShortcut === 'week' }" @click="setDateShortcut('week')">近7天</button>
-            <button :class="{ active: dateShortcut === 'month' }" @click="setDateShortcut('month')">近30天</button>
-            <button :class="{ active: dateShortcut === 'custom' }" @click="dateShortcut = 'custom'">自定义日期</button>
+            <button :class="{ active: dateShortcut === 'custom' }" @click="setDateShortcut('custom')">自定义日期</button>
           </div>
         </section>
 
@@ -252,7 +410,24 @@ async function confirmRemoveRepo(item: RepoInfo) {
               <span>2</span>
               <strong>生成与编辑</strong>
             </div>
-            <el-button :icon="Sparkles" type="primary" :loading="loading" @click="generate">开始生成</el-button>
+            <el-button :icon="Sparkles" type="primary" :loading="loading" @click="handleGenerate">开始生成</el-button>
+          </div>
+          <div class="generation-check-grid">
+            <button
+              v-for="item in generationChecks"
+              :key="item.key"
+              type="button"
+              class="generation-check-card"
+              :class="{ ready: item.ok, warning: !item.ok && item.required, optional: !item.required }"
+              :disabled="!item.action"
+              @click="item.action && emit('navigate', item.action)"
+            >
+              <component :is="item.ok ? CheckCircle2 : CircleAlert" :size="18" />
+              <span>
+                <strong>{{ item.label }}</strong>
+                <small>{{ item.detail }}</small>
+              </span>
+            </button>
           </div>
           <div class="notice-line">
             <StatusBadge
@@ -279,14 +454,36 @@ async function confirmRemoveRepo(item: RepoInfo) {
               <span>生成时间：{{ generatedAtText }}</span>
             </div>
 
+            <div v-if="activePreviewTab === 'report'" class="report-mode-row">
+              <div class="report-mode-copy">
+                <strong>{{ reportMode === 'concise' ? '简洁版日报' : '完整日报' }}</strong>
+                <span>{{ reportMode === 'concise' ? '仅保留今日工作内容，适合直接提交飞书' : '保留完整结构，适合归档和复盘' }}</span>
+              </div>
+              <div class="report-mode-switch">
+                <button type="button" :class="{ active: reportMode === 'concise' }" @click="reportMode = 'concise'">简洁版</button>
+                <button type="button" :class="{ active: reportMode === 'full' }" @click="reportMode = 'full'">完整版</button>
+              </div>
+            </div>
+
             <el-input
-              v-if="activePreviewTab === 'report'"
+              v-if="activePreviewTab === 'report' && reportMode === 'full'"
               v-model="report"
               class="editable-report"
               type="textarea"
               :rows="18"
               resize="vertical"
               placeholder="生成后的日报会显示在这里，可直接修改后保存"
+            />
+
+            <el-input
+              v-else-if="activePreviewTab === 'report'"
+              v-model="conciseReportDraft"
+              class="editable-report concise-report"
+              type="textarea"
+              :rows="10"
+              resize="vertical"
+              placeholder="简洁版会自动提取今日工作内容，可手动微调后复制或发布到飞书"
+              @input="markConciseDirty"
             />
 
             <div v-else-if="activePreviewTab === 'commits'" class="data-list">
@@ -308,7 +505,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
           </article>
 
           <div class="button-row between">
-            <el-button :icon="RotateCcw" plain :loading="loading" @click="generate">重新生成</el-button>
+            <el-button :icon="RotateCcw" plain :loading="loading" @click="handleGenerate">重新生成</el-button>
             <div class="button-row">
               <el-button :icon="Save" plain @click="saveCurrentReport">保存修改</el-button>
               <el-button :icon="ClipboardCopy" plain @click="copyReport">复制内容</el-button>
@@ -326,9 +523,9 @@ async function confirmRemoveRepo(item: RepoInfo) {
             <strong>发布与同步</strong>
           </div>
           <h3>发布到飞书</h3>
-          <div class="switch-line">
-            <span>启用飞书同步</span>
-            <el-switch v-model="config.autoSync.enabled" />
+          <div class="publish-hint">
+            <span>定时自动同步已移至同步任务统一管理</span>
+            <button type="button" @click="emit('navigate', 'sync:list')">去配置</button>
           </div>
           <div class="field">
             <label>选择目标</label>
@@ -374,8 +571,9 @@ async function confirmRemoveRepo(item: RepoInfo) {
               </button>
             </div>
           </div>
-          <el-button :icon="Send" type="primary" :loading="pushing" :disabled="!report.trim()" @click="push">立即发布到飞书</el-button>
-          <el-button plain :icon="Save" :disabled="!report.trim()" @click="saveCurrentReport">仅保存日报</el-button>
+          <el-button :icon="Send" type="primary" :loading="pushing" :disabled="!activeReportContent.trim()" @click="publishActiveReport">
+            {{ reportMode === 'concise' ? '立即发布简洁版到飞书' : '立即发布当前内容到飞书' }}
+          </el-button>
         </section>
 
         <section class="surface-card">

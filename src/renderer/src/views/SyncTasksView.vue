@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import dayjs from 'dayjs';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
@@ -85,7 +85,11 @@ const {
   syncLogs,
 } = assistant;
 
-const activeTab = ref<ActiveTab>('calendar');
+const props = defineProps<{
+  initialTab?: ActiveTab;
+}>();
+
+const activeTab = ref<ActiveTab>(props.initialTab ?? 'list');
 const currentMonth = ref(dayjs().startOf('month'));
 const selectedDate = ref(dayjs());
 const calendarFilter = ref<CalendarFilter>('all');
@@ -109,6 +113,13 @@ const weekOptions = [
   { label: '周六', value: 6 },
   { label: '周日', value: 0 },
 ];
+
+watch(
+  () => props.initialTab,
+  (value) => {
+    if (value) activeTab.value = value;
+  },
+);
 
 const draftTask = reactive({
   name: '',

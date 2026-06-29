@@ -17,6 +17,7 @@ import MessageCenterView from '@/views/MessageCenterView.vue';
 
 const assistant = useAssistant();
 const activeNav = ref('dashboard');
+const syncInitialTab = ref<'list' | 'calendar'>('list');
 const showWelcome = ref(true);
 
 const viewMap = {
@@ -33,9 +34,14 @@ const viewMap = {
 };
 
 const activeView = computed(() => viewMap[activeNav.value as keyof typeof viewMap] ?? DashboardView);
+const appVersionText = computed(() => (assistant.storageInfo.value?.appVersion ? ` v${assistant.storageInfo.value.appVersion}` : ''));
 
 function handleNavigate(value: string) {
-  activeNav.value = value;
+  const [targetNav, targetTab] = value.split(':');
+  if (targetNav === 'sync' && (targetTab === 'list' || targetTab === 'calendar')) {
+    syncInitialTab.value = targetTab;
+  }
+  activeNav.value = targetNav;
 }
 
 onMounted(async () => {
@@ -57,10 +63,10 @@ onBeforeUnmount(() => {
       <AppTopbar @navigate="handleNavigate" />
 
       <div class="app-scroll">
-        <component :is="activeView" @navigate="handleNavigate" />
+        <component :is="activeView" :initial-tab="activeNav === 'sync' ? syncInitialTab : undefined" @navigate="handleNavigate" />
 
         <footer class="app-footer">
-          AI日报助手 v1.0.0 · 让技术日报生成更简单、更智能
+          AI日报助手{{ appVersionText }} · 让技术日报生成更简单、更智能
         </footer>
       </div>
     </main>
