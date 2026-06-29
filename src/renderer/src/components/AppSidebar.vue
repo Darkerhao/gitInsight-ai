@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
-import { Bot, ChevronDown, CircleHelp, ClipboardList, FileCog, FileText, FolderKanban, History, Home, Info, MessageCircle, Pin, Plus, Settings, Sparkles, Trash2 } from 'lucide-vue-next';
-import { useAssistant } from '@/composables/useAssistant';
-import type { RepoInfo } from '@shared/types';
+import { Bot, ChevronDown, CircleHelp, ClipboardList, FileCog, FileText, FolderKanban, FolderOpen, History, Home, Info, MessageCircle, Settings, Sparkles } from 'lucide-vue-next';
 
 const props = defineProps<{
   activeNav: string;
@@ -12,9 +9,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:activeNav', value: string): void;
 }>();
-
-const assistant = useAssistant();
-const { sortedRepos, selectedRepoPaths, toggleRepo, isRepoPinned, toggleRepoPin, chooseWorkspace, removeRepo } = assistant;
 
 type NavLeaf = { key: string; label: string; icon: any; enabled: boolean };
 type NavGroup = { id: string; label: string; icon: any; children: NavLeaf[] };
@@ -33,6 +27,7 @@ const navNodes: NavNode[] = [
       { key: 'history', label: '历史日志', icon: History, enabled: true },
     ],
   },
+  { key: 'repositories', label: '仓库中心', icon: FolderOpen, enabled: true },
   { key: 'messages', label: '消息', icon: MessageCircle, enabled: true },
   {
     id: 'settings',
@@ -82,20 +77,6 @@ function toggleGroup(id: string) {
 function onNav(item: NavLeaf) {
   if (!item.enabled) return;
   emit('update:activeNav', item.key);
-}
-
-async function confirmRemoveRepo(item: RepoInfo) {
-  try {
-    await ElMessageBox.confirm(`确定从列表中移除「${item.name}」吗？这不会删除本地仓库文件。`, '移除仓库', {
-      confirmButtonText: '移除',
-      cancelButtonText: '取消',
-      type: 'warning',
-    });
-    await removeRepo(item.path);
-  } catch (error) {
-    if (error === 'cancel' || error === 'close') return;
-    ElMessage.error(error instanceof Error ? error.message : '移除仓库失败');
-  }
 }
 </script>
 
@@ -147,55 +128,6 @@ async function confirmRemoveRepo(item: RepoInfo) {
         </button>
       </template>
     </nav>
-
-    <div class="sidebar-projects">
-      <div class="sidebar-projects-head">
-        <span>仓库列表</span>
-        <span v-if="sortedRepos.length" class="sidebar-projects-count">{{ sortedRepos.length }} 个</span>
-        <el-button link type="primary" size="small" :icon="Plus" @click="chooseWorkspace">
-          选择仓库
-        </el-button>
-      </div>
-      <div class="sidebar-projects-list">
-        <div
-          v-for="item in sortedRepos"
-          :key="item.path"
-          class="project-card"
-          :class="{ active: selectedRepoPaths.includes(item.path), pinned: isRepoPinned(item.path) }"
-        >
-          <button type="button" class="project-card-main" @click="toggleRepo(item.path)">
-            <div class="project-card-head">
-              <span class="project-dot" />
-              <strong>{{ item.name }}</strong>
-            </div>
-            <span class="project-path">{{ item.path }}</span>
-          </button>
-
-          <el-tooltip :content="isRepoPinned(item.path) ? '取消置顶' : '置顶仓库'" placement="right">
-            <button
-              type="button"
-              class="project-pin"
-              :class="{ active: isRepoPinned(item.path) }"
-              :aria-label="isRepoPinned(item.path) ? `取消置顶 ${item.name}` : `置顶 ${item.name}`"
-              :aria-pressed="isRepoPinned(item.path)"
-              @click.stop="toggleRepoPin(item.path)"
-            >
-              <Pin :size="14" />
-            </button>
-          </el-tooltip>
-
-          <el-tooltip content="从列表移除" placement="right">
-            <button type="button" class="project-delete" :aria-label="`移除 ${item.name}`" @click.stop="confirmRemoveRepo(item)">
-              <Trash2 :size="14" />
-            </button>
-          </el-tooltip>
-        </div>
-
-        <button v-if="!sortedRepos.length" class="project-empty" @click="chooseWorkspace">
-          暂无仓库，点击选择工作目录
-        </button>
-      </div>
-    </div>
 
     <div class="sidebar-tip">
       <div class="sidebar-tip-icon"><Bot :size="28" /></div>

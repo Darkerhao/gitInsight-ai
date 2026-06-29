@@ -1,34 +1,41 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { CalendarDays, ClipboardCopy, Download, FileText, RotateCcw, Save, Send, Sparkles } from 'lucide-vue-next';
-import { ElMessage } from 'element-plus';
+import { CalendarDays, CheckCircle2, ClipboardCopy, Download, FileText, Pin, Plus, RotateCcw, Save, Search, Send, Sparkles, Trash2 } from 'lucide-vue-next';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import { useAssistant } from '@/composables/useAssistant';
+import type { RepoInfo } from '@shared/types';
 
 const assistant = useAssistant();
 const {
   config,
   form,
-  repos,
   report,
   status,
   loading,
   pushing,
+  sortedRepos,
   selectedRepoPaths,
   selectedRepos,
   projectOptions,
   lastReportResult,
   dailyReports,
+  chooseWorkspace,
   generate,
   push,
   saveCurrentReport,
+  toggleRepo,
+  isRepoPinned,
+  toggleRepoPin,
+  removeRepo,
   selectFeishuProject,
   updateProjectWorkHours,
 } = assistant;
 
 const activePreviewTab = ref('report');
 const dateShortcut = ref('today');
+const repoKeyword = ref('');
 const workHourPresets = [1, 2, 4, 6, 7, 7.5, 8];
 const workHourOptions = Array.from({ length: 48 }, (_, index) => (index + 1) * 0.5);
 
@@ -55,6 +62,16 @@ const metrics = computed(() => [
 ]);
 
 const generationRecords = computed(() => dailyReports.value.slice(0, 5));
+const selectedRepoSummary = computed(() => {
+  if (!selectedRepos.value.length) return '请选择要生成日报的仓库';
+  if (selectedRepos.value.length === 1) return selectedRepos.value[0].name;
+  return `已选择 ${selectedRepos.value.length} 个仓库`;
+});
+const filteredRepos = computed(() => {
+  const keyword = repoKeyword.value.trim().toLocaleLowerCase();
+  if (!keyword) return sortedRepos.value;
+  return sortedRepos.value.filter((repo) => `${repo.name} ${repo.path}`.toLocaleLowerCase().includes(keyword));
+});
 
 function formatDateTime(value?: string) {
   if (!value) return '暂无';
@@ -104,6 +121,20 @@ function exportMarkdown() {
   URL.revokeObjectURL(link.href);
   ElMessage.success('Markdown 已导出');
 }
+
+async function confirmRemoveRepo(item: RepoInfo) {
+  try {
+    await ElMessageBox.confirm(`确定从仓库中心移除「${item.name}」吗？这不会删除本地仓库文件。`, '移除仓库', {
+      confirmButtonText: '移除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    });
+    await removeRepo(item.path);
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return;
+    ElMessage.error(error instanceof Error ? error.message : '移除仓库失败');
+  }
+}
 </script>
 
 <template>
@@ -123,11 +154,77 @@ function exportMarkdown() {
             <strong>选择生成范围</strong>
           </div>
           <div class="field-grid">
-            <div class="field">
-              <label>选择项目</label>
-              <el-select v-model="selectedRepoPaths" multiple collapse-tags collapse-tags-tooltip placeholder="选择项目">
-                <el-option v-for="repo in repos" :key="repo.path" :label="repo.name" :value="repo.path" />
-              </el-select>
+            <div class="field field-span-3 repo-picker-field">
+              <label>选择仓库</label>
+              <el-popover placement="bottom-start" trigger="click" :width="620" popper-class="repo-picker-popper">
+                <template #reference>
+                  <button type="button" class="repo-picker-trigger">
+                    <div>
+                      <strong>{{ selectedRepoSummary }}</strong>
+                      <span>{{ selectedRepos.length ? selectedRepos.map((repo) => repo.name).join('、') : '支持多仓库汇总生成日报' }}</span>
+                    </div>
+                    <small>{{ selectedRepoPaths.length }}/{{ sortedRepos.length }}</small>
+                  </button>
+                </template>
+
+                <div class="repo-picker-panel">
+                  <div class="repo-picker-head">
+                    <div>
+                      <strong>仓库选择</strong>
+                      <span>当前日报会基于选中的仓库生成</span>
+                    </div>
+                    <el-button :icon="Plus" type="primary" plain @click="chooseWorkspace">添加仓库</el-button>
+                  </div>
+
+                  <el-input v-model="repoKeyword" :prefix-icon="Search" clearable placeholder="搜索仓库名称或路径" />
+
+                  <div class="repo-picker-list">
+                    <button v-if="!sortedRepos.length" type="button" class="repo-picker-empty" @click="chooseWorkspace">
+                      暂无仓库，点击选择工作目录
+                    </button>
+
+                    <div
+                      v-for="repo in filteredRepos"
+                      :key="repo.path"
+                      class="repo-picker-item"
+                      :class="{ active: selectedRepoPaths.includes(repo.path), pinned: isRepoPinned(repo.path) }"
+                    >
+                      <button type="button" class="repo-picker-main" @click="toggleRepo(repo.path)">
+                        <span class="repo-picker-check">
+                          <CheckCircle2 v-if="selectedRepoPaths.includes(repo.path)" :size="16" />
+                        </span>
+                        <span class="repo-picker-copy">
+                          <strong>{{ repo.name }}</strong>
+                          <small>{{ repo.path }}</small>
+                        </span>
+                      </button>
+
+                      <el-tooltip :content="isRepoPinned(repo.path) ? '取消置顶' : '置顶仓库'" placement="top">
+                        <button
+                          type="button"
+                          class="repo-picker-icon"
+                          :class="{ active: isRepoPinned(repo.path) }"
+                          :aria-label="isRepoPinned(repo.path) ? `取消置顶 ${repo.name}` : `置顶 ${repo.name}`"
+                          :aria-pressed="isRepoPinned(repo.path)"
+                          @click.stop="toggleRepoPin(repo.path)"
+                        >
+                          <Pin :size="15" />
+                        </button>
+                      </el-tooltip>
+
+                      <el-tooltip content="从列表移除" placement="top">
+                        <button type="button" class="repo-picker-icon danger" :aria-label="`移除 ${repo.name}`" @click.stop="confirmRemoveRepo(repo)">
+                          <Trash2 :size="15" />
+                        </button>
+                      </el-tooltip>
+                    </div>
+
+                    <div v-if="sortedRepos.length && !filteredRepos.length" class="repo-picker-empty">
+                      未找到匹配仓库
+                    </div>
+                  </div>
+                </div>
+              </el-popover>
             </div>
             <div class="field">
               <label>选择日期</label>
@@ -160,7 +257,7 @@ function exportMarkdown() {
           <div class="notice-line">
             <StatusBadge
               status="info"
-              :label="selectedRepos.length ? `将基于 ${selectedRepos.length} 个已选仓库生成日报` : '请先在左侧项目列表或当前下拉框选择仓库'"
+              :label="selectedRepos.length ? `将基于 ${selectedRepos.length} 个已选仓库生成日报` : '请先在当前仓库选择器中选择仓库'"
             />
           </div>
           <div class="metric-grid">

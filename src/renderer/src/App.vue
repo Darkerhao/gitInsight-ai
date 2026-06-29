@@ -5,6 +5,7 @@ import AppSidebar from '@/components/AppSidebar.vue';
 import AppTopbar from '@/components/AppTopbar.vue';
 import WelcomeGate from '@/components/WelcomeGate.vue';
 import DashboardView from '@/views/DashboardView.vue';
+import RepositoryCenterView from '@/views/RepositoryCenterView.vue';
 import ReportConfigView from '@/views/ReportConfigView.vue';
 import ReportGenerateView from '@/views/ReportGenerateView.vue';
 import SyncTasksView from '@/views/SyncTasksView.vue';
@@ -20,6 +21,7 @@ const showWelcome = ref(true);
 
 const viewMap = {
   dashboard: DashboardView,
+  repositories: RepositoryCenterView,
   about: AboutUsView,
   help: UsageHelpView,
   config: ReportConfigView,
