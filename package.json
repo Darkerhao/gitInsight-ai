@@ -16,7 +16,8 @@
     "dist:linux": "npm run build && electron-builder --linux",
     "start": "electron .",
     "preview": "electron-vite preview",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "release:tag": "node scripts/release-tag.mjs"
   },
   "dependencies": {
     "@vueuse/core": "^13.5.0",
