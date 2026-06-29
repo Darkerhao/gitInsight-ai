@@ -1,6 +1,6 @@
 {
   "name": "gitinsight-ai",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "AI daily report assistant for Git repositories",
   "author": "JIAZI ANG <17600157636@163.com>",
   "private": true,
@@ -24,6 +24,7 @@
     "echarts": "^6.1.0",
     "electron-updater": "^6.6.2",
     "element-plus": "^2.10.4",
+    "gsap": "^3.15.0",
     "lucide-vue-next": "^0.548.0",
     "simple-git": "^3.27.0",
     "sql.js": "^1.14.1",
