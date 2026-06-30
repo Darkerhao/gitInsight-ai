@@ -37,6 +37,7 @@ const selectedProject = ref('全部项目');
 const selectedType = ref('全部类型');
 const selectedStatus = ref('全部状态');
 const selectedLog = ref<HistoryLog | null>(null);
+const detailVisible = ref(false);
 const timeRange = ref<[string, string] | null>(null);
 const currentPage = ref(1);
 const pageSize = ref(10);
@@ -113,7 +114,7 @@ const filteredLogs = computed(() => {
   });
 });
 
-const activeLog = computed(() => selectedLog.value || filteredLogs.value[0]);
+const activeLog = computed(() => selectedLog.value ?? null);
 const pagedLogs = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value;
   return filteredLogs.value.slice(start, start + pageSize.value);
@@ -203,7 +204,7 @@ function formatDateTime(value: string) {
   <div class="view-stack">
     <PageHeader title="历史日志" subtitle="查看所有日报生成、同步及错误记录" />
 
-    <div class="content-grid history-layout">
+    <div :class="['content-grid', detailVisible && activeLog ? 'history-layout' : '']">
       <div class="view-stack">
         <section class="surface-card filter-panel">
           <div class="field-grid">
@@ -246,7 +247,7 @@ function formatDateTime(value: string) {
 
         <section class="surface-card log-table-card">
           <div class="table-summary">共 {{ filteredLogs.length }} 条日志</div>
-          <el-table :data="pagedLogs" class="log-table" @row-click="(row: HistoryLog) => (selectedLog = row)">
+          <el-table :data="pagedLogs" class="log-table" @row-click="(row: HistoryLog) => { selectedLog = row; detailVisible = true }">
             <el-table-column label="时间" min-width="170">
               <template #default="{ row }">{{ formatDateTime(row.time) }}</template>
             </el-table-column>
@@ -274,41 +275,43 @@ function formatDateTime(value: string) {
         </section>
       </div>
 
-      <aside class="surface-card detail-panel" v-if="activeLog">
-        <div class="panel-head">
-          <h3>日志详情</h3>
-          <el-button :icon="X" link @click="selectedLog = null" />
-        </div>
-        <div class="detail-actions">
-          <el-button :icon="RotateCcw" plain :disabled="!activeLog.reportRecord" @click="loadActiveReport">继续编辑</el-button>
-          <el-button :icon="Send" plain :disabled="!activeLog.reportRecord" @click="republishActiveReport">重新发布</el-button>
-          <el-button :icon="ClipboardCopy" plain @click="copyActiveLog">复制</el-button>
-          <el-button :icon="Download" type="primary" plain @click="exportActiveLog">导出</el-button>
-        </div>
-        <StatusBadge :status="activeLog.status" :label="activeLog.status === 'success' ? '成功' : activeLog.status === 'failed' ? '失败' : '信息'" />
-        <dl class="detail-list">
-          <dt>日志类型</dt>
-          <dd>{{ activeLog.type }}</dd>
-          <dt>操作内容</dt>
-          <dd>{{ activeLog.action }}</dd>
-          <dt>项目</dt>
-          <dd>{{ activeLog.project }}</dd>
-          <dt>执行时间</dt>
-          <dd>{{ formatDateTime(activeLog.time) }}</dd>
-          <dt>执行时长</dt>
-          <dd>{{ activeLog.duration }}</dd>
-          <dt>操作人</dt>
-          <dd>{{ activeLog.operator }}</dd>
-          <dt>触发方式</dt>
-          <dd>{{ activeLog.trigger }}</dd>
-          <dt>生成文件</dt>
-          <dd>{{ activeLog.file || '-' }}</dd>
-        </dl>
-        <div class="process-list">
-          <h4>详情内容</h4>
-          <pre class="log-detail-text">{{ activeLog.detail || '-' }}</pre>
-        </div>
-      </aside>
+      <Transition name="slide-detail">
+        <aside class="surface-card detail-panel" v-if="detailVisible && activeLog">
+          <div class="panel-head">
+            <h3>日志详情</h3>
+            <el-button :icon="X" link @click="detailVisible = false" />
+          </div>
+          <div class="detail-actions">
+            <el-button :icon="RotateCcw" plain :disabled="!activeLog.reportRecord" @click="loadActiveReport">继续编辑</el-button>
+            <el-button :icon="Send" plain :disabled="!activeLog.reportRecord" @click="republishActiveReport">重新发布</el-button>
+            <el-button :icon="ClipboardCopy" plain @click="copyActiveLog">复制</el-button>
+            <el-button :icon="Download" type="primary" plain @click="exportActiveLog">导出</el-button>
+          </div>
+          <StatusBadge :status="activeLog.status" :label="activeLog.status === 'success' ? '成功' : activeLog.status === 'failed' ? '失败' : '信息'" />
+          <dl class="detail-list">
+            <dt>日志类型</dt>
+            <dd>{{ activeLog.type }}</dd>
+            <dt>操作内容</dt>
+            <dd>{{ activeLog.action }}</dd>
+            <dt>项目</dt>
+            <dd>{{ activeLog.project }}</dd>
+            <dt>执行时间</dt>
+            <dd>{{ formatDateTime(activeLog.time) }}</dd>
+            <dt>执行时长</dt>
+            <dd>{{ activeLog.duration }}</dd>
+            <dt>操作人</dt>
+            <dd>{{ activeLog.operator }}</dd>
+            <dt>触发方式</dt>
+            <dd>{{ activeLog.trigger }}</dd>
+            <dt>生成文件</dt>
+            <dd>{{ activeLog.file || '-' }}</dd>
+          </dl>
+          <div class="process-list">
+            <h4>详情内容</h4>
+            <pre class="log-detail-text">{{ activeLog.detail || '-' }}</pre>
+          </div>
+        </aside>
+      </Transition>
     </div>
   </div>
 </template>

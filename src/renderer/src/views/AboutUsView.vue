@@ -53,7 +53,7 @@ async function refreshInfo() {
     </PageHeader>
 
     <section class="surface-card about-hero">
-      <div class="about-logo">A</div>
+      <img class="about-logo" src="../assets/logo.png" alt="Logo" />
       <div class="about-hero-copy">
         <h2>AI 日报助手</h2>
         <span>基于 Git 变更自动生成日报，并同步至飞书。</span>

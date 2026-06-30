@@ -83,7 +83,7 @@ function onNav(item: NavLeaf) {
 <template>
   <aside class="sidebar">
     <div class="sidebar-brand">
-      <div class="sidebar-logo">A</div>
+      <img class="sidebar-logo" src="../assets/logo.png" alt="Logo" />
       <span class="sidebar-brand-name">AI日报助手</span>
     </div>
 

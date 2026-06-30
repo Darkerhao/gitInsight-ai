@@ -1734,8 +1734,9 @@ function createWindow() {
     },
   });
 
-  if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+  const devServerUrl = process.env.ELECTRON_RENDERER_URL || process.env.VITE_DEV_SERVER_URL;
+  if (devServerUrl) {
+    mainWindow.loadURL(devServerUrl);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));

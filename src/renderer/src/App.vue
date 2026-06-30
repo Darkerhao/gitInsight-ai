@@ -72,7 +72,6 @@ function needsOnboarding() {
 
 function finishWelcome() {
   showWelcome.value = false;
-  window.localStorage.setItem('gitinsight:welcome-finished', 'true');
 }
 
 onMounted(async () => {

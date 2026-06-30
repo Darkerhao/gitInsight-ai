@@ -1,9 +1,9 @@
 {
   "name": "gitinsight-ai",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "author": {
     "name": "DarkerHao",
-    "email": "2757586659@qq.com"
+    "email": "1726348482@qq.com"
   },
   "description": "AI daily report assistant for Git repositories",
   "private": true,

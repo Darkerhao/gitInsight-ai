@@ -21,6 +21,18 @@ const { config, projectOptions, storageInfo, refreshLocalData, saveSettings } = 
 
 const activeTab = ref('basic');
 
+const WELCOME_STORAGE_KEY = 'gitinsight:welcome-finished';
+const showWelcomeAnimation = ref(!window.localStorage.getItem(WELCOME_STORAGE_KEY));
+
+function toggleWelcomeAnimation(value: boolean) {
+  showWelcomeAnimation.value = value;
+  if (value) {
+    window.localStorage.removeItem(WELCOME_STORAGE_KEY);
+  } else {
+    window.localStorage.setItem(WELCOME_STORAGE_KEY, 'true');
+  }
+}
+
 const systemTimezone = computed(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai');
 const selectedProject = computed(() => {
   const selected = projectOptions.value.find((item) => item.id === config.feishuForm.projectOptionId);
@@ -110,6 +122,17 @@ async function resetSettings() {
             <div class="field">
               <label>系统时区</label>
               <el-input :model-value="systemTimezone" readonly />
+            </div>
+          </div>
+
+          <div class="panel-head" style="margin-top: 24px">
+            <h3>外观与体验</h3>
+          </div>
+          <div class="field-grid two-columns">
+            <div class="field">
+              <label>开屏动画</label>
+              <el-switch :model-value="showWelcomeAnimation" active-text="开启" inactive-text="关闭" @change="toggleWelcomeAnimation" />
+              <span class="field-hint">开启后下次启动应用将播放欢迎动画</span>
             </div>
           </div>
         </div>
