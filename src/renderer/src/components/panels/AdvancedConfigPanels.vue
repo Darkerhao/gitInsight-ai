@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Trash2 } from 'lucide-vue-next';
+import { RefreshCw, Trash2 } from 'lucide-vue-next';
 import { useAssistant } from '@/composables/useAssistant';
 import SectionTitle from '@/components/common/SectionTitle.vue';
 
@@ -9,11 +9,24 @@ const {
   advancedConfigPanels,
   aiBaseUrlOptions,
   aiModelOptions,
+  feishuFieldOptions,
+  fieldLoading,
   rememberAiBaseUrlOption,
   rememberAiModelOption,
   removeAiBaseUrlOption,
   removeAiModelOption,
+  loadFeishuFields,
+  loadFeishuProjects,
 } = assistant;
+
+const fieldMappingRows = [
+  { label: '日期字段', model: 'dateFieldId', placeholder: '选择日期字段 ID' },
+  { label: '汇报人字段', model: 'userFieldId', placeholder: '选择汇报人字段 ID' },
+  { label: '明细表问题', model: 'questionId', placeholder: '选择明细表问题 ID' },
+  { label: '所属项目字段', model: 'projectFieldId', placeholder: '选择所属项目字段 ID' },
+  { label: '工作时长字段', model: 'hoursFieldId', placeholder: '选择工作时长字段 ID' },
+  { label: '工作内容字段', model: 'contentFieldId', placeholder: '选择工作内容字段 ID' },
+] as const;
 </script>
 
 <template>
@@ -88,6 +101,45 @@ const {
           <div class="field field-span-2">
             <label>Cookie</label>
             <el-input v-model="config.feishuForm.cookie" type="textarea" :rows="2" placeholder="Cookie（仅保存在本机配置）" />
+          </div>
+        </div>
+      </el-collapse-item>
+
+      <el-collapse-item title="飞书表单字段映射" name="fields">
+        <div class="field-helper-row">
+          <div>
+            <strong>解析表单字段</strong>
+            <span>根据飞书表单元数据选择字段 ID，仍支持手动输入兜底。</span>
+          </div>
+          <el-button :icon="RefreshCw" :loading="fieldLoading" type="primary" plain @click="loadFeishuFields">
+            解析字段
+          </el-button>
+        </div>
+
+        <div class="field-grid">
+          <div v-for="row in fieldMappingRows" :key="row.model" class="field">
+            <label>{{ row.label }}</label>
+            <el-select
+              v-model="config.feishuForm[row.model]"
+              filterable
+              allow-create
+              default-first-option
+              :placeholder="row.placeholder"
+              :loading="fieldLoading"
+              @change="row.model === 'projectFieldId' && loadFeishuProjects()"
+            >
+              <el-option
+                v-for="field in feishuFieldOptions"
+                :key="`${row.model}-${field.id}`"
+                :label="`${field.name}（${field.typeLabel}）`"
+                :value="field.id"
+              >
+                <div class="select-option-row">
+                  <span>{{ field.name }} · {{ field.typeLabel }}</span>
+                  <small>{{ field.id }}</small>
+                </div>
+              </el-option>
+            </el-select>
           </div>
         </div>
       </el-collapse-item>

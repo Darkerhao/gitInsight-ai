@@ -209,6 +209,13 @@ export interface FeishuProjectOption {
   color?: number;
 }
 
+export interface FeishuFieldOption {
+  id: string;
+  name: string;
+  type: number | string;
+  typeLabel: string;
+}
+
 export interface FeishuProjectOptionsPayload {
   config: FeishuFormConfig;
 }

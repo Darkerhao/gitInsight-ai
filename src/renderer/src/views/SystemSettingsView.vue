@@ -90,7 +90,7 @@ async function resetSettings() {
           <el-tab-pane label="日志管理" name="logs" />
         </el-tabs>
 
-        <div class="settings-section">
+        <div v-if="activeTab === 'basic'" class="settings-section">
           <div class="panel-head">
             <h3>系统信息</h3>
           </div>
@@ -114,7 +114,7 @@ async function resetSettings() {
           </div>
         </div>
 
-        <div class="settings-section">
+        <div v-if="activeTab === 'integration'" class="settings-section">
           <div class="panel-head">
             <h3>当前配置</h3>
           </div>
@@ -146,7 +146,7 @@ async function resetSettings() {
           </div>
         </div>
 
-        <div class="settings-section">
+        <div v-if="activeTab === 'security'" class="settings-section">
           <div class="panel-head">
             <h3>文件与存储</h3>
             <StatusBadge :status="storageInfo?.encryptionAvailable ? 'success' : 'failed'" :label="storageInfo?.encryptionAvailable ? '密钥保护可用' : '密钥保护不可用'" />
@@ -160,7 +160,7 @@ async function resetSettings() {
           </div>
         </div>
 
-        <div class="settings-section">
+        <div v-if="activeTab === 'logs'" class="settings-section">
           <div class="panel-head">
             <h3>本地数据统计</h3>
           </div>
@@ -172,7 +172,7 @@ async function resetSettings() {
           </div>
         </div>
 
-        <div class="settings-section">
+        <div v-if="activeTab === 'logs'" class="settings-section">
           <h3>系统操作</h3>
           <div class="operation-grid">
             <button class="operation-card" @click="refreshStorage">
@@ -188,7 +188,7 @@ async function resetSettings() {
           </div>
         </div>
 
-        <div class="button-row end">
+        <div v-if="activeTab === 'basic' || activeTab === 'integration'" class="button-row end">
           <el-button :icon="Save" type="primary" @click="saveSettings">保存设置</el-button>
         </div>
       </section>

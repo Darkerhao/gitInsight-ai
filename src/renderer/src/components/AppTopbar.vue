@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ChevronDown, CircleHelp, MessageCircleMore } from 'lucide-vue-next';
+import { ChevronDown, CircleHelp, MessageCircleMore, Save } from 'lucide-vue-next';
 import { useAssistant } from '@/composables/useAssistant';
 import { useMessages } from '@/composables/useMessages';
 
 const assistant = useAssistant();
-const { config } = assistant;
+const { config, isConfigDirty, saveSettings } = assistant;
 const { unreadCount } = useMessages();
 
 const emit = defineEmits<{
@@ -43,6 +43,11 @@ function navigateToAbout() {
     </div>
 
     <div class="topbar-actions">
+      <button v-if="isConfigDirty" class="topbar-pill is-warning" @click="saveSettings">
+        <Save :size="16" />
+        <span>保存配置</span>
+      </button>
+
       <button class="topbar-pill" @click="navigateToHelp">
         <CircleHelp :size="16" />
         <span>使用帮助</span>

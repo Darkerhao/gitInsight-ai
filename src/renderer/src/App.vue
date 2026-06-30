@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useAssistant } from '@/composables/useAssistant';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppTopbar from '@/components/AppTopbar.vue';
@@ -14,11 +15,14 @@ import SystemSettingsView from '@/views/SystemSettingsView.vue';
 import AboutUsView from '@/views/AboutUsView.vue';
 import UsageHelpView from '@/views/UsageHelpView.vue';
 import MessageCenterView from '@/views/MessageCenterView.vue';
+import { navKeys } from '@/router';
+import type { NavKey } from '@/router';
 
 const assistant = useAssistant();
-const activeNav = ref('dashboard');
 const syncInitialTab = ref<'list' | 'calendar'>('list');
-const showWelcome = ref(true);
+const showWelcome = ref(!window.localStorage.getItem('gitinsight:welcome-finished'));
+const route = useRoute();
+const router = useRouter();
 
 const viewMap = {
   dashboard: DashboardView,
@@ -33,19 +37,52 @@ const viewMap = {
   system: SystemSettingsView,
 };
 
+const routeNav = computed<NavKey>(() => {
+  const value = Array.isArray(route.params.nav) ? route.params.nav[0] : route.params.nav;
+  return navKeys.includes(value as NavKey) ? (value as NavKey) : 'dashboard';
+});
+const activeNav = computed({
+  get: () => routeNav.value,
+  set: (value: string) => handleNavigate(value),
+});
 const activeView = computed(() => viewMap[activeNav.value as keyof typeof viewMap] ?? DashboardView);
 const appVersionText = computed(() => (assistant.storageInfo.value?.appVersion ? ` v${assistant.storageInfo.value.appVersion}` : ''));
+
+watch(
+  () => route.query.tab,
+  (value) => {
+    if (routeNav.value === 'sync' && (value === 'list' || value === 'calendar')) {
+      syncInitialTab.value = value;
+    }
+  },
+);
 
 function handleNavigate(value: string) {
   const [targetNav, targetTab] = value.split(':');
   if (targetNav === 'sync' && (targetTab === 'list' || targetTab === 'calendar')) {
     syncInitialTab.value = targetTab;
   }
-  activeNav.value = targetNav;
+  const nextQuery = targetNav === 'sync' && (targetTab === 'list' || targetTab === 'calendar') ? { tab: targetTab } : {};
+  void router.push({ path: `/${targetNav}`, query: nextQuery });
+}
+
+function needsOnboarding() {
+  return !assistant.config.workspaceDirs.length || !assistant.config.reporterName;
+}
+
+function finishWelcome() {
+  showWelcome.value = false;
+  window.localStorage.setItem('gitinsight:welcome-finished', 'true');
 }
 
 onMounted(async () => {
+  if (routeNav.value === 'sync' && (route.query.tab === 'list' || route.query.tab === 'calendar')) {
+    syncInitialTab.value = route.query.tab;
+  }
   await assistant.init();
+  if (needsOnboarding()) {
+    showWelcome.value = true;
+  }
 });
 
 onBeforeUnmount(() => {
@@ -54,7 +91,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <WelcomeGate v-if="showWelcome" @finished="showWelcome = false" />
+  <WelcomeGate v-if="showWelcome" @finished="finishWelcome" />
 
   <div class="app-layout">
     <AppSidebar v-model:active-nav="activeNav" />

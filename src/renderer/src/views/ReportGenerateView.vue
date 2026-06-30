@@ -579,7 +579,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
         <section class="surface-card">
           <div class="panel-head">
             <h3>生成记录</h3>
-            <el-button link type="primary">查看全部</el-button>
+            <el-button link type="primary" @click="emit('navigate', 'history')">查看全部</el-button>
           </div>
           <div class="record-list">
             <div v-if="!generationRecords.length" class="empty-state">暂无生成记录</div>

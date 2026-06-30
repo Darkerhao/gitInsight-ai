@@ -1,6 +1,10 @@
 {
   "name": "gitinsight-ai",
-  "version": "3.2.0",
+  "version": "3.3.0",
+  "author": {
+    "name": "DarkerHao",
+    "email": "2757586659@qq.com"
+  },
   "description": "AI daily report assistant for Git repositories",
   "private": true,
   "type": "module",
@@ -16,6 +20,7 @@
     "start": "electron .",
     "preview": "electron-vite preview",
     "typecheck": "vue-tsc --noEmit",
+    "check": "npm run typecheck && npm run build",
     "release:tag": "node scripts/release-tag.mjs"
   },
   "dependencies": {

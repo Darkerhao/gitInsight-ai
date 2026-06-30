@@ -5,6 +5,7 @@ import type {
   AutoSyncRunResult,
   AutoSyncState,
   AutoSyncValidationResult,
+  FeishuFieldOption,
   FeishuLoginPayload,
   FeishuProjectOption,
   FeishuProjectOptionsPayload,
@@ -25,6 +26,7 @@ declare global {
       scanRepositories: (workspaceDir: string) => Promise<RepoInfo[]>;
       generateReport: (params: GenerateReportParams) => Promise<ReportResult>;
       loginFeishu: (payload: FeishuLoginPayload) => Promise<boolean>;
+      listFeishuFields: (payload: FeishuProjectOptionsPayload) => Promise<FeishuFieldOption[]>;
       listFeishuProjects: (payload: FeishuProjectOptionsPayload) => Promise<FeishuProjectOption[]>;
       testSubmitFeishu: (payload: FeishuTestSubmitPayload) => Promise<FeishuSubmitResult>;
       syncFeishuDaily: (payload: SyncFeishuDailyPayload) => Promise<boolean>;

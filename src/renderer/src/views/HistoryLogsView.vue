@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { Search, X } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
+import { ClipboardCopy, Download, RotateCcw, Search, Send, X } from 'lucide-vue-next';
+import { ElMessage } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import { useAssistant } from '@/composables/useAssistant';
+import type { DailyReportRecord } from '@shared/types';
 
 type LogStatus = 'success' | 'failed' | 'info';
 type LogType = '日报生成' | '手动同步' | '同步任务' | '错误日志';
@@ -20,10 +22,15 @@ interface HistoryLog {
   trigger: string;
   file?: string;
   detail: string;
+  reportRecord?: DailyReportRecord;
 }
 
+const emit = defineEmits<{
+  (e: 'navigate', value: string): void;
+}>();
+
 const assistant = useAssistant();
-const { repos, selectedRepos, config, dailyReports, syncLogs, errorLogs } = assistant;
+const { repos, selectedRepos, config, form, report, currentReportId, lastReportResult, dailyReports, syncLogs, errorLogs, push } = assistant;
 
 const keyword = ref('');
 const selectedProject = ref('全部项目');
@@ -31,6 +38,8 @@ const selectedType = ref('全部类型');
 const selectedStatus = ref('全部状态');
 const selectedLog = ref<HistoryLog | null>(null);
 const timeRange = ref<[string, string] | null>(null);
+const currentPage = ref(1);
+const pageSize = ref(10);
 
 const projectOptions = computed(() => {
   const names = new Set<string>();
@@ -52,6 +61,7 @@ const logs = computed<HistoryLog[]>(() => {
     trigger: '手动触发',
     file: `项目日报-${item.date}.md`,
     detail: item.report,
+    reportRecord: item,
   }));
 
   const syncRecords = syncLogs.value.map((item): HistoryLog => ({
@@ -104,6 +114,14 @@ const filteredLogs = computed(() => {
 });
 
 const activeLog = computed(() => selectedLog.value || filteredLogs.value[0]);
+const pagedLogs = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  return filteredLogs.value.slice(start, start + pageSize.value);
+});
+
+watch([keyword, selectedProject, selectedType, selectedStatus, timeRange], () => {
+  currentPage.value = 1;
+});
 
 function resetFilters() {
   keyword.value = '';
@@ -111,6 +129,60 @@ function resetFilters() {
   selectedType.value = '全部类型';
   selectedStatus.value = '全部状态';
   timeRange.value = null;
+}
+
+function focusFirstLog() {
+  selectedLog.value = filteredLogs.value[0] ?? null;
+}
+
+async function copyActiveLog() {
+  if (!activeLog.value?.detail.trim()) {
+    ElMessage.warning('当前没有可复制的详情内容');
+    return;
+  }
+  await navigator.clipboard.writeText(activeLog.value.detail);
+  ElMessage.success('详情内容已复制');
+}
+
+function exportActiveLog() {
+  if (!activeLog.value?.detail.trim()) {
+    ElMessage.warning('当前没有可导出的详情内容');
+    return;
+  }
+  const blob = new Blob([activeLog.value.detail], { type: 'text/markdown;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `${activeLog.value.file || `${activeLog.value.type}-${activeLog.value.time.slice(0, 10)}.md`}`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+  ElMessage.success('详情内容已导出');
+}
+
+function loadActiveReport() {
+  const record = activeLog.value?.reportRecord;
+  if (!record) {
+    ElMessage.warning('请选择一条日报生成记录');
+    return;
+  }
+  form.date = record.date;
+  config.reporterName = record.reporterName || config.reporterName;
+  report.value = record.report;
+  currentReportId.value = record.id;
+  lastReportResult.value = null;
+  emit('navigate', 'generate');
+  ElMessage.success('已加载到日报生成页，可继续编辑');
+}
+
+async function republishActiveReport() {
+  const record = activeLog.value?.reportRecord;
+  if (!record) {
+    ElMessage.warning('请选择一条日报生成记录');
+    return;
+  }
+  form.date = record.date;
+  config.reporterName = record.reporterName || config.reporterName;
+  currentReportId.value = record.id;
+  await push(record.report);
 }
 
 function formatDateTime(value: string) {
@@ -168,13 +240,13 @@ function formatDateTime(value: string) {
           <div class="filter-actions">
             <el-input v-model="keyword" :prefix-icon="Search" placeholder="请输入操作内容、文件名或其他关键词" />
             <el-button @click="resetFilters">重置</el-button>
-            <el-button type="primary">查询</el-button>
+            <el-button type="primary" @click="focusFirstLog">查询</el-button>
           </div>
         </section>
 
         <section class="surface-card log-table-card">
           <div class="table-summary">共 {{ filteredLogs.length }} 条日志</div>
-          <el-table :data="filteredLogs" class="log-table" @row-click="(row: HistoryLog) => (selectedLog = row)">
+          <el-table :data="pagedLogs" class="log-table" @row-click="(row: HistoryLog) => (selectedLog = row)">
             <el-table-column label="时间" min-width="170">
               <template #default="{ row }">{{ formatDateTime(row.time) }}</template>
             </el-table-column>
@@ -191,7 +263,13 @@ function formatDateTime(value: string) {
           </el-table>
           <div v-if="!filteredLogs.length" class="empty-state">暂无匹配日志</div>
           <div class="pagination-row">
-            <el-pagination layout="prev, pager, next, sizes, total" :total="filteredLogs.length" :page-size="10" />
+            <el-pagination
+              v-model:current-page="currentPage"
+              v-model:page-size="pageSize"
+              layout="prev, pager, next, sizes, total"
+              :total="filteredLogs.length"
+              :page-sizes="[10, 20, 50]"
+            />
           </div>
         </section>
       </div>
@@ -200,6 +278,12 @@ function formatDateTime(value: string) {
         <div class="panel-head">
           <h3>日志详情</h3>
           <el-button :icon="X" link @click="selectedLog = null" />
+        </div>
+        <div class="detail-actions">
+          <el-button :icon="RotateCcw" plain :disabled="!activeLog.reportRecord" @click="loadActiveReport">继续编辑</el-button>
+          <el-button :icon="Send" plain :disabled="!activeLog.reportRecord" @click="republishActiveReport">重新发布</el-button>
+          <el-button :icon="ClipboardCopy" plain @click="copyActiveLog">复制</el-button>
+          <el-button :icon="Download" type="primary" plain @click="exportActiveLog">导出</el-button>
         </div>
         <StatusBadge :status="activeLog.status" :label="activeLog.status === 'success' ? '成功' : activeLog.status === 'failed' ? '失败' : '信息'" />
         <dl class="detail-list">

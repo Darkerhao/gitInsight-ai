@@ -35,12 +35,13 @@ interface TrendRow {
 }
 
 const emit = defineEmits<{
-  (e: 'navigate', value: 'config' | 'generate' | 'sync' | 'history'): void;
+  (e: 'navigate', value: 'config' | 'generate' | 'sync' | 'history' | 'repositories'): void;
 }>();
 
 const assistant = useAssistant();
 const {
   today,
+  config,
   loading,
   autoSyncLoading,
   sortedRepos,
@@ -178,10 +179,48 @@ const taskDistribution = computed(() => {
   };
 });
 
+const generationBlocker = computed(() => {
+  if (!selectedRepos.value.length) return { message: '请先选择参与日报生成的项目', target: 'repositories' as const };
+  if (!config.reporterName) return { message: '请先填写汇报人', target: 'config' as const };
+  return null;
+});
+
+const syncBlocker = computed(() => {
+  const baseBlocker = generationBlocker.value;
+  if (baseBlocker) return baseBlocker;
+  const form = config.feishuForm;
+  if (!form.projectOptionId) return { message: '请先选择飞书所属项目', target: 'config' as const };
+  if (!form.reporterUserId) return { message: '请先填写飞书汇报人 userId', target: 'config' as const };
+  if (!form.questionId || !form.dateFieldId || !form.userFieldId || !form.projectFieldId || !form.hoursFieldId || !form.contentFieldId) {
+    return { message: '请先补齐飞书表单字段映射', target: 'config' as const };
+  }
+  return null;
+});
+
+async function runCheckedGenerate() {
+  const blocker = generationBlocker.value;
+  if (blocker) {
+    ElMessage.warning(blocker.message);
+    emit('navigate', blocker.target);
+    return;
+  }
+  await generate();
+}
+
+async function runCheckedSync() {
+  const blocker = syncBlocker.value;
+  if (blocker) {
+    ElMessage.warning(blocker.message);
+    emit('navigate', blocker.target);
+    return;
+  }
+  await runAutoSyncNow();
+}
+
 const quickActions = [
   { title: '新建日报任务', icon: FilePlus2, action: () => emit('navigate', 'generate') },
-  { title: '批量生成日报', icon: Layers3, action: () => generate() },
-  { title: '同步到飞书', icon: Send, action: () => runAutoSyncNow() },
+  { title: '批量生成日报', icon: Layers3, action: () => runCheckedGenerate() },
+  { title: '同步到飞书', icon: Send, action: () => runCheckedSync() },
   { title: '查看历史日志', icon: History, action: () => emit('navigate', 'history') },
 ];
 
@@ -547,8 +586,8 @@ onBeforeUnmount(() => {
           <div class="dashboard-assistant-head">
             <Bot :size="24" />
             <div>
-              <h3>AI 助手为您服务</h3>
-              <p>有任何问题都可以问我</p>
+              <h3>使用建议</h3>
+              <p>根据当前工作流给出排查方向</p>
             </div>
           </div>
           <el-input v-model="assistantQuestion" placeholder="请输入您的问题..." @keyup.enter="askAssistant()" />
@@ -574,8 +613,8 @@ onBeforeUnmount(() => {
     </el-dialog>
 
     <div class="dashboard-floating-actions">
-      <el-button :icon="RefreshCw" :loading="loading" @click="generate">生成日报</el-button>
-      <el-button :icon="Send" type="primary" :loading="autoSyncLoading" @click="runAutoSyncNow">同步日报</el-button>
+      <el-button :icon="RefreshCw" :loading="loading" @click="runCheckedGenerate">生成日报</el-button>
+      <el-button :icon="Send" type="primary" :loading="autoSyncLoading" @click="runCheckedSync">同步日报</el-button>
       <el-button v-if="!sortedRepos.length" :icon="FileText" plain @click="chooseWorkspace">添加项目</el-button>
     </div>
   </div>

@@ -89,6 +89,10 @@ const props = defineProps<{
   initialTab?: ActiveTab;
 }>();
 
+const emit = defineEmits<{
+  (e: 'navigate', value: string): void;
+}>();
+
 const activeTab = ref<ActiveTab>(props.initialTab ?? 'list');
 const currentMonth = ref(dayjs().startOf('month'));
 const selectedDate = ref(dayjs());
@@ -227,8 +231,8 @@ function createTaskFromRepo(repo: RepoInfo, index: number): SyncTask {
   return {
     id: repo.path,
     repoPath: repo.path,
-    name: `${repo.name} 日报同步`,
-    description: enabled ? '按自动同步配置生成日报并同步到飞书' : '自动同步未启用，任务暂不进入执行队列',
+    name: `${repo.name} 同步范围`,
+    description: enabled ? '跟随全局自动同步计划生成日报并同步到飞书' : '自动同步未启用，该项目暂不进入同步范围',
     projectName,
     projectKey: repo.name,
     projectColor: getTaskColor(repo, index),
@@ -350,7 +354,7 @@ function createRecordTask(id: string, name: string, index: number): SyncTask {
     projectColor: taskColors[index % taskColors.length],
     syncType: 'feishu',
     syncTypeLabel: '日报',
-    frequencyLabel: '真实记录',
+    frequencyLabel: '历史记录',
     time,
     timezone: localTimezone,
     status: 'running',
@@ -524,12 +528,12 @@ async function saveTask() {
 }
 
 function copyTask() {
-  ElMessage.info('同步任务来自真实项目配置，当前版本不创建本地临时副本');
+  ElMessage.info('当前为全局同步计划，不创建独立任务副本');
 }
 
 async function confirmDeleteTask(task: SyncTask) {
   try {
-    await ElMessageBox.confirm(`确定从同步任务中移除「${task.projectKey}」吗？这不会删除本地项目文件。`, '移除同步任务', {
+    await ElMessageBox.confirm(`确定从自动同步范围中移除「${task.projectKey}」吗？这不会删除本地项目文件。`, '移除同步范围', {
       confirmButtonText: '移除',
       cancelButtonText: '取消',
       type: 'warning',
@@ -540,7 +544,7 @@ async function confirmDeleteTask(task: SyncTask) {
     await saveSettings();
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') {
-      ElMessage.error('移除任务失败');
+      ElMessage.error('移除同步范围失败');
     }
   }
 }
@@ -569,11 +573,11 @@ async function handleBatchCommand(command: string) {
 
   if (command === 'delete') {
     if (!targetRows.length) {
-      ElMessage.warning('请先选择需要移除的任务');
+      ElMessage.warning('请先选择需要移除的项目');
       return;
     }
     try {
-      await ElMessageBox.confirm(`确定移除选中的 ${targetRows.length} 个同步任务吗？`, '批量移除任务', {
+      await ElMessageBox.confirm(`确定从自动同步范围中移除选中的 ${targetRows.length} 个项目吗？`, '批量移除同步范围', {
         confirmButtonText: '移除',
         cancelButtonText: '取消',
         type: 'warning',
@@ -586,7 +590,7 @@ async function handleBatchCommand(command: string) {
       await saveSettings();
     } catch (error) {
       if (error !== 'cancel' && error !== 'close') {
-        ElMessage.error('批量移除失败');
+        ElMessage.error('批量移除同步范围失败');
       }
     }
   }
@@ -595,7 +599,7 @@ async function handleBatchCommand(command: string) {
 
 <template>
   <div class="view-stack task-calendar-view">
-    <PageHeader title="同步任务模块" subtitle="定时将配置的项目日报自动生成并同步到飞书">
+    <PageHeader title="自动同步计划" subtitle="统一管理自动同步时间、执行状态和参与同步的项目范围">
       <template #actions>
         <el-dropdown trigger="click" @command="handleBatchCommand">
           <el-button plain :icon="MoreHorizontal">
@@ -603,15 +607,15 @@ async function handleBatchCommand(command: string) {
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="run">立即执行选中任务</el-dropdown-item>
+              <el-dropdown-item command="run">立即执行同步计划</el-dropdown-item>
               <el-dropdown-item command="enable">启用自动同步</el-dropdown-item>
               <el-dropdown-item command="pause">暂停自动同步</el-dropdown-item>
-              <el-dropdown-item divided command="delete">移除选中任务</el-dropdown-item>
+              <el-dropdown-item divided command="delete">从同步范围移除选中项目</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
         <el-button type="primary" :icon="Plus" @click="openTaskDialog()">
-          配置同步任务
+          配置同步计划
         </el-button>
       </template>
     </PageHeader>
@@ -619,14 +623,14 @@ async function handleBatchCommand(command: string) {
     <div class="task-module-layout">
       <section class="surface-card task-module-main">
         <el-tabs v-model="activeTab" class="clean-tabs task-tabs">
-          <el-tab-pane label="任务列表" name="list" />
-          <el-tab-pane label="任务日历" name="calendar" />
+          <el-tab-pane label="同步范围" name="list" />
+          <el-tab-pane label="同步日历" name="calendar" />
         </el-tabs>
 
         <div v-if="activeTab === 'list'" class="task-list-panel">
-          <el-table :data="pagedTasks" class="task-table" empty-text="暂无真实同步任务，请先选择项目" @selection-change="onSelectionChange">
+          <el-table :data="pagedTasks" class="task-table" empty-text="暂无同步范围，请先选择项目" @selection-change="onSelectionChange">
             <el-table-column type="selection" width="46" />
-            <el-table-column label="任务名称" min-width="260">
+            <el-table-column label="同步范围" min-width="260">
               <template #default="{ row }">
                 <div class="task-name-cell">
                   <span class="task-icon" :style="{ color: row.projectColor, backgroundColor: `${row.projectColor}16` }">
@@ -677,17 +681,17 @@ async function handleBatchCommand(command: string) {
             <el-table-column label="操作" width="164" fixed="right">
               <template #default="{ row }">
                 <div class="table-actions">
-                  <el-tooltip content="编辑配置" placement="top">
+                  <el-tooltip content="配置同步计划" placement="top">
                     <el-button :icon="Edit3" link type="primary" @click="openTaskDialog(row)" />
                   </el-tooltip>
-                  <el-tooltip content="复制" placement="top">
+                  <el-tooltip content="计划说明" placement="top">
                     <el-button :icon="Copy" link @click="copyTask" />
                   </el-tooltip>
-                  <el-tooltip content="立即执行" placement="top">
+                  <el-tooltip content="立即执行同步计划" placement="top">
                     <el-button :icon="Send" link :loading="autoSyncRunning" @click="runTask(row)" />
                   </el-tooltip>
                   <el-switch v-model="row.enabled" size="small" @change="toggleTask(row)" />
-                  <el-tooltip content="移除" placement="top">
+                  <el-tooltip content="从同步范围移除" placement="top">
                     <el-button :icon="Trash2" link type="danger" @click="confirmDeleteTask(row)" />
                   </el-tooltip>
                 </div>
@@ -696,12 +700,12 @@ async function handleBatchCommand(command: string) {
           </el-table>
 
           <div v-if="!tasks.length" class="task-empty-state">
-            <span>当前没有可展示的真实同步任务。</span>
+            <span>当前没有可展示的同步范围。</span>
             <el-button type="primary" plain @click="chooseWorkspace">选择项目</el-button>
           </div>
 
           <div class="task-table-footer">
-            <span>共 {{ tasks.length }} 条任务</span>
+            <span>共 {{ tasks.length }} 个同步项目</span>
             <el-pagination
               v-model:current-page="currentPage"
               v-model:page-size="pageSize"
@@ -769,7 +773,7 @@ async function handleBatchCommand(command: string) {
           </div>
 
           <div v-if="!tasks.length" class="task-empty-state calendar-empty-state">
-            <span>暂无真实同步任务，日历不会展示示例数据。</span>
+            <span>暂无同步范围，日历不会展示计划数据。</span>
             <el-button type="primary" plain @click="chooseWorkspace">选择项目</el-button>
           </div>
         </div>
@@ -792,7 +796,7 @@ async function handleBatchCommand(command: string) {
         <section class="surface-card task-side-card">
           <div class="panel-head">
             <h3>近期执行记录</h3>
-            <el-button link type="primary">查看全部</el-button>
+            <el-button link type="primary" @click="emit('navigate', 'history')">查看全部</el-button>
           </div>
           <div class="recent-run-list">
             <div v-if="!recentRuns.length" class="empty-state">暂无同步执行记录</div>
@@ -813,7 +817,7 @@ async function handleBatchCommand(command: string) {
             <h3>任务图例</h3>
           </div>
           <div class="calendar-legend">
-            <div v-if="!legendTasks.length" class="empty-state">暂无真实任务</div>
+            <div v-if="!legendTasks.length" class="empty-state">暂无同步范围</div>
             <span v-for="task in legendTasks" :key="task.id">
               <i :style="{ backgroundColor: task.projectColor }" />
               {{ task.name }}
@@ -848,11 +852,11 @@ async function handleBatchCommand(command: string) {
       </aside>
     </div>
 
-    <el-dialog v-model="taskDialogVisible" title="同步任务配置" width="620px">
+    <el-dialog v-model="taskDialogVisible" title="自动同步计划配置" width="620px">
       <div class="task-dialog-form">
         <div class="field-grid two-columns">
           <div class="field">
-            <label>任务名称</label>
+            <label>范围名称</label>
             <el-input v-model="draftTask.name" disabled />
           </div>
           <div class="field">
@@ -899,7 +903,7 @@ async function handleBatchCommand(command: string) {
             </el-checkbox-group>
           </div>
           <div class="field field-span-2">
-            <label>任务说明</label>
+            <label>计划说明</label>
             <el-input v-model="draftTask.description" type="textarea" :rows="3" disabled />
           </div>
         </div>

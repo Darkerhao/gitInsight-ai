@@ -19,6 +19,7 @@ import type {
   CommitEntry,
   DailyReportRecord,
   ErrorLogRecord,
+  FeishuFieldOption,
   FeishuFormConfig,
   FeishuLoginPayload,
   FeishuProjectOption,
@@ -1299,16 +1300,61 @@ async function validateAutoSync(config: AppConfig) {
   }
 }
 
-function parseFeishuProjectOptions(meta: unknown, projectFieldId: string): FeishuProjectOption[] {
+function parseFeishuSnapshot(meta: unknown) {
   const data = meta as { data?: { snapshot?: unknown } };
   const snapshotRaw = data?.data?.snapshot;
   if (typeof snapshotRaw !== 'string') {
-    throw new Error('飞书项目列表解析失败：接口未返回 snapshot');
+    throw new Error('飞书表单解析失败：接口未返回 snapshot');
   }
 
-  const snapshot = JSON.parse(snapshotRaw) as {
-    fieldMap?: Record<string, { property?: { options?: Array<{ id?: unknown; name?: unknown; color?: unknown }> } }>;
+  return JSON.parse(snapshotRaw) as {
+    fieldMap?: Record<
+      string,
+      {
+        id?: unknown;
+        name?: unknown;
+        type?: unknown;
+        property?: {
+          options?: Array<{ id?: unknown; name?: unknown; color?: unknown }>;
+        };
+      }
+    >;
   };
+}
+
+function getFeishuFieldTypeLabel(type: unknown) {
+  const typeMap: Record<string, string> = {
+    '1': '文本',
+    '2': '数字',
+    '4': '单选',
+    '5': '日期',
+    '11': '人员',
+    '21': '明细表',
+  };
+  return typeMap[String(type)] ?? `类型 ${String(type || '未知')}`;
+}
+
+function parseFeishuFieldOptions(meta: unknown): FeishuFieldOption[] {
+  const snapshot = parseFeishuSnapshot(meta);
+  const fieldEntries = Object.entries(snapshot.fieldMap ?? {});
+  return fieldEntries
+    .map(([key, field]) => {
+      const id = typeof field.id === 'string' && field.id.trim() ? field.id.trim() : key;
+      const name = typeof field.name === 'string' && field.name.trim() ? field.name.trim() : id;
+      const type = typeof field.type === 'number' || typeof field.type === 'string' ? field.type : '';
+      return {
+        id,
+        name,
+        type,
+        typeLabel: getFeishuFieldTypeLabel(type),
+      };
+    })
+    .filter((field) => field.id)
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+}
+
+function parseFeishuProjectOptions(meta: unknown, projectFieldId: string): FeishuProjectOption[] {
+  const snapshot = parseFeishuSnapshot(meta);
   const options = snapshot.fieldMap?.[projectFieldId]?.property?.options;
   if (!Array.isArray(options)) {
     throw new Error(`飞书项目列表解析失败：未找到字段 ${projectFieldId} 的 options`);
@@ -1323,11 +1369,7 @@ function parseFeishuProjectOptions(meta: unknown, projectFieldId: string): Feish
     .filter((option) => option.id && option.name);
 }
 
-async function listFeishuProjectOptions(payload: FeishuProjectOptionsPayload): Promise<FeishuProjectOption[]> {
-  const formConfig = {
-    ...DEFAULT_FEISHU_FORM_CONFIG,
-    ...payload.config,
-  };
+async function fetchFeishuContentMeta(formConfig: FeishuFormConfig, label: string) {
   const endpoint = requireFeishuConfigValue(formConfig.endpoint, '飞书表单提交接口地址');
   const shareToken = requireFeishuConfigValue(formConfig.shareToken, '飞书表单 shareToken');
   const { origin, referer } = getFeishuRequestContext(endpoint, shareToken);
@@ -1349,23 +1391,42 @@ async function listFeishuProjectOptions(payload: FeishuProjectOptionsPayload): P
   const detail = await response.text();
 
   if (!response.ok) {
-    throw new Error(`获取飞书项目列表失败：${response.status} ${response.statusText}${detail ? `，返回：${detail.slice(0, 500)}` : ''}`);
+    throw new Error(`${label}：${response.status} ${response.statusText}${detail ? `，返回：${detail.slice(0, 500)}` : ''}`);
   }
 
   let meta: unknown;
   try {
     meta = JSON.parse(detail);
   } catch {
-    throw new Error(`获取飞书项目列表失败：接口返回内容不是 JSON：${detail.slice(0, 500)}`);
+    throw new Error(`${label}：接口返回内容不是 JSON：${detail.slice(0, 500)}`);
   }
 
   const result = meta as { code?: number; msg?: string };
   if (result.code !== 0) {
     if (result.msg === 'Login Required') {
-      throw new Error('获取飞书项目列表失败：飞书登录态无效或已过期，请先点击“登录飞书”完成登录，或填写完整有效的飞书 Cookie');
+      throw new Error(`${label}：飞书登录态无效或已过期，请先点击“登录飞书”完成登录，或填写完整有效的飞书 Cookie`);
     }
-    throw new Error(`获取飞书项目列表失败：${result.msg || `code=${result.code}`}`);
+    throw new Error(`${label}：${result.msg || `code=${result.code}`}`);
   }
+
+  return meta;
+}
+
+async function listFeishuFieldOptions(payload: FeishuProjectOptionsPayload): Promise<FeishuFieldOption[]> {
+  const formConfig = {
+    ...DEFAULT_FEISHU_FORM_CONFIG,
+    ...payload.config,
+  };
+  const meta = await fetchFeishuContentMeta(formConfig, '获取飞书字段列表失败');
+  return parseFeishuFieldOptions(meta);
+}
+
+async function listFeishuProjectOptions(payload: FeishuProjectOptionsPayload): Promise<FeishuProjectOption[]> {
+  const formConfig = {
+    ...DEFAULT_FEISHU_FORM_CONFIG,
+    ...payload.config,
+  };
+  const meta = await fetchFeishuContentMeta(formConfig, '获取飞书项目列表失败');
 
   return parseFeishuProjectOptions(meta, requireFeishuConfigValue(formConfig.projectFieldId, '所属项目字段 ID'));
 }
@@ -1698,6 +1759,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('error-log:list', async (_event, limit?: number) => listErrorLogs(limit));
   ipcMain.handle('storage:info', async () => getStorageInfo());
   ipcMain.handle('feishu:login', async (_event, payload: FeishuLoginPayload) => openFeishuLogin(payload));
+  ipcMain.handle('feishu:list-fields', async (_event, payload: FeishuProjectOptionsPayload) => listFeishuFieldOptions(payload));
   ipcMain.handle('feishu:list-projects', async (_event, payload: FeishuProjectOptionsPayload) => listFeishuProjectOptions(payload));
   ipcMain.handle('feishu:test-submit', async (_event, payload: FeishuTestSubmitPayload) => testSubmitFeishuForm(payload));
   ipcMain.handle('report:sync-feishu', async (_event, payload: SyncFeishuDailyPayload) => syncFeishuDaily(payload));

@@ -11,6 +11,7 @@ import type {
   AutoSyncState,
   DailyReportRecord,
   ErrorLogRecord,
+  FeishuFieldOption,
   FeishuProjectOption,
   RepoInfo,
   ReportResult,
@@ -30,10 +31,12 @@ function createAssistant() {
   const loading = ref(false);
   const pushing = ref(false);
   const feishuLoading = ref(false);
+  const fieldLoading = ref(false);
   const projectLoading = ref(false);
   const autoSyncLoading = ref(false);
   const repos = ref<RepoInfo[]>([]);
   const projectOptions = ref<FeishuProjectOption[]>([]);
+  const feishuFieldOptions = ref<FeishuFieldOption[]>([]);
   const selectedRepoPaths = ref<string[]>([]);
   const report = ref('');
   const currentReportId = ref<number | null>(null);
@@ -45,6 +48,7 @@ function createAssistant() {
   const status = ref('');
   const autoSyncState = ref<AutoSyncState | null>(null);
   const advancedConfigPanels = ref<string[]>([]);
+  const savedConfigSignature = ref('');
   let removeAutoSyncListener: (() => void) | null = null;
 
   const config = reactive<AppConfig>({
@@ -262,6 +266,52 @@ function createAssistant() {
     };
   }
 
+  function getEditableConfigSignature() {
+    return JSON.stringify({
+      workspaceDir: toPlainString(config.workspaceDir),
+      workspaceDirs: normalizeWorkspaceDirs([...(config.workspaceDirs ?? []), config.workspaceDir]),
+      selectedRepoPaths: normalizeRepoSelections(selectedRepoPaths.value),
+      ignoredRepoPaths: normalizeRepoSelections(config.ignoredRepoPaths ?? []),
+      pinnedRepoPaths: normalizeRepoSelections(config.pinnedRepoPaths ?? []),
+      reporterName: toPlainString(config.reporterName),
+      aiBaseUrl: toPlainString(config.aiBaseUrl),
+      aiApiKey: toPlainString(config.aiApiKey),
+      aiModel: toPlainString(config.aiModel),
+      aiBaseUrlOptions: normalizeOptions([...config.aiBaseUrlOptions, config.aiBaseUrl]),
+      aiModelOptions: normalizeOptions([...config.aiModelOptions, config.aiModel]),
+      feishuForm: {
+        ...config.feishuForm,
+        defaultWorkHours: normalizeWorkHours(config.feishuForm.defaultWorkHours),
+        projectWorkHours: normalizeProjectWorkHours(config.feishuForm.projectWorkHours),
+      },
+      autoSync: {
+        enabled: Boolean(config.autoSync.enabled),
+        time: normalizeTimeValue(config.autoSync.time),
+      },
+    });
+  }
+
+  function markConfigSaved() {
+    savedConfigSignature.value = getEditableConfigSignature();
+  }
+
+  const isConfigDirty = computed(() => Boolean(savedConfigSignature.value) && savedConfigSignature.value !== getEditableConfigSignature());
+
+  async function persistConfig() {
+    const saved = await window.api.saveConfig(getConfigPayload());
+    markConfigSaved();
+    return saved;
+  }
+
+  async function persistConfigBeforeAction(actionLabel: string) {
+    const shouldNotify = isConfigDirty.value;
+    const saved = await persistConfig();
+    if (shouldNotify) {
+      ElMessage.info(`检测到配置修改，已先保存后${actionLabel}`);
+    }
+    return saved;
+  }
+
   function countResultFiles(result: ReportResult | null) {
     if (!result) return 0;
     return Array.from(new Set(result.commits.flatMap((commit) => commit.files))).length;
@@ -354,6 +404,8 @@ function createAssistant() {
       !config.feishuForm.csrfToken;
     const feishuMappingIncomplete =
       !config.feishuForm.reporterUserId ||
+      !config.feishuForm.projectOptionId;
+    const feishuFieldMappingIncomplete =
       !config.feishuForm.questionId ||
       !config.feishuForm.dateFieldId ||
       !config.feishuForm.userFieldId ||
@@ -364,15 +416,20 @@ function createAssistant() {
       ...(!config.aiApiKey ? ['ai'] : []),
       ...(feishuAuthIncomplete ? ['feishu'] : []),
       ...(feishuMappingIncomplete ? ['mapping'] : []),
+      ...(feishuFieldMappingIncomplete ? ['fields'] : []),
       ...(config.autoSync.enabled ? ['autoSync'] : []),
     ];
     if (config.feishuForm.shareToken) {
-      await loadFeishuProjects();
+      await loadFeishuFields({ silent: true });
+      if (config.feishuForm.projectFieldId) {
+        await loadFeishuProjects({ silent: true });
+      }
     }
     if (config.workspaceDirs.length) {
       await refreshRepos();
     }
     await refreshAutoSyncState();
+    markConfigSaved();
   }
 
   async function chooseWorkspace() {
@@ -392,7 +449,7 @@ function createAssistant() {
       config.ignoredRepoPaths = normalizeRepoSelections((config.ignoredRepoPaths ?? []).filter((path) => !scannedRepoKeys.has(getRepoKey(path))));
       repos.value = mergeRepos(repos.value, scannedRepos);
       selectedRepoPaths.value = normalizeRepoSelections([...selectedRepoPaths.value, ...scannedRepos.map((repo) => repo.path)]);
-      await window.api.saveConfig(getConfigPayload());
+      await persistConfig();
       status.value = `已添加 ${scannedRepos.length} 个仓库，项目列表共 ${repos.value.length} 个仓库`;
     } catch (error) {
       ElMessage.error(error instanceof Error ? error.message : '扫描失败');
@@ -427,11 +484,12 @@ function createAssistant() {
   async function saveSettings() {
     const payload = getConfigPayload();
     if (!(await validateAutoSyncBeforeSave(payload))) return;
-    const saved = await window.api.saveConfig(payload);
+    const saved = await persistConfig();
     Object.assign(config.autoSync, {
       ...DEFAULT_AUTO_SYNC_CONFIG,
       ...saved.autoSync,
     });
+    markConfigSaved();
     await refreshAutoSyncState();
     ElMessage.success('配置已保存');
   }
@@ -447,21 +505,21 @@ function createAssistant() {
   async function removeAiBaseUrlOption(value: string) {
     config.aiBaseUrlOptions = config.aiBaseUrlOptions.filter((item) => item !== value);
     if (config.aiBaseUrl === value) config.aiBaseUrl = '';
-    await window.api.saveConfig(getConfigPayload());
+    await persistConfig();
     ElMessage.success('接口地址选项已删除');
   }
 
   async function removeAiModelOption(value: string) {
     config.aiModelOptions = config.aiModelOptions.filter((item) => item !== value);
     if (config.aiModel === value) config.aiModel = '';
-    await window.api.saveConfig(getConfigPayload());
+    await persistConfig();
     ElMessage.success('模型选项已删除');
   }
 
   async function loginFeishu() {
     feishuLoading.value = true;
     try {
-      await window.api.saveConfig(getConfigPayload());
+      await persistConfigBeforeAction('打开飞书登录');
       await window.api.loginFeishu({ config: getConfigPayload().feishuForm });
       ElMessage.success('已打开飞书登录窗口');
     } catch (error) {
@@ -471,18 +529,41 @@ function createAssistant() {
     }
   }
 
-  async function loadFeishuProjects() {
+  async function loadFeishuFields(options: { silent?: boolean } = {}) {
+    fieldLoading.value = true;
+    try {
+      await persistConfigBeforeAction('解析飞书字段');
+      feishuFieldOptions.value = await window.api.listFeishuFields({ config: getConfigPayload().feishuForm });
+      status.value = `已解析 ${feishuFieldOptions.value.length} 个飞书表单字段`;
+      if (!options.silent) ElMessage.success('飞书字段已解析');
+    } catch (error) {
+      if (!options.silent) {
+        ElMessage.error(error instanceof Error ? error.message : '解析飞书字段失败');
+      }
+    } finally {
+      fieldLoading.value = false;
+    }
+  }
+
+  async function loadFeishuProjects(options: { silent?: boolean } = {}) {
+    if (!config.feishuForm.projectFieldId.trim()) {
+      if (!options.silent) ElMessage.warning('请先选择或填写所属项目字段 ID');
+      return;
+    }
     projectLoading.value = true;
     try {
-      await window.api.saveConfig(getConfigPayload());
+      await persistConfigBeforeAction('刷新飞书项目');
       projectOptions.value = await window.api.listFeishuProjects({ config: getConfigPayload().feishuForm });
       const selected = projectOptions.value.find((item) => item.id === config.feishuForm.projectOptionId);
       if (selected) {
         config.feishuForm.projectName = selected.name;
       }
       status.value = `已获取 ${projectOptions.value.length} 个飞书项目选项`;
+      if (!options.silent) ElMessage.success('飞书项目选项已刷新');
     } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '获取飞书项目列表失败');
+      if (!options.silent) {
+        ElMessage.error(error instanceof Error ? error.message : '获取飞书项目列表失败');
+      }
     } finally {
       projectLoading.value = false;
     }
@@ -509,9 +590,13 @@ function createAssistant() {
   async function testSubmitFeishu() {
     feishuLoading.value = true;
     try {
-      await window.api.saveConfig(getConfigPayload());
+      await persistConfigBeforeAction('测试提交');
+      const payloadConfig = {
+        ...getConfigPayload().feishuForm,
+        reporterName: config.feishuForm.reporterName || config.reporterName,
+      };
       const result = await window.api.testSubmitFeishu({
-        config: getConfigPayload().feishuForm,
+        config: payloadConfig,
         date: form.date,
       });
       status.value = `飞书测试提交成功：code=${result.code}`;
@@ -534,7 +619,7 @@ function createAssistant() {
     }
     loading.value = true;
     try {
-      await window.api.saveConfig(getConfigPayload());
+      await persistConfigBeforeAction('生成日报');
       const result = await window.api.generateReport({
         repoPaths: [...selectedRepoPaths.value],
         date: form.date,
@@ -571,7 +656,7 @@ function createAssistant() {
     }
     pushing.value = true;
     try {
-      await window.api.saveConfig(getConfigPayload());
+      await persistConfigBeforeAction('同步飞书');
       await window.api.syncFeishuDaily({
         config: getConfigPayload().feishuForm,
         report: content,
@@ -595,7 +680,8 @@ function createAssistant() {
     if (!(await validateAutoSyncBeforeSave(payload))) return;
     autoSyncLoading.value = true;
     try {
-      const result = await window.api.runAutoSyncNow(payload);
+      await persistConfigBeforeAction('执行自动同步');
+      const result = await window.api.runAutoSyncNow(getConfigPayload());
       status.value = result.message;
       if (result.report) {
         report.value = result.report;
@@ -623,7 +709,7 @@ function createAssistant() {
 
   async function saveRepoSelection() {
     try {
-      await window.api.saveConfig(getConfigPayload());
+      await persistConfig();
     } catch (error) {
       ElMessage.error(error instanceof Error ? error.message : '保存项目选择失败');
     }
@@ -654,7 +740,7 @@ function createAssistant() {
       : [repoPath, ...pinnedRepoPaths.filter((item) => getRepoKey(item) !== repoKey)];
 
     try {
-      await window.api.saveConfig(getConfigPayload());
+      await persistConfig();
       ElMessage.success(alreadyPinned ? '已取消置顶项目' : '项目已置顶');
     } catch (error) {
       ElMessage.error(error instanceof Error ? error.message : '保存项目置顶状态失败');
@@ -674,7 +760,7 @@ function createAssistant() {
     if (getRepoKey(config.workspaceDir) === repoKey) {
       config.workspaceDir = config.workspaceDirs[0] ?? '';
     }
-    await window.api.saveConfig(getConfigPayload());
+    await persistConfig();
     status.value = `已从项目列表移除 ${repo?.name ?? repoPath}`;
     ElMessage.success('项目已从列表移除，本地文件不会被删除');
   }
@@ -723,9 +809,11 @@ function createAssistant() {
     pushing,
     feishuLoading,
     projectLoading,
+    fieldLoading,
     autoSyncLoading,
     repos,
     projectOptions,
+    feishuFieldOptions,
     selectedRepoPaths,
     report,
     currentReportId,
@@ -748,6 +836,7 @@ function createAssistant() {
     autoSyncRunning,
     autoSyncStatusType,
     autoSyncStatusLabel,
+    isConfigDirty,
     // 方法
     formatDateTime,
     chooseWorkspace,
@@ -759,6 +848,7 @@ function createAssistant() {
     removeAiModelOption,
     loginFeishu,
     loadFeishuProjects,
+    loadFeishuFields,
     selectFeishuProject,
     updateProjectWorkHours,
     testSubmitFeishu,
