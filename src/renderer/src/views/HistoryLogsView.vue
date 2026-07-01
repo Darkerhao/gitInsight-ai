@@ -30,7 +30,7 @@ const emit = defineEmits<{
 }>();
 
 const assistant = useAssistant();
-const { repos, selectedRepos, config, report, currentReportId, lastReportResult, dailyReports, syncLogs, errorLogs, push, applyFullDayReportRange } = assistant;
+const { repos, selectedRepos, config, report, currentReportId, lastReportResult, dailyReports, syncLogs, errorLogs, push, applyReportTimeRange } = assistant;
 
 const keyword = ref('');
 const selectedProject = ref('全部项目');
@@ -49,13 +49,18 @@ const projectOptions = computed(() => {
   return Array.from(names);
 });
 
+function buildReportAction(item: DailyReportRecord) {
+  const action = `${item.date} 日报${item.status === 'draft' ? '草稿保存' : '生成'}`;
+  return item.timeRange?.label ? `${action}（${item.timeRange.label}）` : action;
+}
+
 const logs = computed<HistoryLog[]>(() => {
   const reportLogs = dailyReports.value.map((item): HistoryLog => ({
     id: `report-${item.id}`,
     time: item.updatedAt || item.generatedAt,
     type: '日报生成',
     project: item.repoNames.join('、') || '未记录项目',
-    action: `${item.date} 日报${item.status === 'draft' ? '草稿保存' : '生成'}`,
+    action: buildReportAction(item),
     status: item.status === 'failed' ? 'failed' : 'success',
     duration: '-',
     operator: item.reporterName || config.reporterName || '未设置',
@@ -165,7 +170,7 @@ function loadActiveReport() {
     ElMessage.warning('请选择一条日报生成记录');
     return;
   }
-  applyFullDayReportRange(record.date);
+  applyReportTimeRange(record.date, record.timeRange);
   config.reporterName = record.reporterName || config.reporterName;
   report.value = record.report;
   currentReportId.value = record.id;
@@ -180,7 +185,7 @@ async function republishActiveReport() {
     ElMessage.warning('请选择一条日报生成记录');
     return;
   }
-  applyFullDayReportRange(record.date);
+  applyReportTimeRange(record.date, record.timeRange);
   config.reporterName = record.reporterName || config.reporterName;
   currentReportId.value = record.id;
   await push(record.report);
@@ -297,6 +302,10 @@ function formatDateTime(value: string) {
             <dd>{{ activeLog.project }}</dd>
             <dt>执行时间</dt>
             <dd>{{ formatDateTime(activeLog.time) }}</dd>
+            <template v-if="activeLog.reportRecord?.timeRange">
+              <dt>日报时间段</dt>
+              <dd>{{ activeLog.reportRecord.timeRange.label }}</dd>
+            </template>
             <dt>执行时长</dt>
             <dd>{{ activeLog.duration }}</dd>
             <dt>操作人</dt>

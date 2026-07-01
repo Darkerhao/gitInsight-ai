@@ -15,6 +15,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import { useAssistant } from '@/composables/useAssistant';
+import { DEFAULT_AUTO_SYNC_CONFIG } from '@shared/types';
 
 const assistant = useAssistant();
 const { config, projectOptions, storageInfo, refreshLocalData, saveSettings } = assistant;
@@ -76,12 +77,14 @@ async function refreshStorage() {
 }
 
 async function resetSettings() {
-  await ElMessageBox.confirm('确认将系统设置恢复为默认配置？保存后生效。', '重置配置', { type: 'warning' });
-  config.autoSync.enabled = false;
-  config.autoSync.time = '18:30';
+  await ElMessageBox.confirm('确认将自动同步时间窗口和默认工时恢复为默认值？保存后生效。', '重置同步默认值', { type: 'warning' });
+  config.autoSync.enabled = DEFAULT_AUTO_SYNC_CONFIG.enabled;
+  config.autoSync.time = DEFAULT_AUTO_SYNC_CONFIG.time;
+  config.autoSync.timeWindowMode = DEFAULT_AUTO_SYNC_CONFIG.timeWindowMode;
+  config.autoSync.windowStartTime = DEFAULT_AUTO_SYNC_CONFIG.windowStartTime;
   config.feishuForm.defaultWorkHours = 8;
   config.feishuForm.projectWorkHours = {};
-  ElMessage.success('已恢复默认配置，请保存后生效');
+  ElMessage.success('已重置同步默认值，请保存后生效');
 }
 </script>
 

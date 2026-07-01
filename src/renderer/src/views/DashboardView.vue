@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
-  Bot,
   CheckCircle2,
   CircleAlert,
   CircleX,
@@ -56,8 +55,8 @@ const {
 } = assistant;
 
 const selectedReport = ref<DailyReportRecord | null>(null);
-const assistantQuestion = ref('');
-const assistantAnswer = ref('已为你准备好今日日报工作流。可以先检查配置，再生成日报并同步到飞书。');
+const ruleQuestion = ref('');
+const ruleAdvice = ref('规则建议会根据配置、同步、失败等关键词给出排查方向。');
 const trendChartRef = ref<HTMLDivElement | null>(null);
 const projectChartRef = ref<HTMLDivElement | null>(null);
 const taskChartRef = ref<HTMLDivElement | null>(null);
@@ -218,8 +217,8 @@ async function runCheckedSync() {
 }
 
 const quickActions = [
-  { title: '新建日报任务', icon: FilePlus2, action: () => emit('navigate', 'generate') },
-  { title: '批量生成日报', icon: Layers3, action: () => runCheckedGenerate() },
+  { title: '生成日报', icon: FilePlus2, action: () => emit('navigate', 'generate') },
+  { title: '按当前范围生成', icon: Layers3, action: () => runCheckedGenerate() },
   { title: '同步到飞书', icon: Send, action: () => runCheckedSync() },
   { title: '查看历史日志', icon: History, action: () => emit('navigate', 'history') },
 ];
@@ -266,21 +265,21 @@ function badgeStatus(status: string) {
   return 'info';
 }
 
-function askAssistant(question?: string) {
-  const text = (question || assistantQuestion.value).trim();
+function askRuleAdvice(question?: string) {
+  const text = (question || ruleQuestion.value).trim();
   if (!text) {
-    ElMessage.warning('请输入你的问题');
+    ElMessage.warning('请输入需要排查的关键词');
     return;
   }
-  assistantQuestion.value = text;
+  ruleQuestion.value = text;
   if (text.includes('配置')) {
-    assistantAnswer.value = '建议先进入日报配置，补齐汇报人、AI 接入和飞书表单字段，再回到工作台执行生成。';
+    ruleAdvice.value = '建议先进入日报配置，补齐汇报人、AI 接入和飞书表单字段，再回到工作台执行生成。';
   } else if (text.includes('失败')) {
-    assistantAnswer.value = '可以先查看今日执行状态和历史日志中的错误详情，重点检查飞书凭证、项目映射和网络连接。';
+    ruleAdvice.value = '可以先查看今日执行状态和历史日志中的错误详情，重点检查飞书凭证、项目映射和网络连接。';
   } else if (text.includes('飞书') || text.includes('同步')) {
-    assistantAnswer.value = '同步前请确认已生成日报正文，并且飞书 shareToken、cookie、csrfToken 与项目选项仍然有效。';
+    ruleAdvice.value = '同步前请确认已生成日报正文，并且飞书 shareToken、cookie、csrfToken 与项目选项仍然有效。';
   } else {
-    assistantAnswer.value = '我建议从最近生成记录开始排查：确认项目选择、日期范围、日报正文，再根据需要执行同步。';
+    ruleAdvice.value = '可从最近生成记录开始排查：确认项目选择、日期范围、日报正文，再根据需要执行同步。';
   }
 }
 
@@ -579,24 +578,24 @@ onBeforeUnmount(() => {
               </div>
             </li>
           </ol>
-          <el-button class="full-width" plain type="primary" @click="emit('navigate', 'sync')">去新建任务</el-button>
+          <el-button class="full-width" plain type="primary" @click="emit('navigate', 'sync')">配置同步计划</el-button>
         </section>
 
         <section class="dashboard-assistant-card">
           <div class="dashboard-assistant-head">
-            <Bot :size="24" />
+            <CircleAlert :size="24" />
             <div>
-              <h3>使用建议</h3>
-              <p>根据当前工作流给出排查方向</p>
+              <h3>规则建议</h3>
+              <p>按关键词给出工作流排查方向</p>
             </div>
           </div>
-          <el-input v-model="assistantQuestion" placeholder="请输入您的问题..." @keyup.enter="askAssistant()" />
-          <el-button type="primary" :icon="Send" @click="askAssistant()" />
-          <p>{{ assistantAnswer }}</p>
+          <el-input v-model="ruleQuestion" placeholder="输入配置、同步、失败等关键词" @keyup.enter="askRuleAdvice()" />
+          <el-button type="primary" :icon="Send" @click="askRuleAdvice()" />
+          <p>{{ ruleAdvice }}</p>
           <div class="assistant-questions">
-            <button type="button" @click="askAssistant('如何配置日报生成规则？')">如何配置日报生成规则？</button>
-            <button type="button" @click="askAssistant('如何同步到飞书？')">如何同步到飞书？</button>
-            <button type="button" @click="askAssistant('日报生成失败怎么办？')">日报生成失败怎么办？</button>
+            <button type="button" @click="askRuleAdvice('如何配置日报生成规则？')">如何配置日报生成规则？</button>
+            <button type="button" @click="askRuleAdvice('如何同步到飞书？')">如何同步到飞书？</button>
+            <button type="button" @click="askRuleAdvice('日报生成失败怎么办？')">日报生成失败怎么办？</button>
           </div>
         </section>
       </aside>

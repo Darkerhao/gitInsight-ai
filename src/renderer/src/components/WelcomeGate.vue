@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { gsap } from 'gsap';
 import { Cpu, Database, FastForward, FolderGit2, Sparkles } from 'lucide-vue-next';
 
@@ -17,11 +17,46 @@ interface Particle {
   drift: number;
 }
 
+interface WelcomeMetrics {
+  loaded: boolean;
+  repoCount: number;
+  selectedRepoCount: number;
+  reportCount: number;
+  recentCommitCount: number;
+  syncLogCount: number;
+  successSyncLogCount: number;
+  errorLogCount: number;
+  latestReportDate: string;
+  latestSyncAt: string;
+  appVersion: string;
+}
+
+const props = withDefaults(
+  defineProps<{
+    metrics?: WelcomeMetrics;
+  }>(),
+  {
+    metrics: () => ({
+      loaded: false,
+      repoCount: 0,
+      selectedRepoCount: 0,
+      reportCount: 0,
+      recentCommitCount: 0,
+      syncLogCount: 0,
+      successSyncLogCount: 0,
+      errorLogCount: 0,
+      latestReportDate: '',
+      latestSyncAt: '',
+      appVersion: '',
+    }),
+  },
+);
+
 const emit = defineEmits<{
   (e: 'finished'): void;
 }>();
 
-const STORAGE_KEY = 'gitinsight-ai:welcome-gate-played';
+const STORAGE_KEY = 'gitinsight:welcome-finished';
 const FULL_DURATION_SECONDS = 5.8;
 const COMPACT_TIME_SCALE = 1.58;
 const ACCELERATED_TIME_SCALE = 3.35;
@@ -35,13 +70,6 @@ const compactRun = ref(false);
 const accelerated = ref(false);
 const fallbackLoading = ref(false);
 
-const counters = reactive({
-  repos: 0,
-  commits: 0,
-  confidence: 0,
-  syncTasks: 0,
-});
-
 const stageCopy: Record<StageKey, { title: string; detail: string }> = {
   core: {
     title: '能量聚合',
@@ -53,7 +81,7 @@ const stageCopy: Record<StageKey, { title: string; detail: string }> = {
   },
   system: {
     title: '系统生成',
-    detail: '日报卡片、趋势图与同步任务正在填充',
+    detail: '日报预览、同步通道与本地状态正在准备',
   },
   ready: {
     title: '工作台就绪',
@@ -73,6 +101,30 @@ const stageText = computed(() => {
 });
 
 const progressPercent = computed(() => Math.min(100, Math.round(progress.value * 100)));
+
+const metricLoadingText = '读取中';
+
+function metricText(value: number, unit = '') {
+  return props.metrics.loaded ? `${value}${unit}` : metricLoadingText;
+}
+
+function formatMetricDate(value: string) {
+  if (!props.metrics.loaded) return metricLoadingText;
+  if (!value) return '暂无';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+const repoMetricText = computed(() => metricText(props.metrics.repoCount));
+const reportMetricText = computed(() => metricText(props.metrics.reportCount));
+const syncMetricText = computed(() => metricText(props.metrics.syncLogCount));
 
 const structureSpaces = [
   {
@@ -98,13 +150,17 @@ const structureSpaces = [
   },
 ];
 
-const activityRows = [
-  { name: 'feature/report-pipeline', state: '生成中', tone: 'blue' },
-  { name: 'fix/sync-retry', state: '已校验', tone: 'green' },
-  { name: 'refactor/dashboard-shell', state: '分析中', tone: 'violet' },
-];
+const activityRows = computed(() => [
+  { name: '已选仓库', state: metricText(props.metrics.selectedRepoCount, ' 个'), tone: 'blue' },
+  { name: '历史日报', state: metricText(props.metrics.reportCount, ' 条'), tone: 'green' },
+  { name: '近期提交', state: metricText(props.metrics.recentCommitCount, ' 条'), tone: 'violet' },
+]);
 
-const bars = ['42%', '66%', '54%', '82%', '72%', '92%', '76%'];
+const readinessRows = computed(() => [
+  { name: '同步日志', state: metricText(props.metrics.syncLogCount, ' 条'), tone: 'blue' },
+  { name: '成功同步', state: metricText(props.metrics.successSyncLogCount, ' 次'), tone: 'green' },
+  { name: '错误日志', state: metricText(props.metrics.errorLogCount, ' 条'), tone: 'violet' },
+]);
 
 let timeline: gsap.core.Timeline | null = null;
 let gsapContext: ReturnType<typeof gsap.context> | null = null;
@@ -299,30 +355,6 @@ function setupCanvas() {
   window.addEventListener('resize', createParticles);
 }
 
-function animateCounters() {
-  const counterState = {
-    repos: 0,
-    commits: 0,
-    confidence: 0,
-    syncTasks: 0,
-  };
-
-  gsap.to(counterState, {
-    repos: 12,
-    commits: 486,
-    confidence: 96,
-    syncTasks: 8,
-    duration: 1.05,
-    ease: 'power2.out',
-    onUpdate: () => {
-      counters.repos = Math.round(counterState.repos);
-      counters.commits = Math.round(counterState.commits);
-      counters.confidence = Math.round(counterState.confidence);
-      counters.syncTasks = Math.round(counterState.syncTasks);
-    },
-  });
-}
-
 function finish() {
   if (hasFinished) return;
 
@@ -331,7 +363,7 @@ function finish() {
   syncProgress(1);
 
   try {
-    window.localStorage.setItem(STORAGE_KEY, '1');
+    window.localStorage.setItem(STORAGE_KEY, 'true');
   } catch {
     // localStorage 不可用时不影响进入主工作台。
   }
@@ -366,8 +398,7 @@ function setupTimeline() {
       filter: 'blur(18px)',
     });
     gsap.set('.content-card', { opacity: 0, y: 26, scale: 0.94, filter: 'blur(18px)' });
-    gsap.set('.skeleton-line, .structure-rail, .chart-bar', { scaleX: 0, transformOrigin: '0% 50%' });
-    gsap.set('.chart-bar', { scaleY: 0, transformOrigin: '50% 100%' });
+    gsap.set('.skeleton-line, .structure-rail', { scaleX: 0, transformOrigin: '0% 50%' });
     gsap.set('.trend-line', { strokeDasharray: 360, strokeDashoffset: 360 });
     gsap.set('.donut-progress', { strokeDasharray: 260, strokeDashoffset: 260 });
     gsap.set('.ready-signal', { opacity: 0, y: 8 });
@@ -443,9 +474,6 @@ function setupTimeline() {
       )
       .to('.skeleton-line', { scaleX: 1, duration: 0.46, stagger: 0.025 }, 'system+=0.14')
       .to('.trend-line', { strokeDashoffset: 0, duration: 1.04, ease: 'power2.inOut' }, 'system+=0.34')
-      .to('.chart-bar', { scaleY: 1, scaleX: 1, duration: 0.76, stagger: 0.06, ease: 'back.out(1.6)' }, 'system+=0.42')
-      .to('.donut-progress', { strokeDashoffset: 70, duration: 0.96, ease: 'power2.out' }, 'system+=0.48')
-      .add(animateCounters, 'system+=0.4')
       .from('.activity-row', { opacity: 0, x: -12, duration: 0.42, stagger: 0.08 }, 'system+=0.56')
       .addLabel('ready', 5.22)
       .to('.ready-signal', { opacity: 1, y: 0, duration: 0.34 }, 'ready')
@@ -499,7 +527,7 @@ function handleKeydown(event: KeyboardEvent) {
 
 onMounted(async () => {
   try {
-    compactRun.value = window.localStorage.getItem(STORAGE_KEY) === '1';
+    compactRun.value = Boolean(window.localStorage.getItem(STORAGE_KEY));
   } catch {
     compactRun.value = false;
   }
@@ -609,8 +637,8 @@ onBeforeUnmount(() => {
     <div class="opening-workspace">
       <section class="content-card project-console">
         <header>
-          <span>项目维度</span>
-          <strong>{{ counters.repos }}</strong>
+          <span>仓库总数</span>
+          <strong>{{ repoMetricText }}</strong>
         </header>
         <div class="repo-stack">
           <div v-for="row in activityRows" :key="row.name" class="activity-row" :class="`tone-${row.tone}`">
@@ -628,8 +656,8 @@ onBeforeUnmount(() => {
 
       <section class="content-card workbench-console">
         <header>
-          <span>工作台核心</span>
-          <strong>{{ counters.commits }}</strong>
+          <span>历史日报</span>
+          <strong>{{ reportMetricText }}</strong>
         </header>
         <div class="report-frame">
           <div class="report-toolbar">
@@ -637,7 +665,7 @@ onBeforeUnmount(() => {
             <span class="skeleton-line" />
             <span class="skeleton-line" />
           </div>
-          <svg class="trend-chart" viewBox="0 0 360 148" role="img" aria-label="日报生成趋势">
+          <svg class="trend-chart" viewBox="0 0 360 148" role="img" aria-label="日报生成预览骨架">
             <defs>
               <linearGradient id="trendFill" x1="0" x2="1" y1="0" y2="0">
                 <stop offset="0%" stop-color="#4f8cff" />
@@ -657,26 +685,26 @@ onBeforeUnmount(() => {
         </div>
         <div class="ready-signal">
           <Sparkles :size="14" />
-          <span>Stable dashboard</span>
+          <span>最近日报 {{ metrics.loaded ? metrics.latestReportDate || '暂无' : '读取中' }}</span>
         </div>
       </section>
 
       <section class="content-card data-console">
         <header>
-          <span>数据空间</span>
-          <strong>{{ counters.confidence }}%</strong>
+          <span>同步日志</span>
+          <strong>{{ syncMetricText }}</strong>
         </header>
-        <div class="bar-chart">
-          <span v-for="(bar, index) in bars" :key="`${bar}-${index}`" class="chart-bar" :style="{ '--bar-height': bar }" />
+        <div class="repo-stack">
+          <div v-for="row in readinessRows" :key="row.name" class="activity-row" :class="`tone-${row.tone}`">
+            <span />
+            <p>{{ row.name }}</p>
+            <em>{{ row.state }}</em>
+          </div>
         </div>
         <div class="data-footer">
-          <svg class="donut-chart" viewBox="0 0 96 96" aria-hidden="true">
-            <circle cx="48" cy="48" r="38" />
-            <circle class="donut-progress" cx="48" cy="48" r="38" />
-          </svg>
           <div>
-            <span>同步任务</span>
-            <strong>{{ counters.syncTasks }} 个待执行</strong>
+            <span>最近同步</span>
+            <strong>{{ formatMetricDate(metrics.latestSyncAt) }}</strong>
           </div>
         </div>
       </section>

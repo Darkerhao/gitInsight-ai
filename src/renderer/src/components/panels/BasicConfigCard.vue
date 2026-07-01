@@ -16,7 +16,14 @@ const {
   loginFeishu,
   loadFeishuProjects,
   testSubmitFeishu,
+  applyFullDayReportRange,
 } = assistant;
+
+function handleReportDateChange(value: string | null) {
+  if (value) {
+    applyFullDayReportRange(value);
+  }
+}
 </script>
 
 <template>
@@ -33,7 +40,7 @@ const {
       </div>
       <div class="field">
         <label>日报日期</label>
-        <el-date-picker v-model="form.date" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" />
+        <el-date-picker v-model="form.date" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" @change="handleReportDateChange" />
       </div>
       <div class="field">
         <label>负责人</label>

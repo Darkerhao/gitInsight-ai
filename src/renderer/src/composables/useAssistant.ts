@@ -1,5 +1,5 @@
 import { computed, reactive, ref } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   DEFAULT_AI_BASE_URL_OPTIONS,
   DEFAULT_AI_MODEL_OPTIONS,
@@ -15,6 +15,7 @@ import type {
   FeishuProjectOption,
   RepoInfo,
   ReportResult,
+  ReportTimeRange,
   StorageInfo,
   SyncLogRecord,
 } from '@shared/types';
@@ -187,6 +188,10 @@ function createAssistant() {
     return DEFAULT_AUTO_SYNC_CONFIG.time;
   }
 
+  function normalizeAutoSyncTimeWindowMode(value: unknown) {
+    return value === 'yesterday-start-to-run' ? 'yesterday-start-to-run' : DEFAULT_AUTO_SYNC_CONFIG.timeWindowMode;
+  }
+
   async function scanWorkspaceDirs(workspaceDirs: string[], options: { includeIgnored?: boolean } = {}) {
     const scannedGroups = await Promise.all(workspaceDirs.map((workspaceDir) => window.api.scanRepositories(workspaceDir)));
     const scannedRepos = scannedGroups.flat();
@@ -267,6 +272,8 @@ function createAssistant() {
       autoSync: {
         enabled: Boolean(config.autoSync.enabled),
         time: normalizeTimeValue(config.autoSync.time),
+        timeWindowMode: normalizeAutoSyncTimeWindowMode(config.autoSync.timeWindowMode),
+        windowStartTime: normalizeTimeValue(config.autoSync.windowStartTime),
         lastRunAt: toPlainString(config.autoSync.lastRunAt),
         lastSuccessAt: toPlainString(config.autoSync.lastSuccessAt),
         lastStatus: config.autoSync.lastStatus,
@@ -299,6 +306,8 @@ function createAssistant() {
       autoSync: {
         enabled: Boolean(config.autoSync.enabled),
         time: normalizeTimeValue(config.autoSync.time),
+        timeWindowMode: normalizeAutoSyncTimeWindowMode(config.autoSync.timeWindowMode),
+        windowStartTime: normalizeTimeValue(config.autoSync.windowStartTime),
       },
     });
   }
@@ -351,6 +360,8 @@ function createAssistant() {
     Object.assign(config.autoSync, {
       enabled: state.enabled,
       time: state.time,
+      timeWindowMode: state.timeWindowMode,
+      windowStartTime: state.windowStartTime,
       lastRunAt: state.lastRunAt,
       lastSuccessAt: state.lastSuccessAt,
       lastStatus: state.lastStatus,
@@ -383,6 +394,16 @@ function createAssistant() {
     form.endDateTime = buildDateTime(shiftLocalDate(date, 1), '00:00');
   }
 
+  function applyReportTimeRange(date: string, timeRange?: ReportTimeRange) {
+    form.date = date;
+    if (timeRange?.startDateTime && timeRange.endDateTime) {
+      form.startDateTime = timeRange.startDateTime;
+      form.endDateTime = timeRange.endDateTime;
+      return;
+    }
+    applyFullDayReportRange(date);
+  }
+
   function getReportRangePayload() {
     const startMs = new Date(form.startDateTime).getTime();
     const endMs = new Date(form.endDateTime).getTime();
@@ -390,6 +411,24 @@ function createAssistant() {
     return {
       startDateTime: form.startDateTime,
       endDateTime: form.endDateTime,
+    };
+  }
+
+  function getCurrentReportTimeRange(): ReportTimeRange | undefined {
+    const payload = getReportRangePayload();
+    if (!payload) return undefined;
+
+    const resultRange = lastReportResult.value?.timeRange;
+    if (
+      resultRange?.startDateTime === payload.startDateTime &&
+      resultRange.endDateTime === payload.endDateTime
+    ) {
+      return resultRange;
+    }
+
+    return {
+      ...payload,
+      label: `${formatDateTime(payload.startDateTime)} 至 ${formatDateTime(payload.endDateTime)}`,
     };
   }
 
@@ -616,6 +655,19 @@ function createAssistant() {
   }
 
   async function testSubmitFeishu() {
+    try {
+      await ElMessageBox.confirm('测试提交会向当前飞书表单写入一条带测试标记的真实记录，确认继续？', '确认测试提交', {
+        confirmButtonText: '写入测试记录',
+        cancelButtonText: '取消',
+        type: 'warning',
+      });
+    } catch (error) {
+      if (error !== 'cancel' && error !== 'close') {
+        ElMessage.error(error instanceof Error ? error.message : '测试提交已取消');
+      }
+      return;
+    }
+
     feishuLoading.value = true;
     try {
       await persistConfigBeforeAction('测试提交');
@@ -721,7 +773,11 @@ function createAssistant() {
         report.value = result.report;
         lastReportResult.value = null;
         currentReportId.value = null;
-        applyFullDayReportRange(today);
+        if (result.date) {
+          applyReportTimeRange(result.date, result.timeRange);
+        } else {
+          applyFullDayReportRange(today);
+        }
       }
       if (result.status === 'success') {
         ElMessage.success(result.message);
@@ -817,6 +873,7 @@ function createAssistant() {
       commitsCount: result?.commits.length ?? 0,
       filesCount: countResultFiles(result),
       generatedAt: result?.generatedAt,
+      timeRange: getCurrentReportTimeRange(),
       rawInput: result?.rawInput,
     });
     currentReportId.value = record.id;
@@ -873,6 +930,7 @@ function createAssistant() {
     isConfigDirty,
     // 方法
     applyFullDayReportRange,
+    applyReportTimeRange,
     formatDateTime,
     chooseWorkspace,
     refreshRepos,

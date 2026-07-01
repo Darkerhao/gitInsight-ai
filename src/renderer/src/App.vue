@@ -19,8 +19,10 @@ import { navKeys } from '@/router';
 import type { NavKey } from '@/router';
 
 const assistant = useAssistant();
+const WELCOME_STORAGE_KEY = 'gitinsight:welcome-finished';
 const syncInitialTab = ref<'list' | 'calendar'>('list');
-const showWelcome = ref(!window.localStorage.getItem('gitinsight:welcome-finished'));
+const showWelcome = ref(!window.localStorage.getItem(WELCOME_STORAGE_KEY));
+const assistantReady = ref(false);
 const route = useRoute();
 const router = useRouter();
 
@@ -47,6 +49,24 @@ const activeNav = computed({
 });
 const activeView = computed(() => viewMap[activeNav.value as keyof typeof viewMap] ?? DashboardView);
 const appVersionText = computed(() => (assistant.storageInfo.value?.appVersion ? ` v${assistant.storageInfo.value.appVersion}` : ''));
+const welcomeMetrics = computed(() => {
+  const reports = assistant.dailyReports.value;
+  const syncLogs = assistant.syncLogs.value;
+
+  return {
+    loaded: assistantReady.value,
+    repoCount: assistant.repos.value.length,
+    selectedRepoCount: assistant.selectedRepos.value.length,
+    reportCount: assistant.storageInfo.value?.reportsCount ?? reports.length,
+    recentCommitCount: reports.reduce((total, item) => total + item.commitsCount, 0),
+    syncLogCount: assistant.storageInfo.value?.syncLogsCount ?? syncLogs.length,
+    successSyncLogCount: syncLogs.filter((item) => item.status === 'success').length,
+    errorLogCount: assistant.storageInfo.value?.errorLogsCount ?? assistant.errorLogs.value.length,
+    latestReportDate: reports[0]?.date ?? '',
+    latestSyncAt: syncLogs[0]?.ranAt ?? '',
+    appVersion: assistant.storageInfo.value?.appVersion ?? '',
+  };
+});
 
 watch(
   () => route.query.tab,
@@ -71,6 +91,11 @@ function needsOnboarding() {
 }
 
 function finishWelcome() {
+  try {
+    window.localStorage.setItem(WELCOME_STORAGE_KEY, 'true');
+  } catch {
+    // localStorage 不可用时仍允许进入主工作台。
+  }
   showWelcome.value = false;
 }
 
@@ -79,6 +104,7 @@ onMounted(async () => {
     syncInitialTab.value = route.query.tab;
   }
   await assistant.init();
+  assistantReady.value = true;
   if (needsOnboarding()) {
     showWelcome.value = true;
   }
@@ -90,7 +116,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <WelcomeGate v-if="showWelcome" @finished="finishWelcome" />
+  <WelcomeGate v-if="showWelcome" :metrics="welcomeMetrics" @finished="finishWelcome" />
 
   <div class="app-layout">
     <AppSidebar v-model:active-nav="activeNav" />

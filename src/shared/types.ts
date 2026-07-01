@@ -24,10 +24,13 @@ export interface FeishuFormConfig {
 }
 
 export type AutoSyncStatus = 'idle' | 'running' | 'success' | 'failed' | 'skipped';
+export type AutoSyncTimeWindowMode = 'full-day' | 'yesterday-start-to-run';
 
 export interface AutoSyncConfig {
   enabled: boolean;
   time: string;
+  timeWindowMode: AutoSyncTimeWindowMode;
+  windowStartTime: string;
   lastRunAt: string;
   lastSuccessAt: string;
   lastStatus: AutoSyncStatus;
@@ -60,6 +63,8 @@ export const DEFAULT_FEISHU_FORM_CONFIG: FeishuFormConfig = {
 export const DEFAULT_AUTO_SYNC_CONFIG: AutoSyncConfig = {
   enabled: false,
   time: '18:30',
+  timeWindowMode: 'full-day',
+  windowStartTime: '09:00',
   lastRunAt: '',
   lastSuccessAt: '',
   lastStatus: 'idle',
@@ -128,6 +133,7 @@ export interface ReportResult {
 export interface DailyReportRecord {
   id: number;
   date: string;
+  timeRange?: ReportTimeRange;
   reporterName: string;
   repoNames: string[];
   repoPaths: string[];
@@ -176,6 +182,7 @@ export interface StorageInfo {
 export interface SaveDailyReportPayload {
   id?: number;
   date: string;
+  timeRange?: ReportTimeRange;
   reporterName: string;
   repoNames: string[];
   repoPaths: string[];
@@ -240,6 +247,8 @@ export interface AutoSyncRunResult {
   ranAt: string;
   nextRunAt: string;
   report?: string;
+  date?: string;
+  timeRange?: ReportTimeRange;
   commitsCount?: number;
 }
 

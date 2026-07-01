@@ -243,12 +243,18 @@ function normalizeAutoSyncStatus(status: unknown): AutoSyncStatus {
   return ['idle', 'running', 'success', 'failed', 'skipped'].includes(String(status)) ? (status as AutoSyncStatus) : 'idle';
 }
 
+function normalizeAutoSyncTimeWindowMode(mode: unknown): AutoSyncConfig['timeWindowMode'] {
+  return mode === 'yesterday-start-to-run' ? 'yesterday-start-to-run' : DEFAULT_AUTO_SYNC_CONFIG.timeWindowMode;
+}
+
 function normalizeAutoSyncConfig(autoSync?: Partial<AutoSyncConfig>): AutoSyncConfig {
   return {
     ...DEFAULT_AUTO_SYNC_CONFIG,
     ...(autoSync ?? {}),
     enabled: Boolean(autoSync?.enabled),
     time: normalizeAutoSyncTime(autoSync?.time),
+    timeWindowMode: normalizeAutoSyncTimeWindowMode(autoSync?.timeWindowMode),
+    windowStartTime: normalizeAutoSyncTime(autoSync?.windowStartTime ?? DEFAULT_AUTO_SYNC_CONFIG.windowStartTime),
     lastRunAt: typeof autoSync?.lastRunAt === 'string' ? autoSync.lastRunAt : '',
     lastSuccessAt: typeof autoSync?.lastSuccessAt === 'string' ? autoSync.lastSuccessAt : '',
     lastStatus: normalizeAutoSyncStatus(autoSync?.lastStatus),
@@ -301,6 +307,9 @@ async function getDatabase() {
     CREATE TABLE IF NOT EXISTS daily_reports (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       date TEXT NOT NULL,
+      start_datetime TEXT,
+      end_datetime TEXT,
+      time_range_label TEXT,
       reporter_name TEXT NOT NULL,
       repo_names_json TEXT NOT NULL,
       repo_paths_json TEXT NOT NULL,
@@ -336,6 +345,7 @@ async function getDatabase() {
       created_at TEXT NOT NULL
     );
   `);
+  ensureDailyReportTimeRangeColumns(sqlDatabase);
   await persistDatabase();
   return sqlDatabase;
 }
@@ -356,10 +366,30 @@ function parseJsonArray(value: unknown) {
   }
 }
 
+function ensureDailyReportTimeRangeColumns(db: import('sql.js').Database) {
+  const columns = new Set((db.exec('PRAGMA table_info(daily_reports)')[0]?.values ?? []).map((row) => String(row[1])));
+  if (!columns.has('start_datetime')) db.run('ALTER TABLE daily_reports ADD COLUMN start_datetime TEXT');
+  if (!columns.has('end_datetime')) db.run('ALTER TABLE daily_reports ADD COLUMN end_datetime TEXT');
+  if (!columns.has('time_range_label')) db.run('ALTER TABLE daily_reports ADD COLUMN time_range_label TEXT');
+}
+
+function rowToDailyReportTimeRange(row: Record<string, unknown>): ReportTimeRange | undefined {
+  const startDateTime = String(row.start_datetime || '').trim();
+  const endDateTime = String(row.end_datetime || '').trim();
+  if (!startDateTime || !endDateTime) return undefined;
+
+  return {
+    startDateTime,
+    endDateTime,
+    label: String(row.time_range_label || '').trim() || `${startDateTime} 至 ${endDateTime}`,
+  };
+}
+
 function rowToDailyReportRecord(row: Record<string, unknown>): DailyReportRecord {
   return {
     id: Number(row.id) || 0,
     date: String(row.date || ''),
+    timeRange: rowToDailyReportTimeRange(row),
     reporterName: String(row.reporter_name || ''),
     repoNames: parseJsonArray(row.repo_names_json),
     repoPaths: parseJsonArray(row.repo_paths_json),
@@ -425,12 +455,20 @@ async function saveDailyReport(payload: SaveDailyReportPayload): Promise<DailyRe
   const repoNamesJson = JSON.stringify(payload.repoNames);
   const repoPathsJson = JSON.stringify(payload.repoPaths);
   const rawInputJson = payload.rawInput ? JSON.stringify(payload.rawInput) : null;
+  const timeRange = payload.timeRange?.startDateTime && payload.timeRange.endDateTime ? payload.timeRange : null;
+  const startDateTime = timeRange?.startDateTime ?? null;
+  const endDateTime = timeRange?.endDateTime ?? null;
+  const timeRangeLabel = timeRange?.label ?? null;
 
   if (payload.id) {
     db.run(
       `UPDATE daily_reports
        SET date = ?, reporter_name = ?, repo_names_json = ?, repo_paths_json = ?, report = ?, status = ?,
-           commits_count = ?, files_count = ?, generated_at = ?, updated_at = ?, raw_input_json = COALESCE(?, raw_input_json)
+           commits_count = ?, files_count = ?, generated_at = ?, updated_at = ?,
+           start_datetime = COALESCE(?, start_datetime),
+           end_datetime = COALESCE(?, end_datetime),
+           time_range_label = COALESCE(?, time_range_label),
+           raw_input_json = COALESCE(?, raw_input_json)
        WHERE id = ?`,
       [
         payload.date,
@@ -443,6 +481,9 @@ async function saveDailyReport(payload: SaveDailyReportPayload): Promise<DailyRe
         payload.filesCount,
         generatedAt,
         now,
+        startDateTime,
+        endDateTime,
+        timeRangeLabel,
         rawInputJson,
         payload.id,
       ],
@@ -453,10 +494,13 @@ async function saveDailyReport(payload: SaveDailyReportPayload): Promise<DailyRe
 
   db.run(
     `INSERT INTO daily_reports
-      (date, reporter_name, repo_names_json, repo_paths_json, report, status, commits_count, files_count, generated_at, updated_at, raw_input_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (date, start_datetime, end_datetime, time_range_label, reporter_name, repo_names_json, repo_paths_json, report, status, commits_count, files_count, generated_at, updated_at, raw_input_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       payload.date,
+      startDateTime,
+      endDateTime,
+      timeRangeLabel,
       payload.reporterName,
       repoNamesJson,
       repoPathsJson,
@@ -563,6 +607,7 @@ async function recordGeneratedReport(params: GenerateReportParams, result: Repor
     commitsCount: result.commits.length,
     filesCount: countRawInputFiles(result.rawInput),
     generatedAt: result.generatedAt,
+    timeRange: result.timeRange,
     rawInput: result.rawInput,
   });
 }
@@ -624,12 +669,36 @@ function buildAutoSyncTaskKey(config: AppConfig, date: string) {
     .map((item) => item.toLocaleLowerCase())
     .sort()
     .join('|');
+  const timeWindowKey = [
+    normalizeAutoSyncTimeWindowMode(config.autoSync.timeWindowMode),
+    normalizeAutoSyncTime(config.autoSync.windowStartTime),
+  ].join('@');
   return [
     date,
     normalizeAuthorName(config.reporterName),
     config.feishuForm.projectOptionId.trim(),
+    timeWindowKey,
     repoKey,
   ].join('::');
+}
+
+function buildAutoSyncReportWindow(config: AppConfig, now = new Date()) {
+  const date = toLocalDateString(now);
+
+  if (normalizeAutoSyncTimeWindowMode(config.autoSync.timeWindowMode) === 'yesterday-start-to-run') {
+    const startDate = shiftDateString(date, -1);
+    return {
+      date,
+      startDateTime: normalizeDateTimeValue(`${startDate}T${normalizeAutoSyncTime(config.autoSync.windowStartTime)}:00`),
+      endDateTime: normalizeDateTimeValue(formatDateTimeForGit(now).replace(' ', 'T')),
+    };
+  }
+
+  return {
+    date,
+    startDateTime: normalizeDateTimeValue(`${date}T00:00:00`),
+    endDateTime: normalizeDateTimeValue(`${nextDateString(date)}T00:00:00`),
+  };
 }
 
 function getNextAutoSyncRunDate(config: AppConfig, now = new Date()) {
@@ -718,6 +787,8 @@ function buildAutoSyncRunResult(
   ranAt: string,
   report?: string,
   commitsCount?: number,
+  date?: string,
+  timeRange?: ReportTimeRange,
 ): AutoSyncRunResult {
   return toCloneable({
     status,
@@ -725,6 +796,8 @@ function buildAutoSyncRunResult(
     ranAt,
     nextRunAt: getAutoSyncState(config).nextRunAt,
     report,
+    date,
+    timeRange,
     commitsCount,
   });
 }
@@ -1533,7 +1606,7 @@ function buildFeishuTestFormData(config: FeishuFormConfig, date: string) {
             value: [
               {
                 type: 'text',
-                text: '测试提交管道：Electron persist:feishu 登录态验证。',
+                text: `[GitInsight 测试记录] 表单连通性验证，请勿作为正式日报统计。提交时间：${new Date().toISOString()}`,
               },
             ],
           },
@@ -1707,9 +1780,10 @@ async function syncFeishuDaily(payload: SyncFeishuDailyPayload) {
 
 async function runAutoSync(trigger: 'scheduled' | 'manual'): Promise<AutoSyncRunResult> {
   const initialConfig = await loadConfig();
-  const date = toLocalDateString();
-  const runKey = buildAutoSyncTaskKey(initialConfig, date);
-  const ranAt = new Date().toISOString();
+  const runDate = new Date();
+  const initialReportWindow = buildAutoSyncReportWindow(initialConfig, runDate);
+  const runKey = buildAutoSyncTaskKey(initialConfig, initialReportWindow.date);
+  const ranAt = runDate.toISOString();
   const isScheduled = trigger === 'scheduled';
 
   if (autoSyncRunning) {
@@ -1737,35 +1811,38 @@ async function runAutoSync(trigger: 'scheduled' | 'manual'): Promise<AutoSyncRun
     await validateAutoSyncConfig(config);
 
     const repoPaths = normalizeRepoPaths(config.selectedRepoPaths);
+    const reportWindow = buildAutoSyncReportWindow(config, runDate);
     const result = await generateReport({
       repoPaths,
-      date,
+      date: reportWindow.date,
+      startDateTime: reportWindow.startDateTime,
+      endDateTime: reportWindow.endDateTime,
       reporterName: config.reporterName,
     });
 
     if (!result.commits.length) {
       const message = '跳过：未匹配到可生成日报的提交记录';
       const savedConfig = await updateAutoSyncStatus('skipped', message, { runKey, ranAt, scheduled: isScheduled });
-      return buildAutoSyncRunResult(savedConfig, 'skipped', message, ranAt, result.report, 0);
+      return buildAutoSyncRunResult(savedConfig, 'skipped', message, ranAt, result.report, 0, reportWindow.date, result.timeRange);
     }
 
     await syncFeishuDaily({
       config: config.feishuForm,
       report: result.report,
-      date,
+      date: reportWindow.date,
       reporterName: config.reporterName,
       reportId: result.historyId,
       triggerType: trigger,
     });
 
-    const message = `已自动同步 ${result.commits.length} 条记录到飞书日报表`;
+    const message = `已自动同步 ${result.commits.length} 条记录到飞书日报表（${result.timeRange.label}）`;
     const savedConfig = await updateAutoSyncStatus('success', message, {
       runKey,
       ranAt,
       scheduled: isScheduled,
       success: true,
     });
-    return buildAutoSyncRunResult(savedConfig, 'success', message, ranAt, result.report, result.commits.length);
+    return buildAutoSyncRunResult(savedConfig, 'success', message, ranAt, result.report, result.commits.length, reportWindow.date, result.timeRange);
   } catch (error) {
     const message = error instanceof Error ? error.message : '自动同步失败';
     const savedConfig = await updateAutoSyncStatus('failed', message, { runKey, ranAt, scheduled: isScheduled });

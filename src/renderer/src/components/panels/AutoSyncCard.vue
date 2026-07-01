@@ -31,6 +31,23 @@ const {
             placeholder="同步时间"
           />
         </div>
+        <div class="auto-sync-time">
+          <span class="auto-sync-time-label">统计窗口</span>
+          <el-select v-model="config.autoSync.timeWindowMode" placeholder="选择统计窗口">
+            <el-option label="日报日期全天" value="full-day" />
+            <el-option label="昨日固定时间至执行时刻" value="yesterday-start-to-run" />
+          </el-select>
+        </div>
+        <div v-if="config.autoSync.timeWindowMode === 'yesterday-start-to-run'" class="auto-sync-time">
+          <span class="auto-sync-time-label">窗口开始</span>
+          <el-time-picker
+            v-model="config.autoSync.windowStartTime"
+            format="HH:mm"
+            value-format="HH:mm"
+            :clearable="false"
+            placeholder="开始时间"
+          />
+        </div>
         <el-button :icon="Sparkles" type="primary" plain :loading="autoSyncRunning" @click="runAutoSyncNow">
           立即执行一次
         </el-button>

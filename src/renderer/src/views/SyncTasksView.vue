@@ -9,7 +9,6 @@ import {
   CircleCheck,
   CircleX,
   Clock,
-  Copy,
   Edit3,
   ListChecks,
   Loader,
@@ -21,7 +20,7 @@ import {
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import { useAssistant } from '@/composables/useAssistant';
-import type { AutoSyncStatus, DailyReportRecord, RepoInfo, SyncLogRecord } from '@shared/types';
+import type { AutoSyncStatus, AutoSyncTimeWindowMode, DailyReportRecord, RepoInfo, SyncLogRecord } from '@shared/types';
 
 type ActiveTab = 'list' | 'calendar';
 type SyncTaskStatus = 'running' | 'paused';
@@ -133,6 +132,8 @@ const draftTask = reactive({
   projectColor: '#3b82f6',
   frequencyLabel: '每日',
   time: '09:30',
+  timeWindowMode: 'full-day' as AutoSyncTimeWindowMode,
+  windowStartTime: '09:00',
   status: 'running' as SyncTaskStatus,
   enabled: true,
   weekdays: [...syncWeekdays],
@@ -257,6 +258,17 @@ function getTaskColor(repo: RepoInfo, index: number) {
 
 function normalizeTime(value?: string) {
   return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : '18:30';
+}
+
+function normalizeTimeWindowMode(value?: string): AutoSyncTimeWindowMode {
+  return value === 'yesterday-start-to-run' ? 'yesterday-start-to-run' : 'full-day';
+}
+
+function getAutoSyncWindowLabel() {
+  if (normalizeTimeWindowMode(config.autoSync.timeWindowMode) === 'yesterday-start-to-run') {
+    return `昨日 ${normalizeTime(config.autoSync.windowStartTime)} 至执行时刻`;
+  }
+  return '日报日期全天';
 }
 
 function normalizeRunStatus(status?: AutoSyncStatus | 'success' | 'failed'): AutoSyncStatus {
@@ -439,9 +451,9 @@ function formatRecordTime(value?: string) {
 }
 
 function getRunTaskName() {
-  if (!tasks.value.length) return '自动同步任务';
+  if (!tasks.value.length) return '自动同步计划';
   if (tasks.value.length === 1) return tasks.value[0].name;
-  return `自动同步任务（${tasks.value.length} 个项目）`;
+  return `自动同步计划（${tasks.value.length} 个项目）`;
 }
 
 function selectCalendarDay(day: CalendarDay) {
@@ -471,7 +483,7 @@ async function runTask(task?: SyncTask) {
     return;
   }
   if (task && (!task.enabled || task.status === 'paused')) {
-    ElMessage.warning('请先启用自动同步后再执行任务');
+    ElMessage.warning('请先启用自动同步计划后再执行');
     return;
   }
 
@@ -504,6 +516,8 @@ function openTaskDialog(task?: SyncTask) {
     projectColor: targetTask.projectColor,
     frequencyLabel: targetTask.frequencyLabel,
     time: targetTask.time,
+    timeWindowMode: normalizeTimeWindowMode(config.autoSync.timeWindowMode),
+    windowStartTime: normalizeTime(config.autoSync.windowStartTime),
     status: targetTask.status,
     enabled: targetTask.enabled,
     weekdays: [...targetTask.weekdays],
@@ -518,6 +532,8 @@ async function saveTask() {
   }
 
   config.autoSync.time = normalizeTime(draftTask.time);
+  config.autoSync.timeWindowMode = normalizeTimeWindowMode(draftTask.timeWindowMode);
+  config.autoSync.windowStartTime = normalizeTime(draftTask.windowStartTime);
   config.autoSync.enabled = draftTask.enabled && draftTask.status === 'running';
   try {
     await saveSettings();
@@ -525,10 +541,6 @@ async function saveTask() {
   } catch {
     // saveSettings 已展示具体错误，这里保持弹窗打开，便于继续调整。
   }
-}
-
-function copyTask() {
-  ElMessage.info('当前为全局同步计划，不创建独立任务副本');
 }
 
 async function confirmDeleteTask(task: SyncTask) {
@@ -554,7 +566,7 @@ async function handleBatchCommand(command: string) {
 
   if (command === 'run') {
     if (!targetRows.length) {
-      ElMessage.warning('请先选择需要执行的任务');
+      ElMessage.warning('请先选择需要执行的同步范围');
       return;
     }
     await runTask(targetRows[0]);
@@ -656,7 +668,7 @@ async function handleBatchCommand(command: string) {
               <template #default="{ row }">
                 <div class="task-time-cell">
                   <strong>{{ row.frequencyLabel }} {{ row.time }}</strong>
-                  <span>{{ row.timezone }}</span>
+                  <span>{{ getAutoSyncWindowLabel() }} · {{ row.timezone }}</span>
                 </div>
               </template>
             </el-table-column>
@@ -683,9 +695,6 @@ async function handleBatchCommand(command: string) {
                 <div class="table-actions">
                   <el-tooltip content="配置同步计划" placement="top">
                     <el-button :icon="Edit3" link type="primary" @click="openTaskDialog(row)" />
-                  </el-tooltip>
-                  <el-tooltip content="计划说明" placement="top">
-                    <el-button :icon="Copy" link @click="copyTask" />
                   </el-tooltip>
                   <el-tooltip content="立即执行同步计划" placement="top">
                     <el-button :icon="Send" link :loading="autoSyncRunning" @click="runTask(row)" />
@@ -726,7 +735,7 @@ async function handleBatchCommand(command: string) {
             <h2>{{ monthTitle }}</h2>
             <div class="calendar-filters">
               <el-select v-model="calendarFilter">
-                <el-option label="全部任务" value="all" />
+                <el-option label="全部范围" value="all" />
                 <el-option label="执行中" value="running" />
                 <el-option label="已暂停" value="paused" />
               </el-select>
@@ -782,7 +791,7 @@ async function handleBatchCommand(command: string) {
       <aside v-if="activeTab === 'list'" class="task-side">
         <section class="surface-card task-side-card">
           <div class="panel-head">
-            <h3>任务状态概览</h3>
+            <h3>同步范围概览</h3>
           </div>
           <div class="task-status-grid">
             <div v-for="card in statusCards" :key="card.key" class="task-status-card" :class="`tone-${card.tone}`">
@@ -814,7 +823,7 @@ async function handleBatchCommand(command: string) {
       <aside v-else class="task-side">
         <section class="surface-card task-side-card">
           <div class="panel-head">
-            <h3>任务图例</h3>
+            <h3>同步范围图例</h3>
           </div>
           <div class="calendar-legend">
             <div v-if="!legendTasks.length" class="empty-state">暂无同步范围</div>
@@ -832,7 +841,7 @@ async function handleBatchCommand(command: string) {
           </div>
           <strong class="day-detail-date">{{ selectedDateTitle }}</strong>
           <div class="day-task-list">
-            <div v-if="!selectedDateOccurrences.length" class="empty-state">当天暂无同步任务</div>
+            <div v-if="!selectedDateOccurrences.length" class="empty-state">当天暂无同步计划</div>
             <div v-for="item in selectedDateOccurrences.slice(0, 4)" :key="item.id" class="day-task-item" :class="[`is-${item.kind}`, `is-${item.status}`]">
               <time>{{ item.time }}</time>
               <div>
@@ -846,7 +855,7 @@ async function handleBatchCommand(command: string) {
             </div>
           </div>
           <button v-if="selectedDateOccurrences.length > 4" type="button" class="more-day-task">
-            还有 {{ selectedDateOccurrences.length - 4 }} 个任务在当天执行
+            还有 {{ selectedDateOccurrences.length - 4 }} 个同步范围在当天执行
           </button>
         </section>
       </aside>
@@ -882,13 +891,24 @@ async function handleBatchCommand(command: string) {
             <el-time-picker v-model="draftTask.time" format="HH:mm" value-format="HH:mm" :clearable="false" />
           </div>
           <div class="field">
-            <label>执行频率</label>
+            <label>统计窗口</label>
+            <el-select v-model="draftTask.timeWindowMode">
+              <el-option label="日报日期全天" value="full-day" />
+              <el-option label="昨日固定时间至执行时刻" value="yesterday-start-to-run" />
+            </el-select>
+          </div>
+          <div v-if="draftTask.timeWindowMode === 'yesterday-start-to-run'" class="field">
+            <label>窗口开始</label>
+            <el-time-picker v-model="draftTask.windowStartTime" format="HH:mm" value-format="HH:mm" :clearable="false" />
+          </div>
+          <div class="field">
+            <label>执行周期</label>
             <el-select v-model="draftTask.frequencyLabel" disabled>
               <el-option label="每日" value="每日" />
             </el-select>
           </div>
           <div class="field">
-            <label>任务状态</label>
+            <label>计划状态</label>
             <el-radio-group v-model="draftTask.status">
               <el-radio label="running">启用</el-radio>
               <el-radio label="paused">暂停</el-radio>

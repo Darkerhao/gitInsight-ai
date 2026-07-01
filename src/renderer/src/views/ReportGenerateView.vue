@@ -237,7 +237,8 @@ function formatDate(date: Date) {
 function formatDateTimeValue(date: Date) {
   const hour = String(date.getHours()).padStart(2, '0');
   const minute = String(date.getMinutes()).padStart(2, '0');
-  return `${formatDate(date)}T${hour}:${minute}:00`;
+  const second = String(date.getSeconds()).padStart(2, '0');
+  return `${formatDate(date)}T${hour}:${minute}:${second}`;
 }
 
 function setDateShortcut(value: string) {
