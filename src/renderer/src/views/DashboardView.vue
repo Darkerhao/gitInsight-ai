@@ -15,7 +15,7 @@ import {
 } from 'lucide-vue-next';
 import { ElMessage } from 'element-plus';
 import * as echarts from 'echarts/core';
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
+import { GridComponent, LegendComponent, TitleComponent, TooltipComponent } from 'echarts/components';
 import { LineChart, PieChart } from 'echarts/charts';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { ECharts, EChartsOption } from 'echarts';
@@ -23,7 +23,7 @@ import StatusBadge from '@/components/common/StatusBadge.vue';
 import type { DailyReportRecord } from '@shared/types';
 import { useAssistant } from '@/composables/useAssistant';
 
-echarts.use([GridComponent, LegendComponent, TooltipComponent, LineChart, PieChart, CanvasRenderer]);
+echarts.use([GridComponent, LegendComponent, TitleComponent, TooltipComponent, LineChart, PieChart, CanvasRenderer]);
 
 interface TrendRow {
   date: string;
@@ -297,7 +297,8 @@ function createTrendOption(): EChartsOption {
       right: 18,
       top: 20,
       bottom: 34,
-      containLabel: true,
+      outerBoundsMode: 'same',
+      outerBoundsContain: 'axisLabel',
     },
     xAxis: {
       type: 'category',

@@ -57,6 +57,7 @@ const emit = defineEmits<{
 }>();
 
 const STORAGE_KEY = 'gitinsight:welcome-finished';
+const ANIMATION_ENABLED_KEY = 'gitinsight:welcome-animation-enabled';
 const FULL_DURATION_SECONDS = 5.8;
 const COMPACT_TIME_SCALE = 1.58;
 const ACCELERATED_TIME_SCALE = 3.35;
@@ -526,7 +527,7 @@ function handleKeydown(event: KeyboardEvent) {
 
 onMounted(async () => {
   try {
-    compactRun.value = Boolean(window.localStorage.getItem(STORAGE_KEY));
+    compactRun.value = window.localStorage.getItem(ANIMATION_ENABLED_KEY) !== 'true' && Boolean(window.localStorage.getItem(STORAGE_KEY));
   } catch {
     compactRun.value = false;
   }

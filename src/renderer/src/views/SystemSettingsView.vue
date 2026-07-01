@@ -23,13 +23,16 @@ const { config, projectOptions, storageInfo, refreshLocalData, saveSettings } = 
 const activeTab = ref('basic');
 
 const WELCOME_STORAGE_KEY = 'gitinsight:welcome-finished';
-const showWelcomeAnimation = ref(!window.localStorage.getItem(WELCOME_STORAGE_KEY));
+const WELCOME_ANIMATION_ENABLED_KEY = 'gitinsight:welcome-animation-enabled';
+const showWelcomeAnimation = ref(window.localStorage.getItem(WELCOME_ANIMATION_ENABLED_KEY) === 'true');
 
 function toggleWelcomeAnimation(value: boolean) {
   showWelcomeAnimation.value = value;
   if (value) {
+    window.localStorage.setItem(WELCOME_ANIMATION_ENABLED_KEY, 'true');
     window.localStorage.removeItem(WELCOME_STORAGE_KEY);
   } else {
+    window.localStorage.setItem(WELCOME_ANIMATION_ENABLED_KEY, 'false');
     window.localStorage.setItem(WELCOME_STORAGE_KEY, 'true');
   }
 }
@@ -135,7 +138,7 @@ async function resetSettings() {
             <div class="field">
               <label>开屏动画</label>
               <el-switch :model-value="showWelcomeAnimation" active-text="开启" inactive-text="关闭" @change="toggleWelcomeAnimation" />
-              <span class="field-hint">开启后下次启动应用将播放欢迎动画</span>
+              <span class="field-hint">开启后每次启动应用都会播放欢迎动画</span>
             </div>
           </div>
         </div>

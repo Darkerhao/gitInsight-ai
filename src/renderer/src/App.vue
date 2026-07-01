@@ -20,8 +20,9 @@ import type { NavKey } from '@/router';
 
 const assistant = useAssistant();
 const WELCOME_STORAGE_KEY = 'gitinsight:welcome-finished';
+const WELCOME_ANIMATION_ENABLED_KEY = 'gitinsight:welcome-animation-enabled';
 const syncInitialTab = ref<'list' | 'calendar'>('list');
-const showWelcome = ref(!window.localStorage.getItem(WELCOME_STORAGE_KEY));
+const showWelcome = ref(shouldShowWelcomeOnLaunch());
 const assistantReady = ref(false);
 const route = useRoute();
 const router = useRouter();
@@ -88,6 +89,17 @@ function handleNavigate(value: string) {
 
 function needsOnboarding() {
   return !assistant.config.workspaceDirs.length || !assistant.config.reporterName;
+}
+
+function shouldShowWelcomeOnLaunch() {
+  try {
+    const animationPreference = window.localStorage.getItem(WELCOME_ANIMATION_ENABLED_KEY);
+    if (animationPreference === 'true') return true;
+    if (animationPreference === 'false') return false;
+    return !window.localStorage.getItem(WELCOME_STORAGE_KEY);
+  } catch {
+    return false;
+  }
 }
 
 function finishWelcome() {
