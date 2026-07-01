@@ -3017,23 +3017,99 @@ textarea {
   }
 
   .sidebar {
-    position: static;
+    position: sticky;
+    top: 0;
+    z-index: 30;
     height: auto;
     overflow: visible;
     border-right: 0;
     border-bottom: 1px solid var(--c-border);
+    padding: 10px 16px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
   }
 
-  .sidebar-projects {
+  .sidebar-brand {
+    padding: 0;
+    min-width: 0;
+  }
+
+  .sidebar-logo {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+  }
+
+  .sidebar-brand-name {
+    font-size: 15px;
+    white-space: nowrap;
+  }
+
+  .sidebar-nav {
+    min-width: 0;
     flex: none;
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 2px 0;
+    scrollbar-width: none;
   }
 
-  .sidebar-projects-list {
-    max-height: 320px;
+  .sidebar-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-group,
+  .nav-item {
+    flex: 0 0 auto;
+  }
+
+  .nav-group {
+    position: relative;
+  }
+
+  .nav-item,
+  .nav-group-head {
+    width: auto;
+    min-height: 36px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    gap: 8px;
+    white-space: nowrap;
+  }
+
+  .nav-group-head.has-active {
+    background: var(--c-primary-soft);
+    color: var(--c-primary);
+  }
+
+  .nav-group-body {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 35;
+    min-width: 150px;
+    margin: 0;
+    padding: 6px;
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: var(--shadow-md);
+  }
+
+  .nav-subitem {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .sidebar-tip {
-    margin-top: 16px;
+    display: none;
+  }
+
+  .topbar {
+    position: static;
   }
 
   .field-grid {

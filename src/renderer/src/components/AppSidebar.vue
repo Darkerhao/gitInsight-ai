@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Bot, ChevronDown, CircleHelp, ClipboardList, FileCog, FileText, FolderKanban, FolderOpen, History, Home, Info, MessageCircle, Settings, Sparkles } from 'lucide-vue-next';
 
 const props = defineProps<{
@@ -55,13 +55,26 @@ const activeGroupId = computed(() => {
   return null;
 });
 
-// 已展开的分组：默认展开当前激活项所在的分组
-const openGroups = ref<Set<string>>(new Set(activeGroupId.value ? [activeGroupId.value] : []));
+const compactNav = ref(typeof window !== 'undefined' ? window.matchMedia('(max-width: 920px)').matches : false);
+const openGroups = ref<Set<string>>(new Set());
+let compactNavQuery: MediaQueryList | null = null;
 
-// 激活项切换到其它分组时，自动展开其所在分组
-watch(activeGroupId, (id) => {
-  if (id) openGroups.value.add(id);
-});
+function openActiveGroup() {
+  const id = activeGroupId.value;
+  if (!id || compactNav.value) return;
+  openGroups.value = new Set([...openGroups.value, id]);
+}
+
+function updateCompactNav() {
+  compactNav.value = Boolean(compactNavQuery?.matches);
+  if (compactNav.value) {
+    openGroups.value = new Set();
+  } else {
+    openActiveGroup();
+  }
+}
+
+watch(activeGroupId, openActiveGroup, { immediate: true });
 
 function isGroupOpen(id: string) {
   return openGroups.value.has(id);
@@ -77,7 +90,18 @@ function toggleGroup(id: string) {
 function onNav(item: NavLeaf) {
   if (!item.enabled) return;
   emit('update:activeNav', item.key);
+  if (compactNav.value) openGroups.value = new Set();
 }
+
+onMounted(() => {
+  compactNavQuery = window.matchMedia('(max-width: 920px)');
+  updateCompactNav();
+  compactNavQuery.addEventListener('change', updateCompactNav);
+});
+
+onBeforeUnmount(() => {
+  compactNavQuery?.removeEventListener('change', updateCompactNav);
+});
 </script>
 
 <template>

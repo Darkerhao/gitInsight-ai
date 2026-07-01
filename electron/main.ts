@@ -126,6 +126,11 @@ function pickSensitiveConfig(config: AppConfig) {
   };
 }
 
+function hasSensitiveConfig(config: AppConfig) {
+  const sensitiveConfig = pickSensitiveConfig(config);
+  return Boolean(sensitiveConfig.aiApiKey.trim() || sensitiveConfig.feishuForm.cookie.trim() || sensitiveConfig.feishuForm.csrfToken.trim());
+}
+
 function stripSensitiveConfig(config: AppConfig): AppConfig {
   return {
     ...config,
@@ -280,6 +285,9 @@ async function saveConfig(config: AppConfig, options: { reschedule?: boolean; no
   const { reschedule = true, notify = true } = options;
   await ensureConfigDir();
   const normalizedConfig = normalizeConfig(config);
+  if (hasSensitiveConfig(normalizedConfig) && !safeStorage.isEncryptionAvailable()) {
+    throw new Error('密钥保护不可用，已阻止保存包含 AI Key、飞书 Cookie 或 CSRF Token 的配置，避免敏感配置保存后丢失。');
+  }
   await saveSensitiveConfig(normalizedConfig);
   await writeFile(getConfigPath(), JSON.stringify(stripSensitiveConfig(normalizedConfig), null, 2), 'utf-8');
   if (reschedule) {
@@ -1794,7 +1802,7 @@ async function runAutoSync(trigger: 'scheduled' | 'manual'): Promise<AutoSyncRun
     return buildAutoSyncRunResult(initialConfig, 'skipped', '自动同步未启用', ranAt);
   }
 
-  if (initialConfig.autoSync.lastSuccessKey === runKey) {
+  if (isScheduled && initialConfig.autoSync.lastSuccessKey === runKey) {
     const savedConfig = await updateAutoSyncStatus('skipped', '今日相同配置已成功同步，本次跳过', {
       runKey,
       ranAt,

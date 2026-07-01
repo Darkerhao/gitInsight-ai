@@ -18,6 +18,11 @@
 | 8. P2 首次引导 | complete | 欢迎页改为首次/配置缺失时展示 |
 | 9. P2 系统设置分区 | complete | 让设置 tabs 实际控制内容分区 |
 | 10. 质量保障 | complete | 补齐脚本、运行验证并修复发现的问题 |
+| 11. 2026-07-01 审计修复基线 | complete | 基于 `docs/project-issue-audit-2026-07-01.md` 梳理本轮修复范围 |
+| 12. P0/P1 数据正确性 | complete | 修复敏感配置保存降级、简洁版日报保存与状态残留、手动同步去重 |
+| 13. P2 体验闭环 | complete | 修复历史查询反馈、小屏导航占位、教程入口闭环 |
+| 14. P2/P3 维护优化 | complete | 清理 GSAP 残留、补 favicon、修正文案、拆分 renderer vendor chunk |
+| 15. 本轮质量验证 | complete | `npm run typecheck`、`npm run build`、`git diff --check`、残留字符串检索均通过 |
 
 ## 执行原则
 

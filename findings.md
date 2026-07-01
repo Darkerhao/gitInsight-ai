@@ -13,6 +13,14 @@
 | 2026-06-30 | `/usr/bin/bash` 在当前执行器不可用 | 使用 PowerShell 执行只读和验证命令 |
 | 2026-06-30 | PowerShell `Get-Content` 输出中文出现终端编码乱码 | 使用 `rg` 和精确代码片段确认源文件内容，未按乱码文本改写 |
 | 2026-06-30 | 同步任务页并没有独立任务数据模型 | 采用短期方案 A，将页面语义收敛为全局自动同步计划和同步范围 |
+| 2026-07-01 | 当前会话没有暴露 codebase-memory MCP 图谱工具或资源 | 已尝试 `list_mcp_resources`，结果为空；本轮基于审计文档定位、源码阅读和 `rg` 检索推进 |
+
+## 2026-07-01 审计修复发现
+
+- `electron/main.ts` 的 `saveConfig()` 会在 `safeStorage` 不可用时继续写入剥离敏感字段后的 `config.json`，需要在存在 `aiApiKey`、飞书 `cookie` 或 `csrfToken` 时阻断保存。
+- `ReportGenerateView.vue` 的“保存修改”没有把 `activeReportContent` 传给 `saveCurrentReport()`，导致简洁版草稿不会写入历史记录。
+- `ReportGenerateView.vue` 的 `conciseDirty` 是局部状态，从历史日志加载新日报时共享 `report.value` 会变化，但 dirty 状态可能阻止简洁版草稿重建。
+- `runAutoSync('manual')` 与定时任务共用 `lastSuccessKey` 去重；手动触发应允许补发或重试。
 
 ## 2026-07-01 假数据与未完成功能扫描
 

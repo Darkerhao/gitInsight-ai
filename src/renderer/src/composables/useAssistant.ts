@@ -551,14 +551,18 @@ function createAssistant() {
   async function saveSettings() {
     const payload = getConfigPayload();
     if (!(await validateAutoSyncBeforeSave(payload))) return;
-    const saved = await persistConfig();
-    Object.assign(config.autoSync, {
-      ...DEFAULT_AUTO_SYNC_CONFIG,
-      ...saved.autoSync,
-    });
-    markConfigSaved();
-    await refreshAutoSyncState();
-    ElMessage.success('配置已保存');
+    try {
+      const saved = await persistConfig();
+      Object.assign(config.autoSync, {
+        ...DEFAULT_AUTO_SYNC_CONFIG,
+        ...saved.autoSync,
+      });
+      markConfigSaved();
+      await refreshAutoSyncState();
+      ElMessage.success('配置已保存');
+    } catch (error) {
+      ElMessage.error(error instanceof Error ? error.message : '配置保存失败');
+    }
   }
 
   function rememberAiBaseUrlOption(value: string) {
@@ -855,10 +859,11 @@ function createAssistant() {
     ElMessage.success('项目已从列表移除，本地文件不会被删除');
   }
 
-  async function saveCurrentReport() {
-    if (!report.value.trim()) {
+  async function saveCurrentReport(reportContent = report.value) {
+    const content = reportContent.trim();
+    if (!content) {
       ElMessage.warning('当前没有可保存的日报内容');
-      return;
+      return null;
     }
     const selected = selectedRepos.value;
     const result = lastReportResult.value;
@@ -868,7 +873,7 @@ function createAssistant() {
       reporterName: config.reporterName,
       repoNames: result?.repos.map((item) => item.name) ?? selected.map((item) => item.name),
       repoPaths: result?.repos.map((item) => item.path) ?? selected.map((item) => item.path),
-      report: report.value,
+      report: content,
       status: result?.commits.length ? 'success' : 'draft',
       commitsCount: result?.commits.length ?? 0,
       filesCount: countResultFiles(result),
@@ -879,6 +884,7 @@ function createAssistant() {
     currentReportId.value = record.id;
     await refreshLocalData();
     ElMessage.success('日报已保存');
+    return record;
   }
 
   async function init() {

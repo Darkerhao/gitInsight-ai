@@ -15,3 +15,13 @@
 - 完成系统设置 tab 内容分区。
 - 新增 `npm run check` 串联类型检查和构建。
 - 验证通过：`npm run typecheck`、`npm run check`、最终 `npm run typecheck`、`git diff --check`。
+
+## 2026-07-01
+
+- 用户要求根据 `docs/project-issue-audit-2026-07-01.md` 按步骤修复问题。
+- 读取审计文档、现有 `task_plan.md`、`progress.md`、`findings.md`，确认本轮从 P0/P1 数据正确性开始推进，再处理体验闭环和维护项。
+- 当前执行清单：敏感配置保存降级、简洁版日报保存与状态残留、手动同步去重、历史查询反馈、小屏导航、教程入口、GSAP 残留、favicon、重置文案、构建分包、质量验证。
+- 完成 P0/P1 代码改动：`safeStorage` 不可用且存在敏感字段时阻断保存；“保存修改”保存当前日报模式内容；报告正文切换时重建简洁版草稿；手动自动同步不再被当天成功去重拦截。
+- 完成 P2 体验闭环改动：历史查询命中时打开详情；日报配置页教程入口跳转使用帮助；小屏侧栏改为顶部横向紧凑导航并隐藏提示卡。
+- 完成 P2/P3 维护改动：清理 WelcomeGate 残留 `.donut-progress` 动画和 CSS；补充 favicon；设置页重置文案改为“重置同步默认值”；renderer 构建增加 vendor chunk 拆分。
+- 验证通过：`npm run typecheck`、`npm run build`、`git diff --check`、`rg -n "donut-progress|重置基础配置|请按左侧导航进入对应功能页"` 无残留结果。构建仍有第三方 `@vueuse/core` PURE 注释告警，属于既有依赖告警。

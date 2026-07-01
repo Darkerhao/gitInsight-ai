@@ -400,7 +400,6 @@ function setupTimeline() {
     gsap.set('.content-card', { opacity: 0, y: 26, scale: 0.94, filter: 'blur(18px)' });
     gsap.set('.skeleton-line, .structure-rail', { scaleX: 0, transformOrigin: '0% 50%' });
     gsap.set('.trend-line', { strokeDasharray: 360, strokeDashoffset: 360 });
-    gsap.set('.donut-progress', { strokeDasharray: 260, strokeDashoffset: 260 });
     gsap.set('.ready-signal', { opacity: 0, y: 8 });
 
     const tl = gsap.timeline({
@@ -1292,24 +1291,6 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 14px;
   padding: 0 18px 18px;
-}
-
-.donut-chart {
-  width: 64px;
-  height: 64px;
-  flex: 0 0 auto;
-  transform: rotate(-90deg);
-}
-
-.donut-chart circle {
-  fill: none;
-  stroke: rgba(151, 191, 255, 0.16);
-  stroke-width: 9;
-}
-
-.donut-chart .donut-progress {
-  stroke: #50dcbe;
-  stroke-linecap: round;
 }
 
 .data-footer strong {

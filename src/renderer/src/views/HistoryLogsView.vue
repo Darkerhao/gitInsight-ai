@@ -138,7 +138,14 @@ function resetFilters() {
 }
 
 function focusFirstLog() {
-  selectedLog.value = filteredLogs.value[0] ?? null;
+  const firstLog = filteredLogs.value[0] ?? null;
+  selectedLog.value = firstLog;
+  detailVisible.value = Boolean(firstLog);
+  if (firstLog) {
+    ElMessage.success('已定位首条匹配日志');
+  } else {
+    ElMessage.warning('没有匹配日志');
+  }
 }
 
 async function copyActiveLog() {

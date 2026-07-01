@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ElMessage } from 'element-plus';
+const emit = defineEmits<{
+  (e: 'navigate', value: string): void;
+}>();
 
 const steps = [
   { title: '配置基础信息', desc: '填写项目路径、选择负责人等基本信息' },
@@ -23,6 +25,6 @@ const steps = [
         </div>
       </li>
     </ol>
-    <button class="usage-guide-btn" @click="ElMessage.info('请按左侧导航进入对应功能页查看完整流程')">查看详细教程</button>
+    <button class="usage-guide-btn" @click="emit('navigate', 'help')">查看详细教程</button>
   </section>
 </template>

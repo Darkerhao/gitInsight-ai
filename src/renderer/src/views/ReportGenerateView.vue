@@ -42,6 +42,7 @@ const activePreviewTab = ref('report');
 const reportMode = ref<'concise' | 'full'>('concise');
 const conciseReportDraft = ref('');
 const conciseDirty = ref(false);
+const conciseSourceReport = ref('');
 const dateShortcut = ref('today');
 const repoKeyword = ref('');
 const gameScore = ref(0);
@@ -169,6 +170,12 @@ function buildConciseReport(reportText: string) {
     .join('\n');
 }
 
+function resetConciseDraft(reportText: string) {
+  conciseReportDraft.value = buildConciseReport(reportText);
+  conciseDirty.value = false;
+  conciseSourceReport.value = reportText;
+}
+
 function moveGameTarget() {
   gameTarget.value = {
     x: Math.round(12 + Math.random() * 76),
@@ -187,11 +194,21 @@ function markConciseDirty() {
 }
 
 watch(report, (value) => {
-  if (!conciseDirty.value) {
-    conciseReportDraft.value = buildConciseReport(value);
+  if (!value.trim()) {
+    resetConciseDraft('');
+    return;
   }
-  if (value.trim()) reportMode.value = 'concise';
-});
+  if (!conciseDirty.value || value !== conciseSourceReport.value) {
+    resetConciseDraft(value);
+  }
+}, { immediate: true });
+
+async function handleSaveCurrentReport() {
+  const record = await saveCurrentReport(activeReportContent.value);
+  if (record && reportMode.value === 'concise') {
+    conciseDirty.value = false;
+  }
+}
 
 watch(loading, (isLoading) => {
   if (!isLoading) return;
@@ -281,6 +298,9 @@ async function handleGenerate() {
   }
   conciseDirty.value = false;
   await generate();
+  if (report.value.trim()) {
+    reportMode.value = 'concise';
+  }
 }
 
 async function copyReport() {
@@ -592,7 +612,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
           <div class="button-row between">
             <el-button :icon="RotateCcw" plain :loading="loading" @click="handleGenerate">重新生成</el-button>
             <div class="button-row">
-              <el-button :icon="Save" plain @click="saveCurrentReport">保存修改</el-button>
+              <el-button :icon="Save" plain @click="handleSaveCurrentReport">保存修改</el-button>
               <el-button :icon="ClipboardCopy" plain @click="copyReport">复制内容</el-button>
               <el-button :icon="Download" type="primary" plain @click="exportMarkdown">导出为 Markdown</el-button>
             </div>

@@ -208,7 +208,7 @@ async function resetSettings() {
             </button>
             <button class="operation-card" @click="resetSettings">
               <Settings :size="18" />
-              <strong>重置基础配置</strong>
+              <strong>重置同步默认值</strong>
               <span>恢复自动同步时间和默认工时，保存后写入 config.json</span>
             </button>
           </div>
