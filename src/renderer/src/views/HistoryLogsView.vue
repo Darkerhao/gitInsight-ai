@@ -30,7 +30,7 @@ const emit = defineEmits<{
 }>();
 
 const assistant = useAssistant();
-const { repos, selectedRepos, config, form, report, currentReportId, lastReportResult, dailyReports, syncLogs, errorLogs, push } = assistant;
+const { repos, selectedRepos, config, report, currentReportId, lastReportResult, dailyReports, syncLogs, errorLogs, push, applyFullDayReportRange } = assistant;
 
 const keyword = ref('');
 const selectedProject = ref('全部项目');
@@ -165,7 +165,7 @@ function loadActiveReport() {
     ElMessage.warning('请选择一条日报生成记录');
     return;
   }
-  form.date = record.date;
+  applyFullDayReportRange(record.date);
   config.reporterName = record.reporterName || config.reporterName;
   report.value = record.report;
   currentReportId.value = record.id;
@@ -180,7 +180,7 @@ async function republishActiveReport() {
     ElMessage.warning('请选择一条日报生成记录');
     return;
   }
-  form.date = record.date;
+  applyFullDayReportRange(record.date);
   config.reporterName = record.reporterName || config.reporterName;
   currentReportId.value = record.id;
   await push(record.report);

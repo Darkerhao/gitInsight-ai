@@ -29,6 +29,7 @@ import type {
   GenerateReportParams,
   RepoInfo,
   ReportResult,
+  ReportTimeRange,
   SaveDailyReportPayload,
   StorageInfo,
   SyncLogRecord,
@@ -779,22 +780,76 @@ function nextDateString(date: string) {
   return shiftDateString(date, 1);
 }
 
-// 目标当天在本地时区的起始毫秒数（用于 author date 的半开区间 [start, end) 判定）。
-function dateToLocalMs(date: string) {
-  const [year, month, day] = date.split('-').map(Number);
-  return new Date(year, month - 1, day).getTime();
+type NormalizedReportTimeRange = ReportTimeRange & {
+  startMs: number;
+  endMs: number;
+};
+
+function parseLocalDateTimeMs(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value.trim());
+  if (!match) return Number.NaN;
+  const [, year, month, day, hour, minute, second = '0'] = match;
+  return new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+  ).getTime();
 }
 
-async function collectGitData(repoPath: string, date: string) {
+function normalizeDateTimeValue(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value.trim());
+  if (!match) return value.trim();
+  const [, year, month, day, hour, minute, second = '00'] = match;
+  return `${year}-${month}-${day}T${hour}:${minute}:${second.padStart(2, '0')}`;
+}
+
+function formatDateTimeForDisplay(value: string) {
+  return normalizeDateTimeValue(value).replace('T', ' ').replace(/:00$/, '');
+}
+
+function formatDateTimeForGit(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  const second = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+}
+
+function normalizeReportTimeRange(params: GenerateReportParams): NormalizedReportTimeRange {
+  const startDateTime = normalizeDateTimeValue(params.startDateTime || `${params.date}T00:00:00`);
+  const endDateTime = normalizeDateTimeValue(params.endDateTime || `${nextDateString(params.date)}T00:00:00`);
+  const startMs = parseLocalDateTimeMs(startDateTime);
+  const endMs = parseLocalDateTimeMs(endDateTime);
+
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
+    throw new Error('提交时间段格式不正确');
+  }
+  if (startMs >= endMs) {
+    throw new Error('提交时间段的结束时间必须晚于开始时间');
+  }
+
+  return {
+    startDateTime,
+    endDateTime,
+    startMs,
+    endMs,
+    label: `${formatDateTimeForDisplay(startDateTime)} 至 ${formatDateTimeForDisplay(endDateTime)}`,
+  };
+}
+
+async function collectGitData(repoPath: string, timeRange: NormalizedReportTimeRange) {
   const git = simpleGit(repoPath);
   const marker = '__COMMIT__';
   // git log 的 --since/--until 过滤的是 committer date，但日报关心的是 author date：
   // 提交被 rebase / merge 后 committer date 会被刷新到处理那一刻，author date 仍是当初写代码的时间。
   // 因此这里只用宽松的 committer-date 下界做粗筛（committer date 一般 ≥ author date），不设 --until，
-  // 再在 JS 里按 author date(%ad) 精确筛到目标当天，避免漏掉「当天写、隔天才合并」的提交。
-  const dayStartMs = dateToLocalMs(date);
-  const dayEndMs = dateToLocalMs(nextDateString(date));
-  const coarseSince = `${shiftDateString(date, -2)} 00:00:00`;
+  // 再在 JS 里按 author date(%ad) 精确筛到目标时间段，避免漏掉「前一时间段写、之后才合并」的提交。
+  const coarseSince = formatDateTimeForGit(new Date(timeRange.startMs - 2 * 24 * 60 * 60 * 1000));
 
   const logOutput = await git.raw([
     'log',
@@ -814,8 +869,8 @@ async function collectGitData(repoPath: string, date: string) {
     if (line.startsWith(marker)) {
       const [hash, commitDate, author, message] = line.slice(marker.length).split('\t');
       const authoredMs = new Date(commitDate).getTime();
-      if (Number.isNaN(authoredMs) || authoredMs < dayStartMs || authoredMs >= dayEndMs) {
-        current = null; // 非目标当天创作，跳过该提交（其 --name-only 文件行也随之忽略）
+      if (Number.isNaN(authoredMs) || authoredMs < timeRange.startMs || authoredMs >= timeRange.endMs) {
+        current = null; // 非目标时间段创作，跳过该提交（其 --name-only 文件行也随之忽略）
         continue;
       }
       current = { hash, date: commitDate, author, message, files: [], show: '' };
@@ -931,10 +986,10 @@ async function buildAiErrorMessage(config: AppConfig, response: Response, detail
   return `AI接口调用失败：${response.status} ${response.statusText}${parsedDetail ? `，返回内容：${parsedDetail.slice(0, 500)}` : ''}`;
 }
 
-async function callAiReport(config: AppConfig, rawInput: { gitLogs: string; files: string; diff: string }) {
+async function callAiReport(config: AppConfig, rawInput: { gitLogs: string; files: string; diff: string }, timeRange: ReportTimeRange) {
   const prompt = `你是一名资深软件研发工程师。
 
-请根据以下Git提交记录、修改文件和代码变更内容，总结今天的工作内容。
+请根据以下Git提交记录、修改文件和代码变更内容，总结所选时间段内的工作内容。
 
 要求：
 1. 不要出现commit、git等技术词汇。
@@ -945,6 +1000,9 @@ async function callAiReport(config: AppConfig, rawInput: { gitLogs: string; file
 6. 输出3-5条工作内容。
 7. 自动生成明日计划。
 8. 只能依据提供的Git数据、修改文件和代码变更总结，禁止补写未出现的工作内容。
+
+时间范围：
+${timeRange.label}
 
 Git数据：
 ${rawInput.gitLogs}
@@ -1008,7 +1066,7 @@ function formatNumbered(items: string[]) {
   return items.map((item, index) => `${index + 1}. ${item}`).join('\n');
 }
 
-function fallbackReport(repoNames: string[], date: string, reporterName: string, commits: CommitEntry[]) {
+function fallbackReport(repoNames: string[], date: string, reporterName: string, commits: CommitEntry[], timeRange: ReportTimeRange) {
   const workItems = commits.slice(0, 5).map((commit) => {
     const topic = commit.message.replace(/^(\w+)(\(.+?\))?:\s*/, '') || '相关模块';
     const modules = commit.files.slice(0, 2).join('、') || repoNames[0] || '当前项目';
@@ -1019,7 +1077,7 @@ function fallbackReport(repoNames: string[], date: string, reporterName: string,
         `完成 ${Math.min(commits.length, 5)} 项当日研发变更梳理，并整理为结构化日报内容。`,
         `覆盖 ${repoNames.join('、') || '当前项目'} 的主要改动线索，便于后续同步与复盘。`,
       ]
-    : ['完成日报基础信息整理，当前日期暂无可用研发记录。'];
+    : ['完成日报基础信息整理，当前时间段暂无可用研发记录。'];
   const planItems = commits.length
     ? commits.slice(0, 2).map((commit) => {
         const topic = commit.message.replace(/^(\w+)(\(.+?\))?:\s*/, '') || '当前模块';
@@ -1046,14 +1104,16 @@ function fallbackReport(repoNames: string[], date: string, reporterName: string,
     '',
     `汇报人：${reporterName}`,
     `日期：${date}`,
+    `时间范围：${timeRange.label}`,
   ].join('\n');
 }
 
 async function generateReport(params: GenerateReportParams): Promise<ReportResult> {
   const config = await loadConfig();
   const generatedAt = new Date().toISOString();
+  const timeRange = normalizeReportTimeRange(params);
   const repos = params.repoPaths.map((repoPath) => ({ name: basename(repoPath), path: repoPath }));
-  const allRepoDataList = await Promise.all(params.repoPaths.map((repoPath) => collectGitData(repoPath, params.date)));
+  const allRepoDataList = await Promise.all(params.repoPaths.map((repoPath) => collectGitData(repoPath, timeRange)));
   const repoDataList = allRepoDataList.map((item) => {
     const commits = filterCommitsByReporter(item.commits, params.reporterName);
     return formatCollectedGitData(commits);
@@ -1062,19 +1122,19 @@ async function generateReport(params: GenerateReportParams): Promise<ReportResul
   const allCommits = allRepoDataList.flatMap((item) => item.commits);
   const rawInput = {
     gitLogs: repoDataList
-      .map((item, index) => `## ${repos[index]?.name ?? `项目${index + 1}`}\n${item.gitLogs || '当日无记录'}`)
+      .map((item, index) => `## ${repos[index]?.name ?? `项目${index + 1}`}\n${item.gitLogs || '该时间段无记录'}`)
       .join('\n\n'),
     files: [...new Set(repoDataList.flatMap((item) => item.files.split('\n').filter(Boolean)))].join('\n'),
     diff: repoDataList
-      .map((item, index) => `## ${repos[index]?.name ?? `项目${index + 1}`}\n${item.diff || '当日无代码变更摘要'}`)
+      .map((item, index) => `## ${repos[index]?.name ?? `项目${index + 1}`}\n${item.diff || '该时间段无代码变更摘要'}`)
       .join('\n\n')
       .slice(0, 12000),
   };
 
   if (!commits.length) {
     const matchedTip = allCommits.length
-      ? `所选日期存在 ${allCommits.length} 条提交记录，但没有匹配到汇报人“${params.reporterName}”的提交。`
-      : '所选日期未采集到代码提交记录。';
+      ? `所选时间段存在 ${allCommits.length} 条提交记录，但没有匹配到汇报人“${params.reporterName}”的提交。`
+      : '所选时间段未采集到代码提交记录。';
     const report = [
       '今日工作内容：',
       '',
@@ -1090,9 +1150,10 @@ async function generateReport(params: GenerateReportParams): Promise<ReportResul
       '',
       `汇报人：${params.reporterName}`,
       `日期：${params.date}`,
+      `时间范围：${timeRange.label}`,
     ].join('\n');
 
-    const result = { report, commits, repos, generatedAt, rawInput };
+    const result = { report, commits, repos, generatedAt, timeRange, rawInput };
     const record = await recordGeneratedReport(params, result);
     return { ...result, historyId: record.id };
   }
@@ -1100,17 +1161,17 @@ async function generateReport(params: GenerateReportParams): Promise<ReportResul
   let report = '';
   if (config.aiApiKey) {
     try {
-      report = await callAiReport(config, rawInput);
+      report = await callAiReport(config, rawInput, timeRange);
     } catch (error) {
-      report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits);
+      report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange);
       report = `${report}\n\nAI提示：${error instanceof Error ? error.message : '调用失败'}`;
     }
   } else {
-    report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits);
+    report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange);
     report = `${report}\n\nAI提示：请先在设置中配置 OpenAI 兼容接口。`;
   }
 
-  const result = { report, commits, repos, generatedAt, rawInput };
+  const result = { report, commits, repos, generatedAt, timeRange, rawInput };
   const record = await recordGeneratedReport(params, result);
   return { ...result, historyId: record.id };
 }

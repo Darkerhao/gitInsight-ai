@@ -26,8 +26,18 @@ function formatLocalDate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function shiftLocalDate(date: string, deltaDays: number) {
+  const [year, month, day] = date.split('-').map(Number);
+  return formatLocalDate(new Date(year, month - 1, day + deltaDays));
+}
+
+function buildDateTime(date: string, time: string) {
+  return `${date}T${time}:00`;
+}
+
 function createAssistant() {
   const today = formatLocalDate(new Date());
+  const tomorrow = shiftLocalDate(today, 1);
   const loading = ref(false);
   const pushing = ref(false);
   const feishuLoading = ref(false);
@@ -69,6 +79,8 @@ function createAssistant() {
 
   const form = reactive({
     date: today,
+    startDateTime: buildDateTime(today, '00:00'),
+    endDateTime: buildDateTime(tomorrow, '00:00'),
   });
 
   const reporterOptions = computed(() => {
@@ -365,6 +377,22 @@ function createAssistant() {
     }).format(date);
   }
 
+  function applyFullDayReportRange(date: string) {
+    form.date = date;
+    form.startDateTime = buildDateTime(date, '00:00');
+    form.endDateTime = buildDateTime(shiftLocalDate(date, 1), '00:00');
+  }
+
+  function getReportRangePayload() {
+    const startMs = new Date(form.startDateTime).getTime();
+    const endMs = new Date(form.endDateTime).getTime();
+    if (Number.isNaN(startMs) || Number.isNaN(endMs) || startMs >= endMs) return null;
+    return {
+      startDateTime: form.startDateTime,
+      endDateTime: form.endDateTime,
+    };
+  }
+
   async function validateAutoSyncBeforeSave(payload: AppConfig) {
     if (!payload.autoSync.enabled) return true;
     const result = await window.api.validateAutoSync(payload);
@@ -617,12 +645,18 @@ function createAssistant() {
       ElMessage.warning('请先填写汇报人');
       return;
     }
+    const reportRange = getReportRangePayload();
+    if (!reportRange) {
+      ElMessage.warning('请选择有效的提交时间段');
+      return;
+    }
     loading.value = true;
     try {
       await persistConfigBeforeAction('生成日报');
       const result = await window.api.generateReport({
         repoPaths: [...selectedRepoPaths.value],
         date: form.date,
+        ...reportRange,
         reporterName: config.reporterName,
       });
       lastReportResult.value = result;
@@ -687,7 +721,7 @@ function createAssistant() {
         report.value = result.report;
         lastReportResult.value = null;
         currentReportId.value = null;
-        form.date = today;
+        applyFullDayReportRange(today);
       }
       if (result.status === 'success') {
         ElMessage.success(result.message);
@@ -838,6 +872,7 @@ function createAssistant() {
     autoSyncStatusLabel,
     isConfigDirty,
     // 方法
+    applyFullDayReportRange,
     formatDateTime,
     chooseWorkspace,
     refreshRepos,

@@ -91,7 +91,15 @@ export interface AppConfig {
 export interface GenerateReportParams {
   repoPaths: string[];
   date: string;
+  startDateTime?: string;
+  endDateTime?: string;
   reporterName: string;
+}
+
+export interface ReportTimeRange {
+  startDateTime: string;
+  endDateTime: string;
+  label: string;
 }
 
 export interface CommitEntry {
@@ -108,6 +116,7 @@ export interface ReportResult {
   commits: CommitEntry[];
   repos: RepoInfo[];
   generatedAt: string;
+  timeRange: ReportTimeRange;
   historyId?: number;
   rawInput: {
     gitLogs: string;

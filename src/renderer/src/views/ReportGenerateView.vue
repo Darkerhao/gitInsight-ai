@@ -35,6 +35,7 @@ const {
   removeRepo,
   selectFeishuProject,
   updateProjectWorkHours,
+  applyFullDayReportRange,
 } = assistant;
 
 const activePreviewTab = ref('report');
@@ -50,7 +51,7 @@ const workHourPresets = [1, 2, 4, 6, 7, 7.5, 8];
 const workHourOptions = Array.from({ length: 48 }, (_, index) => (index + 1) * 0.5);
 const loadingTips = [
   '正在读取提交记录和影响文件',
-  '正在整理今日工作内容',
+  '正在整理时间段工作内容',
   '正在压缩上下文并生成日报',
   '快点中间的小光标，给等待加一点手感',
 ];
@@ -66,6 +67,16 @@ const touchedFiles = computed(() => Array.from(new Set(lastReportResult.value?.c
 const reportLineCount = computed(() => report.value.split(/\r?\n/).filter((line) => line.trim()).length);
 const activeReportContent = computed(() => (reportMode.value === 'concise' ? conciseReportDraft.value : report.value));
 const loadingTip = computed(() => loadingTips[gameScore.value % loadingTips.length]);
+const reportRangeStartMs = computed(() => new Date(form.startDateTime).getTime());
+const reportRangeEndMs = computed(() => new Date(form.endDateTime).getTime());
+const reportRangeValid = computed(
+  () => !Number.isNaN(reportRangeStartMs.value) && !Number.isNaN(reportRangeEndMs.value) && reportRangeStartMs.value < reportRangeEndMs.value,
+);
+const reportRangeLabel = computed(() => {
+  if (!reportRangeValid.value) return '请选择有效时间段';
+  return `${formatRangeDateTime(form.startDateTime)} 至 ${formatRangeDateTime(form.endDateTime)}`;
+});
+const reportTitleRange = computed(() => (reportRangeValid.value ? reportRangeLabel.value : form.date));
 const gameTargetStyle = computed(() => ({
   left: `${gameTarget.value.x}%`,
   top: `${gameTarget.value.y}%`,
@@ -103,6 +114,14 @@ const generationChecks = computed(() => [
     label: '日报日期',
     ok: Boolean(form.date),
     detail: form.date || '未选择日期',
+    action: '',
+    required: true,
+  },
+  {
+    key: 'range',
+    label: '提交时间段',
+    ok: reportRangeValid.value,
+    detail: reportRangeLabel.value,
     action: '',
     required: true,
   },
@@ -195,18 +214,58 @@ function formatDateTime(value?: string) {
   }).format(date);
 }
 
-function setDateShortcut(value: string) {
-  dateShortcut.value = value;
-  if (value === 'custom') return;
-  const date = new Date();
-  if (value === 'yesterday') date.setDate(date.getDate() - 1);
+function formatRangeDateTime(value?: string) {
+  if (!value) return '暂无';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '暂无';
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function formatDate(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
-  form.date = `${year}-${month}-${day}`;
+  return `${year}-${month}-${day}`;
 }
 
-function handleDateChange() {
+function formatDateTimeValue(date: Date) {
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  return `${formatDate(date)}T${hour}:${minute}:00`;
+}
+
+function setDateShortcut(value: string) {
+  dateShortcut.value = value;
+  if (value === 'custom') return;
+  const now = new Date();
+  if (value === 'rolling') {
+    const start = new Date(now);
+    start.setDate(start.getDate() - 1);
+    start.setHours(9, 0, 0, 0);
+    form.date = formatDate(now);
+    form.startDateTime = formatDateTimeValue(start);
+    form.endDateTime = formatDateTimeValue(now);
+    return;
+  }
+  const date = new Date(now);
+  if (value === 'yesterday') date.setDate(date.getDate() - 1);
+  applyFullDayReportRange(formatDate(date));
+}
+
+function handleReportDateChange() {
+  if (form.date) {
+    applyFullDayReportRange(form.date);
+  }
+  dateShortcut.value = 'custom';
+}
+
+function handleRangeChange() {
   dateShortcut.value = 'custom';
 }
 
@@ -274,7 +333,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
             <Sparkles :size="16" />
             生成中
           </span>
-          <h2>AI 正在整理今日日报</h2>
+          <h2>AI 正在整理所选范围日报</h2>
           <p>{{ loadingTip }}</p>
           <div class="loading-progress">
             <i />
@@ -393,14 +452,39 @@ async function confirmRemoveRepo(item: RepoInfo) {
               </el-popover>
             </div>
             <div class="field">
-              <label>选择日期</label>
-              <el-date-picker v-model="form.date" type="date" value-format="YYYY-MM-DD" @change="handleDateChange" />
+              <label>日报日期</label>
+              <el-date-picker v-model="form.date" type="date" value-format="YYYY-MM-DD" :clearable="false" @change="handleReportDateChange" />
+            </div>
+            <div class="field">
+              <label>提交开始</label>
+              <el-date-picker
+                v-model="form.startDateTime"
+                type="datetime"
+                format="YYYY-MM-DD HH:mm"
+                value-format="YYYY-MM-DDTHH:mm:ss"
+                :clearable="false"
+                placeholder="开始时间"
+                @change="handleRangeChange"
+              />
+            </div>
+            <div class="field">
+              <label>提交结束</label>
+              <el-date-picker
+                v-model="form.endDateTime"
+                type="datetime"
+                format="YYYY-MM-DD HH:mm"
+                value-format="YYYY-MM-DDTHH:mm:ss"
+                :clearable="false"
+                placeholder="结束时间"
+                @change="handleRangeChange"
+              />
             </div>
           </div>
           <div class="segmented-actions">
             <button :class="{ active: dateShortcut === 'today' }" @click="setDateShortcut('today')">今天</button>
             <button :class="{ active: dateShortcut === 'yesterday' }" @click="setDateShortcut('yesterday')">昨天</button>
-            <button :class="{ active: dateShortcut === 'custom' }" @click="setDateShortcut('custom')">自定义日期</button>
+            <button :class="{ active: dateShortcut === 'rolling' }" @click="setDateShortcut('rolling')">昨日9点至现在</button>
+            <button :class="{ active: dateShortcut === 'custom' }" @click="setDateShortcut('custom')">自定义范围</button>
           </div>
         </section>
 
@@ -432,7 +516,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
           <div class="notice-line">
             <StatusBadge
               status="info"
-              :label="selectedRepos.length ? `将基于 ${selectedRepos.length} 个已选仓库生成日报` : '请先在当前仓库选择器中选择仓库'"
+              :label="selectedRepos.length ? `将基于 ${selectedRepos.length} 个已选仓库和 ${reportRangeLabel} 生成日报` : '请先在当前仓库选择器中选择仓库'"
             />
           </div>
           <div class="metric-grid">
@@ -450,7 +534,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
 
           <article class="report-preview">
             <div class="report-preview-head">
-              <h2>{{ selectedProjectText }} {{ form.date }} 日报</h2>
+              <h2>{{ selectedProjectText }} {{ reportTitleRange }} 日报</h2>
               <span>生成时间：{{ generatedAtText }}</span>
             </div>
 
