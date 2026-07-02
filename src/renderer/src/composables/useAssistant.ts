@@ -14,8 +14,6 @@ import type {
   FeishuAuthSnapshot,
   FeishuFieldOption,
   FeishuProjectOption,
-  MaterialRole,
-  MaterialSection,
   RepoInfo,
   ReportResult,
   ReportTimeRange,
@@ -42,12 +40,14 @@ function buildDateTime(date: string, time: string) {
 function createAssistant() {
   const today = formatLocalDate(new Date());
   const tomorrow = shiftLocalDate(today, 1);
+
   const loading = ref(false);
   const pushing = ref(false);
   const feishuLoading = ref(false);
   const fieldLoading = ref(false);
   const projectLoading = ref(false);
   const autoSyncLoading = ref(false);
+
   const repos = ref<RepoInfo[]>([]);
   const projectOptions = ref<FeishuProjectOption[]>([]);
   const feishuFieldOptions = ref<FeishuFieldOption[]>([]);
@@ -55,7 +55,6 @@ function createAssistant() {
   const report = ref('');
   const currentReportId = ref<number | null>(null);
   const lastReportResult = ref<ReportResult | null>(null);
-  const materialGenerating = ref(false);
   const dailyReports = ref<DailyReportRecord[]>([]);
   const syncLogs = ref<SyncLogRecord[]>([]);
   const errorLogs = ref<ErrorLogRecord[]>([]);
@@ -64,6 +63,7 @@ function createAssistant() {
   const autoSyncState = ref<AutoSyncState | null>(null);
   const advancedConfigPanels = ref<string[]>([]);
   const savedConfigSignature = ref('');
+
   let removeAutoSyncListener: (() => void) | null = null;
   let removeFeishuAuthListener: (() => void) | null = null;
   let lastAppliedFeishuAuthSignature = '';
@@ -90,14 +90,8 @@ function createAssistant() {
     endDateTime: buildDateTime(tomorrow, '00:00'),
   });
 
-  const reporterOptions = computed(() => {
-    return config.reporterName ? [config.reporterName] : [];
-  });
-
-  function mergeCurrentOption(options: string[], currentValue: string) {
-    const normalizedValue = currentValue.trim();
-    if (!normalizedValue || options.includes(normalizedValue)) return options;
-    return [normalizedValue, ...options];
+  function toPlainString(value: unknown) {
+    return typeof value === 'string' ? value : value == null ? '' : String(value);
   }
 
   function normalizeOptions(options: unknown[]) {
@@ -108,51 +102,12 @@ function createAssistant() {
     return Array.from(new Set(options.map((item) => toPlainString(item).trim()).filter(Boolean)));
   }
 
-  function getWorkspaceDirs() {
-    const workspaceDirs = normalizeWorkspaceDirs([...config.workspaceDirs, config.workspaceDir]);
-    config.workspaceDirs = workspaceDirs;
-    return workspaceDirs;
-  }
-
-  function getRepoKey(path: string) {
-    return path.trim().toLocaleLowerCase();
-  }
-
-  function mergeRepos(currentRepos: RepoInfo[], nextRepos: RepoInfo[]) {
-    const repoMap = new Map<string, RepoInfo>();
-    for (const repo of [...currentRepos, ...nextRepos]) {
-      repoMap.set(getRepoKey(repo.path), repo);
-    }
-    return Array.from(repoMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
-  }
-
   function normalizeRepoSelections(paths: string[]) {
     const selectedPathMap = new Map<string, string>();
     for (const path of paths) {
       if (path.trim()) selectedPathMap.set(getRepoKey(path), path);
     }
     return Array.from(selectedPathMap.values());
-  }
-
-  function filterIgnoredRepos(repoItems: RepoInfo[]) {
-    const ignoredRepoKeys = new Set(normalizeRepoSelections(config.ignoredRepoPaths ?? []).map(getRepoKey));
-    return repoItems.filter((repo) => !ignoredRepoKeys.has(getRepoKey(repo.path)));
-  }
-
-  function sortReposForDisplay(repoItems: RepoInfo[]) {
-    const pinnedOrder = new Map(normalizeRepoSelections(config.pinnedRepoPaths ?? []).map((path, index) => [getRepoKey(path), index]));
-    return [...repoItems].sort((a, b) => {
-      const pinnedA = pinnedOrder.get(getRepoKey(a.path));
-      const pinnedB = pinnedOrder.get(getRepoKey(b.path));
-      if (pinnedA !== undefined && pinnedB !== undefined) return pinnedA - pinnedB;
-      if (pinnedA !== undefined) return -1;
-      if (pinnedB !== undefined) return 1;
-      return a.name.localeCompare(b.name, 'zh-Hans-CN');
-    });
-  }
-
-  function toPlainString(value: unknown) {
-    return typeof value === 'string' ? value : value == null ? '' : String(value);
   }
 
   function normalizeWorkHours(value: unknown, fallback = DEFAULT_FEISHU_FORM_CONFIG.defaultWorkHours) {
@@ -187,7 +142,7 @@ function createAssistant() {
           return formatted;
         }
       } catch {
-        // Fall back to the default time below.
+        // Fall through to default.
       }
     }
 
@@ -198,19 +153,61 @@ function createAssistant() {
     return value === 'yesterday-start-to-run' ? 'yesterday-start-to-run' : DEFAULT_AUTO_SYNC_CONFIG.timeWindowMode;
   }
 
+  function mergeCurrentOption(options: string[], currentValue: string) {
+    const normalizedValue = currentValue.trim();
+    if (!normalizedValue || options.includes(normalizedValue)) return options;
+    return [normalizedValue, ...options];
+  }
+
+  function getRepoKey(path: string) {
+    return path.trim().toLocaleLowerCase();
+  }
+
+  function getWorkspaceDirs() {
+    const workspaceDirs = normalizeWorkspaceDirs([...config.workspaceDirs, config.workspaceDir]);
+    config.workspaceDirs = workspaceDirs;
+    return workspaceDirs;
+  }
+
+  function mergeRepos(currentRepos: RepoInfo[], nextRepos: RepoInfo[]) {
+    const repoMap = new Map<string, RepoInfo>();
+    for (const repo of [...currentRepos, ...nextRepos]) {
+      repoMap.set(getRepoKey(repo.path), repo);
+    }
+    return Array.from(repoMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+  }
+
+  function filterIgnoredRepos(repoItems: RepoInfo[]) {
+    const ignoredRepoKeys = new Set(normalizeRepoSelections(config.ignoredRepoPaths ?? []).map(getRepoKey));
+    return repoItems.filter((repo) => !ignoredRepoKeys.has(getRepoKey(repo.path)));
+  }
+
+  function sortReposForDisplay(repoItems: RepoInfo[]) {
+    const pinnedOrder = new Map(normalizeRepoSelections(config.pinnedRepoPaths ?? []).map((path, index) => [getRepoKey(path), index]));
+    return [...repoItems].sort((a, b) => {
+      const pinnedA = pinnedOrder.get(getRepoKey(a.path));
+      const pinnedB = pinnedOrder.get(getRepoKey(b.path));
+      if (pinnedA !== undefined && pinnedB !== undefined) return pinnedA - pinnedB;
+      if (pinnedA !== undefined) return -1;
+      if (pinnedB !== undefined) return 1;
+      return a.name.localeCompare(b.name, 'zh-Hans-CN');
+    });
+  }
+
   async function scanWorkspaceDirs(workspaceDirs: string[], options: { includeIgnored?: boolean } = {}) {
     const scannedGroups = await Promise.all(workspaceDirs.map((workspaceDir) => window.api.scanRepositories(workspaceDir)));
     const scannedRepos = scannedGroups.flat();
     return options.includeIgnored ? scannedRepos : filterIgnoredRepos(scannedRepos);
   }
 
+  const reporterOptions = computed(() => (config.reporterName ? [config.reporterName] : []));
   const aiBaseUrlOptions = computed(() => mergeCurrentOption(config.aiBaseUrlOptions, config.aiBaseUrl));
   const aiModelOptions = computed(() => mergeCurrentOption(config.aiModelOptions, config.aiModel));
-
   const pinnedRepoKeys = computed(() => new Set(normalizeRepoSelections(config.pinnedRepoPaths ?? []).map(getRepoKey)));
   const sortedRepos = computed(() => sortReposForDisplay(repos.value));
   const selectedRepos = computed(() => sortedRepos.value.filter((item) => selectedRepoPaths.value.includes(item.path)));
   const autoSyncRunning = computed(() => autoSyncLoading.value || Boolean(autoSyncState.value?.isRunning));
+
   const autoSyncStatusType = computed(() => {
     const statusValue = autoSyncState.value?.lastStatus ?? config.autoSync.lastStatus;
     if (statusValue === 'success') return 'success';
@@ -240,10 +237,12 @@ function createAssistant() {
     const normalizedPinnedRepoPaths = normalizeRepoSelections(config.pinnedRepoPaths ?? []).filter(
       (path) => !ignoredRepoKeys.has(getRepoKey(path)),
     );
+
     selectedRepoPaths.value = normalizedSelectedRepoPaths;
     config.selectedRepoPaths = normalizedSelectedRepoPaths;
     config.ignoredRepoPaths = normalizedIgnoredRepoPaths;
     config.pinnedRepoPaths = normalizedPinnedRepoPaths;
+
     return {
       workspaceDir: toPlainString(config.workspaceDir),
       workspaceDirs,
@@ -467,10 +466,7 @@ function createAssistant() {
     if (!payload) return undefined;
 
     const resultRange = lastReportResult.value?.timeRange;
-    if (
-      resultRange?.startDateTime === payload.startDateTime &&
-      resultRange.endDateTime === payload.endDateTime
-    ) {
+    if (resultRange?.startDateTime === payload.startDateTime && resultRange.endDateTime === payload.endDateTime) {
       return resultRange;
     }
 
@@ -484,9 +480,6 @@ function createAssistant() {
     if (!payload.autoSync.enabled) return true;
     const result = await window.api.validateAutoSync(payload);
     if (result.valid) return true;
-    if (!advancedConfigPanels.value.includes('autoSync')) {
-      advancedConfigPanels.value = [...advancedConfigPanels.value, 'autoSync'];
-    }
     ElMessage.warning(result.message);
     return false;
   }
@@ -505,21 +498,22 @@ function createAssistant() {
         ...saved.autoSync,
       },
     });
+
     selectedRepoPaths.value = normalizeRepoSelections(config.selectedRepoPaths ?? []);
     config.ignoredRepoPaths = normalizeRepoSelections(config.ignoredRepoPaths ?? []);
     config.pinnedRepoPaths = normalizeRepoSelections(config.pinnedRepoPaths ?? []);
-    if (!form.date) form.date = today;
     config.aiBaseUrlOptions = normalizeOptions(config.aiBaseUrlOptions.length ? config.aiBaseUrlOptions : [...DEFAULT_AI_BASE_URL_OPTIONS]);
     config.aiModelOptions = normalizeOptions(config.aiModelOptions.length ? config.aiModelOptions : [...DEFAULT_AI_MODEL_OPTIONS]);
     config.workspaceDirs = normalizeWorkspaceDirs([...(config.workspaceDirs ?? []), config.workspaceDir]);
+
+    if (!form.date) form.date = today;
+
     const feishuAuthIncomplete =
       !config.feishuForm.endpoint ||
       !config.feishuForm.shareToken ||
       !config.feishuForm.cookie ||
       !config.feishuForm.csrfToken;
-    const feishuMappingIncomplete =
-      !config.feishuForm.reporterUserId ||
-      !config.feishuForm.projectOptionId;
+    const feishuMappingIncomplete = !config.feishuForm.reporterUserId || !config.feishuForm.projectOptionId;
     const feishuFieldMappingIncomplete =
       !config.feishuForm.questionId ||
       !config.feishuForm.dateFieldId ||
@@ -527,6 +521,7 @@ function createAssistant() {
       !config.feishuForm.projectFieldId ||
       !config.feishuForm.hoursFieldId ||
       !config.feishuForm.contentFieldId;
+
     advancedConfigPanels.value = [
       ...(!config.aiApiKey ? ['ai'] : []),
       ...(feishuAuthIncomplete ? ['feishu'] : []),
@@ -534,15 +529,18 @@ function createAssistant() {
       ...(feishuFieldMappingIncomplete ? ['fields'] : []),
       ...(config.autoSync.enabled ? ['autoSync'] : []),
     ];
+
     if (config.feishuForm.shareToken) {
       await loadFeishuFields({ silent: true });
       if (config.feishuForm.projectFieldId) {
         await loadFeishuProjects({ silent: true });
       }
     }
+
     if (config.workspaceDirs.length) {
       await refreshRepos();
     }
+
     await refreshAutoSyncState();
     markConfigSaved();
   }
@@ -550,6 +548,7 @@ function createAssistant() {
   async function chooseWorkspace() {
     const dir = await window.api.selectDirectory();
     if (!dir) return;
+
     loading.value = true;
     try {
       const scannedRepos = await scanWorkspaceDirs([dir], { includeIgnored: true });
@@ -558,6 +557,7 @@ function createAssistant() {
         ElMessage.warning('未在所选目录下识别到 Git 仓库，请选择包含 .git 的项目目录或工作区');
         return;
       }
+
       config.workspaceDir = dir;
       config.workspaceDirs = normalizeWorkspaceDirs([...config.workspaceDirs, dir]);
       const scannedRepoKeys = new Set(scannedRepos.map((repo) => getRepoKey(repo.path)));
@@ -565,7 +565,7 @@ function createAssistant() {
       repos.value = mergeRepos(repos.value, scannedRepos);
       selectedRepoPaths.value = normalizeRepoSelections([...selectedRepoPaths.value, ...scannedRepos.map((repo) => repo.path)]);
       await persistConfig();
-      status.value = `已添加 ${scannedRepos.length} 个仓库，项目列表共 ${repos.value.length} 个仓库`;
+      status.value = `已添加 ${scannedRepos.length} 个仓库，当前共 ${repos.value.length} 个仓库`;
     } catch (error) {
       ElMessage.error(error instanceof Error ? error.message : '扫描失败');
     } finally {
@@ -580,6 +580,7 @@ function createAssistant() {
       selectedRepoPaths.value = [];
       return;
     }
+
     loading.value = true;
     try {
       repos.value = mergeRepos([], await scanWorkspaceDirs(workspaceDirs));
@@ -670,6 +671,7 @@ function createAssistant() {
       if (!options.silent) ElMessage.warning('请先选择或填写所属项目字段 ID');
       return;
     }
+
     projectLoading.value = true;
     try {
       await persistConfigBeforeAction('刷新飞书项目');
@@ -732,7 +734,7 @@ function createAssistant() {
         config: payloadConfig,
         date: form.date,
       });
-      status.value = `飞书测试提交成功：code=${result.code}`;
+      status.value = `飞书测试提交成功，code=${result.code}`;
       ElMessage.success('飞书测试提交成功');
     } catch (error) {
       ElMessage.error(error instanceof Error ? error.message : '飞书测试提交失败');
@@ -755,6 +757,7 @@ function createAssistant() {
       ElMessage.warning('请选择有效的提交时间段');
       return;
     }
+
     loading.value = true;
     try {
       await persistConfigBeforeAction('生成日报');
@@ -781,57 +784,6 @@ function createAssistant() {
     }
   }
 
-  async function generateFromMaterial(role: MaterialRole, sections: MaterialSection[], extraNotes: string) {
-    if (!config.reporterName) {
-      ElMessage.warning('请先填写汇报人');
-      return;
-    }
-    const hasContent = sections.some((section) => section.content.trim()) || extraNotes.trim();
-    if (!hasContent) {
-      ElMessage.warning('请至少填写一项工作素材后再生成日报');
-      return;
-    }
-    materialGenerating.value = true;
-    try {
-      if (!config.aiApiKey) {
-        ElMessage.info('未配置 AI 接入，将按素材结构化排版生成');
-      }
-      const result = await window.api.generateReportFromMaterial({
-        role,
-        date: form.date,
-        reporterName: config.reporterName,
-        sections,
-        extraNotes,
-      });
-      // 素材来源没有 commit / 仓库信息，清空研发相关结果以免下游误用。
-      lastReportResult.value = null;
-      currentReportId.value = null;
-      report.value = result.report;
-      status.value = `已根据${role === 'projectManager' ? '项目经理' : '产品经理'}工作素材生成日报`;
-      ElMessage.success('日报已生成');
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '生成失败');
-    } finally {
-      materialGenerating.value = false;
-    }
-  }
-
-  async function persistRoleMaterial(role: MaterialRole, sections: MaterialSection[], extraNotes: string) {
-    try {
-      await window.api.saveRoleMaterial({ role, date: form.date, sections, extraNotes });
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '保存工作素材失败');
-    }
-  }
-
-  async function restoreRoleMaterial(role: MaterialRole) {
-    try {
-      return await window.api.loadRoleMaterial(role, form.date);
-    } catch {
-      return null;
-    }
-  }
-
   async function generateAndPush() {
     await generate();
     if (!report.value) return;
@@ -844,6 +796,7 @@ function createAssistant() {
       ElMessage.warning('请先生成日报');
       return;
     }
+
     pushing.value = true;
     try {
       await persistConfigBeforeAction('同步飞书');
@@ -868,6 +821,7 @@ function createAssistant() {
   async function runAutoSyncNow() {
     const payload = getConfigPayload();
     if (!(await validateAutoSyncBeforeSave(payload))) return;
+
     autoSyncLoading.value = true;
     try {
       await persistConfigBeforeAction('执行自动同步');
@@ -883,15 +837,12 @@ function createAssistant() {
           applyFullDayReportRange(today);
         }
       }
-      if (result.status === 'success') {
-        ElMessage.success(result.message);
-      } else if (result.status === 'skipped') {
-        ElMessage.warning(result.message);
-      } else if (result.status === 'failed') {
-        ElMessage.error(result.message);
-      } else {
-        ElMessage.info(result.message);
-      }
+
+      if (result.status === 'success') ElMessage.success(result.message);
+      else if (result.status === 'skipped') ElMessage.warning(result.message);
+      else if (result.status === 'failed') ElMessage.error(result.message);
+      else ElMessage.info(result.message);
+
       await refreshAutoSyncState();
       await refreshLocalData();
     } catch (error) {
@@ -965,6 +916,7 @@ function createAssistant() {
       ElMessage.warning('当前没有可保存的日报内容');
       return null;
     }
+
     const selected = selectedRepos.value;
     const result = lastReportResult.value;
     const record = await window.api.saveDailyReport({
@@ -1006,9 +958,7 @@ function createAssistant() {
   }
 
   return {
-    // 常量
     today,
-    // 状态
     loading,
     pushing,
     feishuLoading,
@@ -1022,7 +972,6 @@ function createAssistant() {
     report,
     currentReportId,
     lastReportResult,
-    materialGenerating,
     dailyReports,
     syncLogs,
     errorLogs,
@@ -1032,7 +981,6 @@ function createAssistant() {
     advancedConfigPanels,
     config,
     form,
-    // computed
     reporterOptions,
     aiBaseUrlOptions,
     aiModelOptions,
@@ -1042,7 +990,6 @@ function createAssistant() {
     autoSyncStatusType,
     autoSyncStatusLabel,
     isConfigDirty,
-    // 方法
     applyFullDayReportRange,
     applyReportTimeRange,
     formatDateTime,
@@ -1060,9 +1007,6 @@ function createAssistant() {
     updateProjectWorkHours,
     testSubmitFeishu,
     generate,
-    generateFromMaterial,
-    persistRoleMaterial,
-    restoreRoleMaterial,
     generateAndPush,
     push,
     runAutoSyncNow,

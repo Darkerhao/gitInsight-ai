@@ -24,6 +24,20 @@ npm run preview    # electron-vite preview
 npm run typecheck  # vue-tsc --noEmit(唯一的静态检查;没有 ESLint/Prettier)
 ```
 
+### 双版本打包
+
+```bash
+npm run dist:win:lite       # Windows 简洁版
+npm run dist:win:standard   # Windows 标准版
+npm run dist:mac:lite       # macOS 简洁版
+npm run dist:mac:standard   # macOS 标准版
+npm run dist:linux:lite     # Linux 简洁版
+npm run dist:linux:standard # Linux 标准版
+```
+
+打包脚本通过 `APP_EDITION=lite|standard` 区分发行版本,产物会输出到 `release/<version>/lite` 或 `release/<version>/standard`。
+推送 `v*` 标签时,GitHub Actions 会同时构建 Lite 和 Standard 两套 Release 资产。
+
 **没有配置测试框架**——没有 `test` 脚本,也没有测试运行器。
 
 `npm run dev` 需要 TCP 端口 **5174** 空闲(`strictPort: true`)。Windows 上若端口处于系统保留/排除区间,会报 `listen EACCES ... 127.0.0.1:5174`(见 `dev.stderr.log`),此时在 `electron.vite.config.ts` 中改端口即可。

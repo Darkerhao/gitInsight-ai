@@ -1,3 +1,5 @@
+# Edition-aware npm scripts use electron-builder.config.cjs.
+# This YAML file is kept as a legacy single-edition fallback.
 appId: com.shuzhi.gitinsight-ai
 productName: GitInsight AI
 directories:

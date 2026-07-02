@@ -2,8 +2,18 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import { resolve } from 'node:path';
 import vue from '@vitejs/plugin-vue';
 
+const appEdition = process.env.APP_EDITION === 'standard' ? 'standard' : 'lite';
+const appEditionLabel = appEdition === 'standard' ? '标准版' : '简洁版';
+const appProductName = appEdition === 'standard' ? 'GitInsight AI Standard' : 'GitInsight AI Lite';
+const editionDefines = {
+  __APP_EDITION__: JSON.stringify(appEdition),
+  __APP_EDITION_LABEL__: JSON.stringify(appEditionLabel),
+  __APP_PRODUCT_NAME__: JSON.stringify(appProductName),
+};
+
 export default defineConfig({
   main: {
+    define: editionDefines,
     plugins: [externalizeDepsPlugin()],
     build: {
       lib: {
@@ -12,6 +22,7 @@ export default defineConfig({
     },
   },
   preload: {
+    define: editionDefines,
     plugins: [externalizeDepsPlugin()],
     build: {
       lib: {
@@ -22,6 +33,7 @@ export default defineConfig({
     },
   },
   renderer: {
+    define: editionDefines,
     plugins: [vue()],
     resolve: {
       alias: {

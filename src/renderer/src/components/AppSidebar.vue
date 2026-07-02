@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Bot, ChevronDown, CircleHelp, ClipboardList, FileCog, FileText, FolderKanban, FolderOpen, History, Home, Info, MessageCircle, Settings, Sparkles } from 'lucide-vue-next';
+import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
+import { Bot, FileCog, FileText, FolderKanban, History, Settings, Sparkles } from 'lucide-vue-next';
 
 const props = defineProps<{
   activeNav: string;
@@ -10,87 +10,51 @@ const emit = defineEmits<{
   (e: 'update:activeNav', value: string): void;
 }>();
 
-type NavLeaf = { key: string; label: string; icon: any; enabled: boolean };
-type NavGroup = { id: string; label: string; icon: any; children: NavLeaf[] };
-type NavNode = NavLeaf | NavGroup;
+type NavLeaf = { key: string; label: string; icon: Component; enabled: boolean };
+type NavGroup = { id: string; label: string; icon: Component; children: NavLeaf[] };
 
-const navNodes: NavNode[] = [
-  { key: 'dashboard', label: '工作台', icon: Home, enabled: true },
+const navGroups: NavGroup[] = [
   {
     id: 'report',
     label: '日报中心',
     icon: FolderKanban,
     children: [
-      { key: 'config', label: '日报配置', icon: FileCog, enabled: true },
       { key: 'generate', label: '日报生成', icon: FileText, enabled: true },
-      { key: 'sync', label: '同步任务', icon: ClipboardList, enabled: true },
+      { key: 'config', label: '日报配置', icon: FileCog, enabled: true },
       { key: 'history', label: '历史日志', icon: History, enabled: true },
     ],
   },
-  { key: 'repositories', label: '仓库中心', icon: FolderOpen, enabled: true },
-  { key: 'messages', label: '消息', icon: MessageCircle, enabled: true },
   {
     id: 'settings',
     label: '设置',
     icon: Settings,
-    children: [
-      { key: 'system', label: '系统设置', icon: Settings, enabled: true },
-      { key: 'help', label: '使用帮助', icon: CircleHelp, enabled: true },
-      { key: 'about', label: '关于我们', icon: Info, enabled: true },
-    ],
+    children: [{ key: 'system', label: '系统设置', icon: Settings, enabled: true }],
   },
 ];
 
-function isGroup(node: NavNode): node is NavGroup {
-  return 'children' in node;
-}
-
-// 找出当前激活项所属的分组 id（用于自动展开）
 const activeGroupId = computed(() => {
-  for (const node of navNodes) {
-    if (isGroup(node) && node.children.some((c) => c.key === props.activeNav)) {
-      return node.id;
+  for (const group of navGroups) {
+    if (group.children.some((child) => child.key === props.activeNav)) {
+      return group.id;
     }
   }
-  return null;
+  return '';
 });
 
 const compactNav = ref(typeof window !== 'undefined' ? window.matchMedia('(max-width: 920px)').matches : false);
-const openGroups = ref<Set<string>>(new Set());
 let compactNavQuery: MediaQueryList | null = null;
 
-function openActiveGroup() {
-  const id = activeGroupId.value;
-  if (!id || compactNav.value) return;
-  openGroups.value = new Set([...openGroups.value, id]);
-}
+const menuMode = computed(() => (compactNav.value ? 'horizontal' : 'vertical'));
+const menuTrigger = computed(() => (compactNav.value ? 'click' : 'hover'));
+const menuDefaultOpeneds = computed(() => (compactNav.value || !activeGroupId.value ? [] : [activeGroupId.value]));
+const menuKey = computed(() => `${menuMode.value}:${menuDefaultOpeneds.value.join(',')}`);
 
 function updateCompactNav() {
   compactNav.value = Boolean(compactNavQuery?.matches);
-  if (compactNav.value) {
-    openGroups.value = new Set();
-  } else {
-    openActiveGroup();
-  }
 }
 
-watch(activeGroupId, openActiveGroup, { immediate: true });
-
-function isGroupOpen(id: string) {
-  return openGroups.value.has(id);
-}
-
-function toggleGroup(id: string) {
-  const next = new Set(openGroups.value);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  openGroups.value = next;
-}
-
-function onNav(item: NavLeaf) {
-  if (!item.enabled) return;
-  emit('update:activeNav', item.key);
-  if (compactNav.value) openGroups.value = new Set();
+function onSelect(index: string) {
+  emit('update:activeNav', index);
 }
 
 onMounted(() => {
@@ -111,56 +75,40 @@ onBeforeUnmount(() => {
       <span class="sidebar-brand-name">AI日报助手</span>
     </div>
 
-    <nav class="sidebar-nav">
-      <template v-for="node in navNodes" :key="isGroup(node) ? node.id : node.key">
-        <!-- 分组（可折叠二级菜单） -->
-        <div v-if="isGroup(node)" class="nav-group" :class="{ open: isGroupOpen(node.id) }">
-          <button
-            type="button"
-            class="nav-group-head"
-            :class="{ 'has-active': activeGroupId === node.id }"
-            :aria-expanded="isGroupOpen(node.id)"
-            @click="toggleGroup(node.id)"
-          >
-            <component :is="node.icon" :size="18" />
-            <span>{{ node.label }}</span>
-            <ChevronDown class="nav-group-caret" :size="16" />
-          </button>
-          <div v-show="isGroupOpen(node.id)" class="nav-group-body">
-            <button
-              v-for="child in node.children"
-              :key="child.key"
-              class="nav-item nav-subitem"
-              :class="{ active: child.enabled && activeNav === child.key, disabled: !child.enabled }"
-              @click="onNav(child)"
-            >
-              <component :is="child.icon" :size="16" />
-              <span>{{ child.label }}</span>
-            </button>
-          </div>
-        </div>
+    <nav class="sidebar-nav" aria-label="主导航">
+      <el-menu
+        :key="menuKey"
+        class="sidebar-menu"
+        :default-active="activeNav"
+        :default-openeds="menuDefaultOpeneds"
+        :mode="menuMode"
+        :menu-trigger="menuTrigger"
+        :ellipsis="false"
+        :collapse-transition="false"
+        @select="onSelect"
+      >
+        <el-sub-menu v-for="group in navGroups" :key="group.id" :index="group.id" popper-class="sidebar-menu-popper">
+          <template #title>
+            <component :is="group.icon" :size="18" class="sidebar-menu-icon" />
+            <span class="sidebar-menu-label">{{ group.label }}</span>
+          </template>
 
-        <!-- 单项 -->
-        <button
-          v-else
-          class="nav-item"
-          :class="{ active: node.enabled && activeNav === node.key, disabled: !node.enabled }"
-          @click="onNav(node)"
-        >
-          <component :is="node.icon" :size="18" />
-          <span>{{ node.label }}</span>
-        </button>
-      </template>
+          <el-menu-item v-for="child in group.children" :key="child.key" :index="child.key" :disabled="!child.enabled">
+            <component :is="child.icon" :size="16" class="sidebar-menu-icon" />
+            <span class="sidebar-menu-label">{{ child.label }}</span>
+          </el-menu-item>
+        </el-sub-menu>
+      </el-menu>
     </nav>
 
     <div class="sidebar-tip">
       <div class="sidebar-tip-icon"><Bot :size="28" /></div>
       <div class="sidebar-tip-title">
         <Sparkles :size="14" />
-        <span>AI 助手小贴士</span>
+        <span>简洁版提示</span>
       </div>
-      <p class="sidebar-tip-desc">支持多仓库日报汇总、飞书同步与本地日志追踪</p>
-      <button class="sidebar-tip-btn" @click="emit('update:activeNav', 'help')">查看帮助</button>
+      <p class="sidebar-tip-desc">保留日报配置、日报生成与历史查看，聚焦你最常用的主流程。</p>
+      <el-button class="sidebar-tip-btn" @click="emit('update:activeNav', 'generate')">开始生成日报</el-button>
     </div>
   </aside>
 </template>

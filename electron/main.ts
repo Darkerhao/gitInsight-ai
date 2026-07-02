@@ -10,6 +10,7 @@ import {
   DEFAULT_AUTO_SYNC_CONFIG,
   DEFAULT_FEISHU_FORM_CONFIG,
 } from '../src/shared/types.js';
+import { APP_EDITION, APP_EDITION_LABEL, APP_PRODUCT_NAME } from '../src/shared/edition.js';
 import type {
   AppConfig,
   AutoSyncConfig,
@@ -27,16 +28,10 @@ import type {
   FeishuProjectOptionsPayload,
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
-  GenerateFromMaterialParams,
   GenerateReportParams,
-  MaterialReportResult,
-  MaterialRole,
-  MaterialSection,
   RepoInfo,
   ReportResult,
   ReportTimeRange,
-  RoleMaterialPayload,
-  RoleMaterialRecord,
   SaveDailyReportPayload,
   StorageInfo,
   SyncLogRecord,
@@ -364,15 +359,6 @@ async function getDatabase() {
       detail TEXT,
       created_at TEXT NOT NULL
     );
-
-    CREATE TABLE IF NOT EXISTS role_materials (
-      role TEXT NOT NULL,
-      date TEXT NOT NULL,
-      sections_json TEXT NOT NULL,
-      extra_notes TEXT NOT NULL DEFAULT '',
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (role, date)
-    );
   `);
   ensureDailyReportTimeRangeColumns(sqlDatabase);
   await persistDatabase();
@@ -563,66 +549,6 @@ async function listDailyReports(limit = 10): Promise<DailyReportRecord[]> {
   return records;
 }
 
-function normalizeMaterialSections(value: unknown): MaterialSection[] {
-  if (typeof value !== 'string') return [];
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
-      .map((item) => ({
-        key: String(item.key || ''),
-        label: String(item.label || ''),
-        content: String(item.content || ''),
-      }))
-      .filter((section) => section.key);
-  } catch {
-    return [];
-  }
-}
-
-async function saveRoleMaterial(payload: RoleMaterialPayload): Promise<RoleMaterialRecord> {
-  const db = await getDatabase();
-  const now = new Date().toISOString();
-  const sectionsJson = JSON.stringify(payload.sections ?? []);
-  db.run(
-    `INSERT INTO role_materials (role, date, sections_json, extra_notes, updated_at)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(role, date) DO UPDATE SET
-       sections_json = excluded.sections_json,
-       extra_notes = excluded.extra_notes,
-       updated_at = excluded.updated_at`,
-    [payload.role, payload.date, sectionsJson, payload.extraNotes ?? '', now],
-  );
-  await persistDatabase();
-  return {
-    role: payload.role,
-    date: payload.date,
-    sections: normalizeMaterialSections(sectionsJson),
-    extraNotes: payload.extraNotes ?? '',
-    updatedAt: now,
-  };
-}
-
-async function loadRoleMaterial(role: MaterialRole, date: string): Promise<RoleMaterialRecord | null> {
-  const db = await getDatabase();
-  const statement = db.prepare('SELECT * FROM role_materials WHERE role = ? AND date = ? LIMIT 1');
-  try {
-    statement.bind([role, date]);
-    if (!statement.step()) return null;
-    const row = statement.getAsObject();
-    return {
-      role,
-      date,
-      sections: normalizeMaterialSections(row.sections_json),
-      extraNotes: String(row.extra_notes || ''),
-      updatedAt: String(row.updated_at || ''),
-    };
-  } finally {
-    statement.free();
-  }
-}
-
 async function listSyncLogs(limit = 20): Promise<SyncLogRecord[]> {
   const db = await getDatabase();
   const statement = db.prepare('SELECT * FROM sync_logs ORDER BY ran_at DESC LIMIT ?');
@@ -671,6 +597,9 @@ async function getStorageInfo(): Promise<StorageInfo> {
   await getDatabase();
   return {
     appVersion: app.getVersion(),
+    appEdition: APP_EDITION,
+    appEditionLabel: APP_EDITION_LABEL,
+    appName: APP_PRODUCT_NAME,
     userDataPath: app.getPath('userData'),
     configPath: getConfigPath(),
     secretsPath: getSecretsPath(),
@@ -1336,125 +1265,6 @@ async function generateReport(params: GenerateReportParams): Promise<ReportResul
   const result = { report, commits, repos, generatedAt, timeRange, rawInput };
   const record = await recordGeneratedReport(params, result);
   return { ...result, historyId: record.id };
-}
-
-const MATERIAL_ROLE_LABELS: Record<MaterialRole, string> = {
-  projectManager: '项目经理',
-  productManager: '产品经理',
-};
-
-/** 把用户填写的分区素材拼成给 AI 或 fallback 使用的文本；空分区会被跳过。 */
-function formatMaterialSections(sections: MaterialSection[], extraNotes: string) {
-  const filledSections = sections.filter((section) => section.content.trim());
-  const sectionText = filledSections
-    .map((section) => `【${section.label}】\n${section.content.trim()}`)
-    .join('\n\n');
-  const normalizedNotes = extraNotes.trim();
-  const notesText = normalizedNotes ? `\n\n【补充说明】\n${normalizedNotes}` : '';
-  return {
-    hasContent: Boolean(filledSections.length || normalizedNotes),
-    text: `${sectionText}${notesText}`.trim(),
-  };
-}
-
-async function callAiMaterialReport(config: AppConfig, params: GenerateFromMaterialParams, materialText: string) {
-  const roleLabel = MATERIAL_ROLE_LABELS[params.role];
-  const prompt = `你是一名资深${roleLabel}。
-
-请根据以下我提供的工作素材，整理成一份正式的中文${roleLabel}日报。
-
-要求：
-1. 使用正式工作日报语言，条理清晰。
-2. 按素材中的分区归纳，同类事项合并表述。
-3. 只能依据我提供的素材整理，禁止补写、推断或编造素材中未出现的任何内容、结论或数据。
-4. 如某方面素材为空，则该部分不输出，不要用占位内容填充。
-5. 保留关键事实（进度、结论、风险、待确认事项等），不要丢失信息。
-
-日期：${params.date}
-汇报人：${params.reporterName}
-
-工作素材：
-${materialText}`;
-
-  const chatCompletionsUrl = getChatCompletionsUrl(config.aiBaseUrl);
-
-  const response = await fetch(chatCompletionsUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.aiApiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.aiModel,
-      messages: [
-        { role: 'system', content: `你是一名严谨的中文${roleLabel}日报助手，只依据用户提供的素材整理，绝不编造。` },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.3,
-    }),
-  });
-
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(await buildAiErrorMessage(config, response, detail));
-  }
-
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content ?? '';
-  if (!content) {
-    throw new Error('AI接口未返回有效内容');
-  }
-  return content.trim();
-}
-
-/** 无 AI Key 或调用失败时，把素材结构化排版成日报，不做任何推断。 */
-function fallbackMaterialReport(params: GenerateFromMaterialParams) {
-  const roleLabel = MATERIAL_ROLE_LABELS[params.role];
-  const filledSections = params.sections.filter((section) => section.content.trim());
-  const sectionBlocks = filledSections.map((section, index) => {
-    const items = section.content
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-    return [`${index + 1}、${section.label}`, '', formatNumbered(items)].join('\n');
-  });
-  const normalizedNotes = params.extraNotes.trim();
-  const notesBlock = normalizedNotes ? ['补充说明：', '', normalizedNotes] : [];
-
-  return [
-    `${params.date} ${roleLabel}日报`,
-    '',
-    ...(sectionBlocks.length ? [sectionBlocks.join('\n\n')] : ['本时间段暂无填写的工作素材。']),
-    ...(notesBlock.length ? ['', ...notesBlock] : []),
-    '',
-    `汇报人：${params.reporterName}`,
-    `日期：${params.date}`,
-  ].join('\n');
-}
-
-async function generateReportFromMaterial(params: GenerateFromMaterialParams): Promise<MaterialReportResult> {
-  const config = await loadConfig();
-  const generatedAt = new Date().toISOString();
-  const { hasContent, text } = formatMaterialSections(params.sections, params.extraNotes);
-
-  if (!hasContent) {
-    throw new Error('请至少填写一项工作素材后再生成日报');
-  }
-
-  let report = '';
-  if (config.aiApiKey) {
-    try {
-      report = await callAiMaterialReport(config, params, text);
-    } catch (error) {
-      report = fallbackMaterialReport(params);
-      report = `${report}\n\nAI提示：${error instanceof Error ? error.message : '调用失败'}`;
-    }
-  } else {
-    report = fallbackMaterialReport(params);
-    report = `${report}\n\nAI提示：请先在设置中配置 OpenAI 兼容接口。`;
-  }
-
-  return { report, role: params.role, date: params.date, generatedAt };
 }
 
 function requireFeishuConfigValue(value: string, label: string) {
@@ -2225,11 +2035,6 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle('repo:scan', async (_event, workspaceDir: string) => scanRepositories(workspaceDir));
   ipcMain.handle('report:generate', async (_event, params: GenerateReportParams) => generateReport(params));
-  ipcMain.handle('report:generate-from-material', async (_event, params: GenerateFromMaterialParams) => generateReportFromMaterial(params));
-  ipcMain.handle('role-material:save', async (_event, payload: RoleMaterialPayload) => saveRoleMaterial(payload));
-  ipcMain.handle('role-material:load', async (_event, params: { role: MaterialRole; date: string }) =>
-    loadRoleMaterial(params.role, params.date),
-  );
   ipcMain.handle('daily-report:list', async (_event, limit?: number) => listDailyReports(limit));
   ipcMain.handle('daily-report:save', async (_event, payload: SaveDailyReportPayload) => saveDailyReport(payload));
   ipcMain.handle('sync-log:list', async (_event, limit?: number) => listSyncLogs(limit));

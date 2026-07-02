@@ -13,14 +13,9 @@ import type {
   FeishuProjectOptionsPayload,
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
-  GenerateFromMaterialParams,
   GenerateReportParams,
-  MaterialReportResult,
-  MaterialRole,
   RepoInfo,
   ReportResult,
-  RoleMaterialPayload,
-  RoleMaterialRecord,
   SaveDailyReportPayload,
   StorageInfo,
   SyncLogRecord,
@@ -33,12 +28,6 @@ contextBridge.exposeInMainWorld('api', {
   selectDirectory: () => ipcRenderer.invoke('dialog:select-directory') as Promise<string | null>,
   scanRepositories: (workspaceDir: string) => ipcRenderer.invoke('repo:scan', workspaceDir) as Promise<RepoInfo[]>,
   generateReport: (params: GenerateReportParams) => ipcRenderer.invoke('report:generate', params) as Promise<ReportResult>,
-  generateReportFromMaterial: (params: GenerateFromMaterialParams) =>
-    ipcRenderer.invoke('report:generate-from-material', params) as Promise<MaterialReportResult>,
-  saveRoleMaterial: (payload: RoleMaterialPayload) =>
-    ipcRenderer.invoke('role-material:save', payload) as Promise<RoleMaterialRecord>,
-  loadRoleMaterial: (role: MaterialRole, date: string) =>
-    ipcRenderer.invoke('role-material:load', { role, date }) as Promise<RoleMaterialRecord | null>,
   loginFeishu: (payload: FeishuLoginPayload) => ipcRenderer.invoke('feishu:login', payload) as Promise<FeishuAuthSnapshot>,
   listFeishuFields: (payload: FeishuProjectOptionsPayload) =>
     ipcRenderer.invoke('feishu:list-fields', payload) as Promise<FeishuFieldOption[]>,

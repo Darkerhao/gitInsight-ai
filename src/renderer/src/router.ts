@@ -1,7 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
 
-export const navKeys = ['dashboard', 'repositories', 'about', 'help', 'config', 'generate', 'messages', 'sync', 'history', 'system'] as const;
+export const navKeys = ['config', 'generate', 'history', 'system'] as const;
 export type NavKey = (typeof navKeys)[number];
 
 const EmptyRouteView = {
@@ -10,10 +10,12 @@ const EmptyRouteView = {
 };
 
 function getLastRoute() {
-  const fallback = '/dashboard';
+  const fallback = '/generate';
   try {
     const value = window.localStorage.getItem('gitinsight:last-route');
-    return value && value !== '/' ? value : fallback;
+    if (!value || value === '/') return fallback;
+    const nav = value.replace(/^\//, '').split('?')[0];
+    return navKeys.includes(nav as NavKey) ? value : fallback;
   } catch {
     return fallback;
   }
@@ -25,12 +27,12 @@ const routes: RouteRecordRaw[] = [
     redirect: () => getLastRoute(),
   },
   {
-    path: '/:nav(dashboard|repositories|about|help|config|generate|messages|sync|history|system)',
+    path: '/:nav(config|generate|history|system)',
     component: EmptyRouteView,
   },
   {
     path: '/:pathMatch(.*)*',
-    redirect: '/dashboard',
+    redirect: '/generate',
   },
 ];
 

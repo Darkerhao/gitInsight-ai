@@ -12,14 +12,9 @@ import type {
   FeishuProjectOptionsPayload,
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
-  GenerateFromMaterialParams,
   GenerateReportParams,
-  MaterialReportResult,
-  MaterialRole,
   RepoInfo,
   ReportResult,
-  RoleMaterialPayload,
-  RoleMaterialRecord,
   SyncFeishuDailyPayload,
 } from '@shared/types';
 
@@ -31,9 +26,6 @@ declare global {
       selectDirectory: () => Promise<string | null>;
       scanRepositories: (workspaceDir: string) => Promise<RepoInfo[]>;
       generateReport: (params: GenerateReportParams) => Promise<ReportResult>;
-      generateReportFromMaterial: (params: GenerateFromMaterialParams) => Promise<MaterialReportResult>;
-      saveRoleMaterial: (payload: RoleMaterialPayload) => Promise<RoleMaterialRecord>;
-      loadRoleMaterial: (role: MaterialRole, date: string) => Promise<RoleMaterialRecord | null>;
       loginFeishu: (payload: FeishuLoginPayload) => Promise<FeishuAuthSnapshot>;
       listFeishuFields: (payload: FeishuProjectOptionsPayload) => Promise<FeishuFieldOption[]>;
       listFeishuProjects: (payload: FeishuProjectOptionsPayload) => Promise<FeishuProjectOption[]>;

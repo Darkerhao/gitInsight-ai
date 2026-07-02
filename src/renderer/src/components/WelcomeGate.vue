@@ -723,10 +723,10 @@ onBeforeUnmount(() => {
         <span :style="{ width: `${progressPercent}%` }" />
       </div>
 
-      <button class="accelerate-btn" type="button" :aria-pressed="accelerated" @click.stop="accelerate">
+      <el-button class="accelerate-btn" :aria-pressed="accelerated" @click.stop="accelerate">
         <FastForward :size="15" stroke-width="2" />
         <span>{{ accelerated ? '加速中' : '加速构建' }}</span>
-      </button>
+      </el-button>
     </footer>
   </section>
 </template>
@@ -1372,34 +1372,37 @@ onBeforeUnmount(() => {
   transition: width 0.12s linear;
 }
 
-.accelerate-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+.accelerate-btn.el-button {
   min-width: 112px;
   height: 38px;
   border: 1px solid rgba(151, 191, 255, 0.3);
   border-radius: 8px;
   color: #f7fbff;
   background: rgba(79, 140, 255, 0.18);
-  cursor: pointer;
   pointer-events: auto;
   transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
 
-.accelerate-btn:hover {
+.accelerate-btn.el-button > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.accelerate-btn.el-button:hover {
   border-color: rgba(120, 180, 255, 0.62);
   background: rgba(79, 140, 255, 0.28);
+  color: #f7fbff;
   transform: translateY(-1px);
 }
 
-.accelerate-btn:focus-visible {
+.accelerate-btn.el-button:focus-visible {
   outline: 2px solid rgba(120, 180, 255, 0.82);
   outline-offset: 2px;
 }
 
-.accelerate-btn span {
+.accelerate-btn.el-button span {
   font-size: 12px;
   font-weight: 700;
 }

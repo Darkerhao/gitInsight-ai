@@ -23,8 +23,6 @@
 | 13. P2 体验闭环 | complete | 修复历史查询反馈、小屏导航占位、教程入口闭环 |
 | 14. P2/P3 维护优化 | complete | 清理 GSAP 残留、补 favicon、修正文案、拆分 renderer vendor chunk |
 | 15. 本轮质量验证 | complete | `npm run typecheck`、`npm run build`、`git diff --check`、残留字符串检索均通过 |
-| 16. AI日报助手多角色设计 | complete | 设计面向研发、项目经理、产品经理的统一日报助手方案，不改动业务源码 |
-| 17. 多角色日报 MVP 实现 | complete | 新增计划文档，落地研发/项目经理/产品经理三角色日报视图并完成验证 |
 
 ## 执行原则
 

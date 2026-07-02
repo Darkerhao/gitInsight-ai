@@ -52,6 +52,13 @@ const dataStats = computed(() => [
   { label: '同步日志', value: storageInfo.value?.syncLogsCount ?? 0 },
   { label: '错误日志', value: storageInfo.value?.errorLogsCount ?? 0 },
 ]);
+const systemInfoRows = computed(() => [
+  { label: '系统名称', value: storageInfo.value?.appName || 'AI日报助手' },
+  { label: '系统描述', value: '基于配置自动生成日报，支持预览、导出和同步飞书' },
+  { label: '系统版本', value: storageInfo.value?.appVersion || '读取中' },
+  { label: '发行版本', value: storageInfo.value?.appEditionLabel || '读取中' },
+  { label: '系统时区', value: systemTimezone.value },
+]);
 
 const settingNotes = [
   { icon: Settings, title: '基础设置', desc: '普通配置保存在 config.json，敏感字段不再写入明文配置。' },
@@ -89,6 +96,27 @@ async function resetSettings() {
   config.feishuForm.projectWorkHours = {};
   ElMessage.success('已重置同步默认值，请保存后生效');
 }
+
+const operationCards = [
+  {
+    key: 'refresh',
+    icon: RefreshCw,
+    title: '刷新本地数据状态',
+    desc: '重新读取配置文件、数据库记录数量和存储文件大小',
+    tag: '无持久化变更',
+    tone: 'primary',
+    action: refreshStorage,
+  },
+  {
+    key: 'reset',
+    icon: Settings,
+    title: '重置同步默认值',
+    desc: '恢复自动同步时间和默认工时，保存后写入 config.json',
+    tag: '需要保存生效',
+    tone: 'warning',
+    action: resetSettings,
+  },
+] as const;
 </script>
 
 <template>
@@ -112,24 +140,11 @@ async function resetSettings() {
           <div class="panel-head">
             <h3>系统信息</h3>
           </div>
-          <div class="field-grid two-columns">
-            <div class="field">
-              <label>系统名称</label>
-              <el-input model-value="AI日报助手" readonly />
-            </div>
-            <div class="field">
-              <label>系统描述</label>
-              <el-input model-value="基于配置自动生成日报，支持预览、导出和同步飞书" readonly />
-            </div>
-            <div class="field">
-              <label>系统版本</label>
-              <el-input :model-value="storageInfo?.appVersion || '读取中'" readonly />
-            </div>
-            <div class="field">
-              <label>系统时区</label>
-              <el-input :model-value="systemTimezone" readonly />
-            </div>
-          </div>
+          <el-descriptions class="settings-descriptions" :column="2" border>
+            <el-descriptions-item v-for="item in systemInfoRows" :key="item.label" :label="item.label">
+              {{ item.value }}
+            </el-descriptions-item>
+          </el-descriptions>
 
           <div class="panel-head" style="margin-top: 24px">
             <h3>外观与体验</h3>
@@ -180,13 +195,14 @@ async function resetSettings() {
             <h3>文件与存储</h3>
             <StatusBadge :status="storageInfo?.encryptionAvailable ? 'success' : 'failed'" :label="storageInfo?.encryptionAvailable ? '密钥保护可用' : '密钥保护不可用'" />
           </div>
-          <div class="storage-table">
-            <div v-for="item in storageRows" :key="item.label" class="storage-row">
-              <strong>{{ item.label }}</strong>
-              <span>{{ item.path }}</span>
-              <em>{{ formatBytes(item.size) }}</em>
-            </div>
-          </div>
+          <el-descriptions class="settings-descriptions storage-descriptions" :column="1" border>
+            <el-descriptions-item v-for="item in storageRows" :key="item.label" :label="item.label">
+              <div class="storage-description-value">
+                <span>{{ item.path }}</span>
+                <el-tag size="small" effect="plain">{{ formatBytes(item.size) }}</el-tag>
+              </div>
+            </el-descriptions-item>
+          </el-descriptions>
         </div>
 
         <div v-if="activeTab === 'logs'" class="settings-section">
@@ -202,18 +218,27 @@ async function resetSettings() {
         </div>
 
         <div v-if="activeTab === 'logs'" class="settings-section">
-          <h3>系统操作</h3>
+          <div class="panel-head">
+            <h3>系统操作</h3>
+          </div>
           <div class="operation-grid">
-            <button class="operation-card" @click="refreshStorage">
-              <RefreshCw :size="18" />
-              <strong>刷新本地数据状态</strong>
-              <span>重新读取配置文件、数据库记录数量和存储文件大小</span>
-            </button>
-            <button class="operation-card" @click="resetSettings">
-              <Settings :size="18" />
-              <strong>重置同步默认值</strong>
-              <span>恢复自动同步时间和默认工时，保存后写入 config.json</span>
-            </button>
+            <el-button
+              v-for="item in operationCards"
+              :key="item.key"
+              class="operation-card"
+              :class="`is-${item.tone}`"
+              plain
+              @click="item.action"
+            >
+              <component :is="item.icon" :size="18" />
+              <div class="operation-card-copy">
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.desc }}</span>
+              </div>
+              <el-tag class="operation-card-tag" :type="item.tone === 'warning' ? 'warning' : 'primary'" effect="light" round>
+                {{ item.tag }}
+              </el-tag>
+            </el-button>
           </div>
         </div>
 

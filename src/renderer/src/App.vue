@@ -1,55 +1,56 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAssistant } from '@/composables/useAssistant';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppTopbar from '@/components/AppTopbar.vue';
 import WelcomeGate from '@/components/WelcomeGate.vue';
-import DashboardView from '@/views/DashboardView.vue';
-import RepositoryCenterView from '@/views/RepositoryCenterView.vue';
 import ReportConfigView from '@/views/ReportConfigView.vue';
 import ReportGenerateView from '@/views/ReportGenerateView.vue';
-import SyncTasksView from '@/views/SyncTasksView.vue';
 import HistoryLogsView from '@/views/HistoryLogsView.vue';
 import SystemSettingsView from '@/views/SystemSettingsView.vue';
-import AboutUsView from '@/views/AboutUsView.vue';
-import UsageHelpView from '@/views/UsageHelpView.vue';
-import MessageCenterView from '@/views/MessageCenterView.vue';
 import { navKeys } from '@/router';
 import type { NavKey } from '@/router';
 
 const assistant = useAssistant();
 const WELCOME_STORAGE_KEY = 'gitinsight:welcome-finished';
 const WELCOME_ANIMATION_ENABLED_KEY = 'gitinsight:welcome-animation-enabled';
-const syncInitialTab = ref<'list' | 'calendar'>('list');
 const showWelcome = ref(shouldShowWelcomeOnLaunch());
 const assistantReady = ref(false);
 const route = useRoute();
 const router = useRouter();
+const legacyNavMap: Record<string, NavKey> = {
+  dashboard: 'generate',
+  repositories: 'config',
+  sync: 'config',
+  'sync:list': 'config',
+  'sync:calendar': 'config',
+  messages: 'history',
+  help: 'system',
+  about: 'system',
+};
 
 const viewMap = {
-  dashboard: DashboardView,
-  repositories: RepositoryCenterView,
-  about: AboutUsView,
-  help: UsageHelpView,
   config: ReportConfigView,
   generate: ReportGenerateView,
-  messages: MessageCenterView,
-  sync: SyncTasksView,
   history: HistoryLogsView,
   system: SystemSettingsView,
 };
 
 const routeNav = computed<NavKey>(() => {
   const value = Array.isArray(route.params.nav) ? route.params.nav[0] : route.params.nav;
-  return navKeys.includes(value as NavKey) ? (value as NavKey) : 'dashboard';
+  return navKeys.includes(value as NavKey) ? (value as NavKey) : 'generate';
 });
 const activeNav = computed({
   get: () => routeNav.value,
   set: (value: string) => handleNavigate(value),
 });
-const activeView = computed(() => viewMap[activeNav.value as keyof typeof viewMap] ?? DashboardView);
-const appVersionText = computed(() => (assistant.storageInfo.value?.appVersion ? ` v${assistant.storageInfo.value.appVersion}` : ''));
+const activeView = computed(() => viewMap[activeNav.value as keyof typeof viewMap] ?? ReportGenerateView);
+const appVersionText = computed(() => {
+  const info = assistant.storageInfo.value;
+  if (!info?.appVersion) return '';
+  return ` ${info.appEditionLabel} v${info.appVersion}`;
+});
 const welcomeMetrics = computed(() => {
   const reports = assistant.dailyReports.value;
   const syncLogs = assistant.syncLogs.value;
@@ -69,22 +70,10 @@ const welcomeMetrics = computed(() => {
   };
 });
 
-watch(
-  () => route.query.tab,
-  (value) => {
-    if (routeNav.value === 'sync' && (value === 'list' || value === 'calendar')) {
-      syncInitialTab.value = value;
-    }
-  },
-);
-
 function handleNavigate(value: string) {
-  const [targetNav, targetTab] = value.split(':');
-  if (targetNav === 'sync' && (targetTab === 'list' || targetTab === 'calendar')) {
-    syncInitialTab.value = targetTab;
-  }
-  const nextQuery = targetNav === 'sync' && (targetTab === 'list' || targetTab === 'calendar') ? { tab: targetTab } : {};
-  void router.push({ path: `/${targetNav}`, query: nextQuery });
+  const target = navKeys.includes(value as NavKey) ? (value as NavKey) : legacyNavMap[value];
+  if (!target) return;
+  void router.push({ path: `/${target}` });
 }
 
 function needsOnboarding() {
@@ -112,9 +101,6 @@ function finishWelcome() {
 }
 
 onMounted(async () => {
-  if (routeNav.value === 'sync' && (route.query.tab === 'list' || route.query.tab === 'calendar')) {
-    syncInitialTab.value = route.query.tab;
-  }
   await assistant.init();
   assistantReady.value = true;
   if (needsOnboarding()) {
@@ -134,10 +120,10 @@ onBeforeUnmount(() => {
     <AppSidebar v-model:active-nav="activeNav" />
 
     <main class="app-main">
-      <AppTopbar @navigate="handleNavigate" />
+      <AppTopbar />
 
       <div class="app-scroll">
-        <component :is="activeView" :initial-tab="activeNav === 'sync' ? syncInitialTab : undefined" @navigate="handleNavigate" />
+        <component :is="activeView" @navigate="handleNavigate" />
 
         <footer class="app-footer">
           AI日报助手{{ appVersionText }} · 让技术日报生成更简单、更智能

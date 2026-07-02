@@ -1,6 +1,6 @@
 {
   "name": "gitinsight-ai",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "author": {
     "name": "DarkerHao",
     "email": "1726348482@qq.com"
@@ -12,11 +12,19 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder",
-    "dist:win": "npm run build && electron-builder --win",
-    "dist:mac": "npm run build && electron-builder --mac",
-    "dist:linux": "npm run build && electron-builder --linux",
+    "pack": "node scripts/dist-edition.mjs --dir",
+    "dist": "node scripts/dist-edition.mjs",
+    "dist:lite": "node scripts/dist-edition.mjs --edition lite",
+    "dist:standard": "node scripts/dist-edition.mjs --edition standard",
+    "dist:win": "node scripts/dist-edition.mjs --win",
+    "dist:win:lite": "node scripts/dist-edition.mjs --edition lite --win",
+    "dist:win:standard": "node scripts/dist-edition.mjs --edition standard --win",
+    "dist:mac": "node scripts/dist-edition.mjs --mac",
+    "dist:mac:lite": "node scripts/dist-edition.mjs --edition lite --mac",
+    "dist:mac:standard": "node scripts/dist-edition.mjs --edition standard --mac",
+    "dist:linux": "node scripts/dist-edition.mjs --linux",
+    "dist:linux:lite": "node scripts/dist-edition.mjs --edition lite --linux",
+    "dist:linux:standard": "node scripts/dist-edition.mjs --edition standard --linux",
     "start": "electron .",
     "preview": "electron-vite preview",
     "typecheck": "vue-tsc --noEmit",
@@ -26,7 +34,6 @@
   "dependencies": {
     "@vueuse/core": "^13.5.0",
     "dayjs": "^1.11.13",
-    "echarts": "^6.1.0",
     "electron-updater": "^6.6.2",
     "element-plus": "^2.10.4",
     "gsap": "^3.15.0",
