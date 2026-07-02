@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { CalendarDays, CheckCircle2, CircleAlert, ClipboardCopy, Download, FileText, Gamepad2, Pin, Plus, RotateCcw, Save, Search, Send, Sparkles, Trash2 } from 'lucide-vue-next';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import { useAssistant } from '@/composables/useAssistant';
-import type { RepoInfo } from '@shared/types';
+import { PRODUCT_MANAGER_SECTIONS, PROJECT_MANAGER_SECTIONS } from '@shared/types';
+import type { MaterialRole, MaterialSection, MaterialSectionDef, RepoInfo, ReportRole } from '@shared/types';
 
 const emit = defineEmits<{
   (e: 'navigate', value: string): void;
@@ -19,6 +20,7 @@ const {
   status,
   loading,
   pushing,
+  materialGenerating,
   sortedRepos,
   selectedRepoPaths,
   selectedRepos,
@@ -27,6 +29,9 @@ const {
   dailyReports,
   chooseWorkspace,
   generate,
+  generateFromMaterial,
+  persistRoleMaterial,
+  restoreRoleMaterial,
   push,
   saveCurrentReport,
   toggleRepo,
@@ -38,11 +43,65 @@ const {
   applyFullDayReportRange,
 } = assistant;
 
+interface RoleOption {
+  key: ReportRole;
+  label: string;
+  title: string;
+  description: string;
+  source: string;
+  filenameLabel: string;
+  placeholder: string;
+}
+
+const reportRoles: RoleOption[] = [
+  {
+    key: 'developer',
+    label: '研发日报',
+    title: '研发日报',
+    description: '基于 Git 提交、diff 和影响文件生成技术日报',
+    source: '数据来源：所选仓库的 Git 提交记录',
+    filenameLabel: '研发日报',
+    placeholder: '生成后的研发日报会显示在这里，可直接修改后保存',
+  },
+  {
+    key: 'projectManager',
+    label: '项目经理日报',
+    title: '项目经理日报',
+    description: '基于项目推进事实生成，聚焦进度、里程碑、风险与协同',
+    source: '数据来源：你填写的项目推进素材（非 Git）',
+    filenameLabel: '项目经理日报',
+    placeholder: '填写左侧项目素材后点击生成，日报会显示在这里，可继续编辑',
+  },
+  {
+    key: 'productManager',
+    label: '产品经理日报',
+    title: '产品经理日报',
+    description: '基于产品工作事实生成，聚焦需求、评审、验收与反馈',
+    source: '数据来源：你填写的产品工作素材（非 Git）',
+    filenameLabel: '产品经理日报',
+    placeholder: '填写左侧产品素材后点击生成，日报会显示在这里，可继续编辑',
+  },
+];
+
+const materialSectionDefs: Record<MaterialRole, MaterialSectionDef[]> = {
+  projectManager: PROJECT_MANAGER_SECTIONS,
+  productManager: PRODUCT_MANAGER_SECTIONS,
+};
+
+const activeRole = ref<ReportRole>('developer');
 const activePreviewTab = ref('report');
-const reportMode = ref<'concise' | 'full'>('concise');
-const conciseReportDraft = ref('');
-const conciseDirty = ref(false);
-const conciseSourceReport = ref('');
+const roleReportDrafts = ref<Record<ReportRole, string>>(createEmptyRoleReports());
+const reportDirty = ref<Record<ReportRole, boolean>>(createCleanRoleDirty());
+const materialInputs = reactive<Record<MaterialRole, Record<string, string>>>({
+  projectManager: createSectionInputs('projectManager'),
+  productManager: createSectionInputs('productManager'),
+});
+const materialExtraNotes = reactive<Record<MaterialRole, string>>({
+  projectManager: '',
+  productManager: '',
+});
+const restoredMaterialRoles = new Set<MaterialRole>();
+
 const dateShortcut = ref('today');
 const repoKeyword = ref('');
 const gameScore = ref(0);
@@ -51,11 +110,17 @@ const gameTarget = ref({ x: 52, y: 48 });
 const workHourPresets = [1, 2, 4, 6, 7, 7.5, 8];
 const workHourOptions = Array.from({ length: 48 }, (_, index) => (index + 1) * 0.5);
 const loadingTips = [
-  '正在读取提交记录和影响文件',
+  '正在读取素材与提交记录',
   '正在整理时间段工作内容',
   '正在压缩上下文并生成日报',
   '快点中间的小光标，给等待加一点手感',
 ];
+
+const busy = computed(() => loading.value || materialGenerating.value);
+const isDeveloperRole = computed(() => activeRole.value === 'developer');
+const activeMaterialRole = computed<MaterialRole | null>(() => (activeRole.value === 'developer' ? null : (activeRole.value as MaterialRole)));
+const activeRoleOption = computed(() => reportRoles.find((item) => item.key === activeRole.value) ?? reportRoles[0]);
+const activeSectionDefs = computed(() => (activeMaterialRole.value ? materialSectionDefs[activeMaterialRole.value] : []));
 
 const selectedProjectText = computed(() => {
   if (!selectedRepos.value.length) return '未选择项目';
@@ -65,8 +130,13 @@ const selectedProjectText = computed(() => {
 const generatedAtText = computed(() => formatDateTime(lastReportResult.value?.generatedAt || dailyReports.value[0]?.generatedAt));
 const commitCount = computed(() => lastReportResult.value?.commits.length ?? 0);
 const touchedFiles = computed(() => Array.from(new Set(lastReportResult.value?.commits.flatMap((commit) => commit.files) ?? [])));
-const reportLineCount = computed(() => report.value.split(/\r?\n/).filter((line) => line.trim()).length);
-const activeReportContent = computed(() => (reportMode.value === 'concise' ? conciseReportDraft.value : report.value));
+const activeReportContent = computed({
+  get: () => roleReportDrafts.value[activeRole.value],
+  set: (value: string) => {
+    roleReportDrafts.value = { ...roleReportDrafts.value, [activeRole.value]: value };
+  },
+});
+const reportLineCount = computed(() => activeReportContent.value.split(/\r?\n/).filter((line) => line.trim()).length);
 const loadingTip = computed(() => loadingTips[gameScore.value % loadingTips.length]);
 const reportRangeStartMs = computed(() => new Date(form.startDateTime).getTime());
 const reportRangeEndMs = computed(() => new Date(form.endDateTime).getTime());
@@ -78,17 +148,38 @@ const reportRangeLabel = computed(() => {
   return `${formatRangeDateTime(form.startDateTime)} 至 ${formatRangeDateTime(form.endDateTime)}`;
 });
 const reportTitleRange = computed(() => (reportRangeValid.value ? reportRangeLabel.value : form.date));
+const reportPreviewTitle = computed(() => {
+  if (isDeveloperRole.value) return `${selectedProjectText.value} ${reportTitleRange.value} 日报`;
+  return `${activeRoleOption.value.title} · ${form.date}`;
+});
 const gameTargetStyle = computed(() => ({
   left: `${gameTarget.value.x}%`,
   top: `${gameTarget.value.y}%`,
 }));
 
-const metrics = computed(() => [
-  { label: '选中仓库', value: selectedRepos.value.length },
-  { label: '提交记录', value: commitCount.value },
-  { label: '影响文件', value: touchedFiles.value.length },
-  { label: '日报行数', value: report.value ? reportLineCount.value : 0 },
-]);
+const filledSectionCount = computed(() => {
+  if (!activeMaterialRole.value) return 0;
+  const inputs = materialInputs[activeMaterialRole.value];
+  const filled = activeSectionDefs.value.filter((def) => (inputs[def.key] ?? '').trim()).length;
+  return materialExtraNotes[activeMaterialRole.value].trim() ? filled + 1 : filled;
+});
+const hasMaterialContent = computed(() => filledSectionCount.value > 0);
+
+const metrics = computed(() => {
+  if (isDeveloperRole.value) {
+    return [
+      { label: '选中仓库', value: selectedRepos.value.length },
+      { label: '提交记录', value: commitCount.value },
+      { label: '影响文件', value: touchedFiles.value.length },
+      { label: '当前正文行数', value: activeReportContent.value ? reportLineCount.value : 0 },
+    ];
+  }
+  return [
+    { label: '已填素材项', value: filledSectionCount.value },
+    { label: '素材分区', value: activeSectionDefs.value.length },
+    { label: '当前正文行数', value: activeReportContent.value ? reportLineCount.value : 0 },
+  ];
+});
 
 const generationRecords = computed(() => dailyReports.value.slice(0, 5));
 const selectedRepoSummary = computed(() => {
@@ -138,42 +229,55 @@ const generationChecks = computed(() => [
     key: 'ai',
     label: 'AI 接入',
     ok: Boolean(config.aiBaseUrl && config.aiModel && config.aiApiKey),
-    detail: config.aiApiKey ? config.aiModel : '未配置时将使用基础日报模板',
+    detail: config.aiApiKey ? config.aiModel : '未配置时将使用基础模板排版',
     action: 'config',
     required: false,
   },
 ]);
 const blockedGenerationCheck = computed(() => generationChecks.value.find((item) => item.required && !item.ok));
 
-function extractReportSection(reportText: string, sectionTitle: string) {
-  const lines = reportText.split(/\r?\n/);
-  const startIndex = lines.findIndex((line) => line.trim().replace(/^#+\s*/, '').startsWith(sectionTitle));
-  if (startIndex < 0) return '';
+function createEmptyRoleReports(): Record<ReportRole, string> {
+  return { developer: '', projectManager: '', productManager: '' };
+}
 
-  const sectionLines: string[] = [];
-  for (const line of lines.slice(startIndex + 1)) {
-    const trimmed = line.trim();
-    if (/^(今日工作内容|工作成果|工作时长|明日计划|汇报人|日期)[：:]/.test(trimmed)) {
-      break;
+function createCleanRoleDirty(): Record<ReportRole, boolean> {
+  return { developer: false, projectManager: false, productManager: false };
+}
+
+function createSectionInputs(role: MaterialRole): Record<string, string> {
+  return Object.fromEntries(materialSectionDefs[role].map((def) => [def.key, '']));
+}
+
+function buildSectionsPayload(role: MaterialRole): MaterialSection[] {
+  const inputs = materialInputs[role];
+  return materialSectionDefs[role].map((def) => ({
+    key: def.key,
+    label: def.label,
+    content: (inputs[def.key] ?? '').trim(),
+  }));
+}
+
+async function loadMaterialForRole(role: MaterialRole) {
+  if (restoredMaterialRoles.has(role)) return;
+  const record = await restoreRoleMaterial(role);
+  const next = createSectionInputs(role);
+  if (record) {
+    for (const section of record.sections) {
+      if (section.key in next) next[section.key] = section.content;
     }
-    if (trimmed) sectionLines.push(trimmed);
+    materialExtraNotes[role] = record.extraNotes ?? '';
   }
-  return sectionLines.join('\n').trim();
+  materialInputs[role] = next;
+  restoredMaterialRoles.add(role);
 }
 
-function buildConciseReport(reportText: string) {
-  const workContent = extractReportSection(reportText, '今日工作内容') || reportText.trim();
-  return workContent
-    .split(/\r?\n/)
-    .map((line) => line.trim().replace(/^[-*]\s+/, ''))
-    .filter(Boolean)
-    .join('\n');
-}
-
-function resetConciseDraft(reportText: string) {
-  conciseReportDraft.value = buildConciseReport(reportText);
-  conciseDirty.value = false;
-  conciseSourceReport.value = reportText;
+async function switchRole(role: ReportRole) {
+  if (role === activeRole.value) return;
+  activeRole.value = role;
+  activePreviewTab.value = 'report';
+  if (role !== 'developer') {
+    await loadMaterialForRole(role);
+  }
 }
 
 function moveGameTarget() {
@@ -189,33 +293,23 @@ function hitGameTarget() {
   moveGameTarget();
 }
 
-function markConciseDirty() {
-  conciseDirty.value = true;
+function markReportDirty() {
+  reportDirty.value = { ...reportDirty.value, [activeRole.value]: true };
 }
 
-watch(report, (value) => {
-  if (!value.trim()) {
-    resetConciseDraft('');
-    return;
-  }
-  if (!conciseDirty.value || value !== conciseSourceReport.value) {
-    resetConciseDraft(value);
-  }
-}, { immediate: true });
-
-async function handleSaveCurrentReport() {
-  const record = await saveCurrentReport(activeReportContent.value);
-  if (record && reportMode.value === 'concise') {
-    conciseDirty.value = false;
-  }
-}
-
-watch(loading, (isLoading) => {
-  if (!isLoading) return;
+watch(busy, (isBusy) => {
+  if (!isBusy) return;
   gameScore.value = 0;
   gameStreak.value = 0;
   moveGameTarget();
 });
+
+async function handleSaveCurrentReport() {
+  const record = await saveCurrentReport(activeReportContent.value);
+  if (record) {
+    reportDirty.value = { ...reportDirty.value, [activeRole.value]: false };
+  }
+}
 
 function formatDateTime(value?: string) {
   if (!value) return '暂无';
@@ -288,6 +382,14 @@ function handleRangeChange() {
 }
 
 async function handleGenerate() {
+  if (isDeveloperRole.value) {
+    await handleGenerateDeveloper();
+    return;
+  }
+  await handleGenerateMaterial();
+}
+
+async function handleGenerateDeveloper() {
   const blocked = blockedGenerationCheck.value;
   if (blocked) {
     ElMessage.warning(`请先完善：${blocked.label}`);
@@ -296,10 +398,31 @@ async function handleGenerate() {
   if (!config.aiApiKey) {
     ElMessage.info('未配置 AI 接入，将使用基础日报模板生成');
   }
-  conciseDirty.value = false;
   await generate();
   if (report.value.trim()) {
-    reportMode.value = 'concise';
+    roleReportDrafts.value = { ...roleReportDrafts.value, developer: report.value };
+    reportDirty.value = { ...reportDirty.value, developer: false };
+  }
+}
+
+async function handleGenerateMaterial() {
+  const role = activeMaterialRole.value;
+  if (!role) return;
+  if (!config.reporterName) {
+    ElMessage.warning('请先填写汇报人');
+    return;
+  }
+  if (!hasMaterialContent.value) {
+    ElMessage.warning('请至少填写一项工作素材后再生成日报');
+    return;
+  }
+  const sections = buildSectionsPayload(role);
+  const extraNotes = materialExtraNotes[role].trim();
+  await persistRoleMaterial(role, sections, extraNotes);
+  await generateFromMaterial(role, sections, extraNotes);
+  if (report.value.trim()) {
+    roleReportDrafts.value = { ...roleReportDrafts.value, [role]: report.value };
+    reportDirty.value = { ...reportDirty.value, [role]: false };
   }
 }
 
@@ -320,7 +443,7 @@ function exportMarkdown() {
   const blob = new Blob([activeReportContent.value], { type: 'text/markdown;charset=utf-8' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  link.download = `项目日报-${reportMode.value === 'concise' ? '简洁版-' : ''}${form.date}.md`;
+  link.download = `项目日报-${activeRoleOption.value.filenameLabel}-${form.date}.md`;
   link.click();
   URL.revokeObjectURL(link.href);
   ElMessage.success('Markdown 已导出');
@@ -347,14 +470,14 @@ async function confirmRemoveRepo(item: RepoInfo) {
 
 <template>
   <div class="view-stack">
-    <div v-if="loading" class="generation-loading-overlay" aria-live="polite">
+    <div v-if="busy" class="generation-loading-overlay" aria-live="polite">
       <div class="generation-loading-shell">
         <div class="generation-loading-copy">
           <span class="loading-eyebrow">
             <Sparkles :size="16" />
             生成中
           </span>
-          <h2>AI 正在整理所选范围日报</h2>
+          <h2>AI 正在整理{{ activeRoleOption.label }}</h2>
           <p>{{ loadingTip }}</p>
           <div class="loading-progress">
             <i />
@@ -385,16 +508,37 @@ async function confirmRemoveRepo(item: RepoInfo) {
       </div>
     </div>
 
-    <PageHeader title="日报生成" subtitle="基于当前仓库和配置生成日报，支持直接修改、保存、导出和同步飞书">
+    <PageHeader title="日报生成" subtitle="按角色的真实数据来源生成日报：研发用 Git，项目/产品用工作素材">
       <template #actions>
         <el-button :icon="FileText" plain @click="emit('navigate', 'history')">生成记录</el-button>
         <el-button :icon="CalendarDays" plain @click="emit('navigate', 'sync:list')">同步任务</el-button>
       </template>
     </PageHeader>
 
+    <section class="surface-card role-select-card">
+      <div class="role-select-head">
+        <strong>选择日报角色</strong>
+        <span>不同角色的事实来源不同，生成方式也不同</span>
+      </div>
+      <div class="role-select-grid">
+        <button
+          v-for="item in reportRoles"
+          :key="item.key"
+          type="button"
+          class="role-select-card-item"
+          :class="{ active: activeRole === item.key }"
+          @click="switchRole(item.key)"
+        >
+          <strong>{{ item.label }}</strong>
+          <span>{{ item.description }}</span>
+          <small>{{ item.source }}</small>
+        </button>
+      </div>
+    </section>
+
     <div class="content-grid has-right-panel">
       <div class="view-stack">
-        <section class="surface-card step-card">
+        <section v-if="isDeveloperRole" class="surface-card step-card">
           <div class="step-title">
             <span>1</span>
             <strong>选择生成范围</strong>
@@ -509,15 +653,55 @@ async function confirmRemoveRepo(item: RepoInfo) {
           </div>
         </section>
 
+        <section v-else class="surface-card step-card">
+          <div class="step-title">
+            <span>1</span>
+            <strong>填写{{ activeRoleOption.label }}素材</strong>
+          </div>
+          <div class="notice-line">
+            <StatusBadge status="info" :label="`${activeRoleOption.source}，可只填有内容的分区`" />
+          </div>
+          <div class="field-grid">
+            <div class="field">
+              <label>日报日期</label>
+              <el-date-picker v-model="form.date" type="date" value-format="YYYY-MM-DD" :clearable="false" />
+            </div>
+          </div>
+          <div v-if="activeMaterialRole" class="material-form">
+            <div v-for="def in activeSectionDefs" :key="def.key" class="material-field">
+              <label>{{ def.label }}</label>
+              <el-input
+                v-model="materialInputs[activeMaterialRole][def.key]"
+                type="textarea"
+                :rows="2"
+                resize="vertical"
+                :placeholder="def.placeholder"
+                @input="markReportDirty"
+              />
+            </div>
+            <div class="material-field">
+              <label>补充材料</label>
+              <el-input
+                v-model="materialExtraNotes[activeMaterialRole]"
+                type="textarea"
+                :rows="3"
+                resize="vertical"
+                placeholder="可粘贴会议纪要、需求文档摘录、聊天记录等任意补充材料，AI 会一并整理"
+                @input="markReportDirty"
+              />
+            </div>
+          </div>
+        </section>
+
         <section class="surface-card step-card">
           <div class="step-title with-action">
             <div>
               <span>2</span>
               <strong>生成与编辑</strong>
             </div>
-            <el-button :icon="Sparkles" type="primary" :loading="loading" @click="handleGenerate">开始生成</el-button>
+            <el-button :icon="Sparkles" type="primary" :loading="busy" @click="handleGenerate">开始生成</el-button>
           </div>
-          <div class="generation-check-grid">
+          <div v-if="isDeveloperRole" class="generation-check-grid">
             <button
               v-for="item in generationChecks"
               :key="item.key"
@@ -536,8 +720,14 @@ async function confirmRemoveRepo(item: RepoInfo) {
           </div>
           <div class="notice-line">
             <StatusBadge
+              v-if="isDeveloperRole"
               status="info"
               :label="selectedRepos.length ? `将基于 ${selectedRepos.length} 个已选仓库和 ${reportRangeLabel} 生成日报` : '请先在当前仓库选择器中选择仓库'"
+            />
+            <StatusBadge
+              v-else
+              :status="hasMaterialContent ? 'info' : 'pending'"
+              :label="hasMaterialContent ? `已填写 ${filledSectionCount} 项素材，将整理为${activeRoleOption.label}` : '请先在上方填写至少一项工作素材'"
             />
           </div>
           <div class="metric-grid">
@@ -546,7 +736,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
               <strong>{{ item.value }}</strong>
             </div>
           </div>
-          <el-tabs v-model="activePreviewTab" class="clean-tabs">
+          <el-tabs v-if="isDeveloperRole" v-model="activePreviewTab" class="clean-tabs">
             <el-tab-pane label="日报正文" name="report" />
             <el-tab-pane :label="`提交记录 (${commitCount})`" name="commits" />
             <el-tab-pane :label="`影响文件 (${touchedFiles.length})`" name="files" />
@@ -555,40 +745,26 @@ async function confirmRemoveRepo(item: RepoInfo) {
 
           <article class="report-preview">
             <div class="report-preview-head">
-              <h2>{{ selectedProjectText }} {{ reportTitleRange }} 日报</h2>
+              <h2>{{ reportPreviewTitle }}</h2>
               <span>生成时间：{{ generatedAtText }}</span>
             </div>
 
-            <div v-if="activePreviewTab === 'report'" class="report-mode-row">
+            <div class="report-mode-row">
               <div class="report-mode-copy">
-                <strong>{{ reportMode === 'concise' ? '简洁版日报' : '完整日报' }}</strong>
-                <span>{{ reportMode === 'concise' ? '仅保留今日工作内容，适合直接提交飞书' : '保留完整结构，适合归档和复盘' }}</span>
-              </div>
-              <div class="report-mode-switch">
-                <button type="button" :class="{ active: reportMode === 'concise' }" @click="reportMode = 'concise'">简洁版</button>
-                <button type="button" :class="{ active: reportMode === 'full' }" @click="reportMode = 'full'">完整版</button>
+                <strong>{{ activeRoleOption.title }}</strong>
+                <span>{{ activeRoleOption.description }}</span>
               </div>
             </div>
 
             <el-input
-              v-if="activePreviewTab === 'report' && reportMode === 'full'"
-              v-model="report"
+              v-if="!isDeveloperRole || activePreviewTab === 'report'"
+              v-model="activeReportContent"
               class="editable-report"
               type="textarea"
-              :rows="18"
+              :rows="isDeveloperRole ? 18 : 16"
               resize="vertical"
-              placeholder="生成后的日报会显示在这里，可直接修改后保存"
-            />
-
-            <el-input
-              v-else-if="activePreviewTab === 'report'"
-              v-model="conciseReportDraft"
-              class="editable-report concise-report"
-              type="textarea"
-              :rows="10"
-              resize="vertical"
-              placeholder="简洁版会自动提取今日工作内容，可手动微调后复制或发布到飞书"
-              @input="markConciseDirty"
+              :placeholder="activeRoleOption.placeholder"
+              @input="markReportDirty"
             />
 
             <div v-else-if="activePreviewTab === 'commits'" class="data-list">
@@ -610,7 +786,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
           </article>
 
           <div class="button-row between">
-            <el-button :icon="RotateCcw" plain :loading="loading" @click="handleGenerate">重新生成</el-button>
+            <el-button :icon="RotateCcw" plain :loading="busy" @click="handleGenerate">重新生成</el-button>
             <div class="button-row">
               <el-button :icon="Save" plain @click="handleSaveCurrentReport">保存修改</el-button>
               <el-button :icon="ClipboardCopy" plain @click="copyReport">复制内容</el-button>
@@ -677,7 +853,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
             </div>
           </div>
           <el-button :icon="Send" type="primary" :loading="pushing" :disabled="!activeReportContent.trim()" @click="publishActiveReport">
-            {{ reportMode === 'concise' ? '立即发布简洁版到飞书' : '立即发布当前内容到飞书' }}
+            发布{{ activeRoleOption.label }}到飞书
           </el-button>
         </section>
 
