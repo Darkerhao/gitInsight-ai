@@ -1213,7 +1213,7 @@ textarea {
 
 .report-mode-switch {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(70px, 1fr));
+  grid-template-columns: repeat(3, minmax(86px, 1fr));
   gap: 4px;
   border-radius: 8px;
   background: #eef2f8;
@@ -1231,12 +1231,103 @@ textarea {
   font-size: 13px;
   font-weight: 700;
   padding: 0 10px;
+  white-space: nowrap;
 }
 
 .report-mode-switch button.active {
   background: #fff;
   color: var(--c-primary);
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.role-select-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.role-select-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.role-select-head strong {
+  color: var(--c-text);
+  font-size: 14px;
+}
+
+.role-select-head span {
+  color: var(--c-text-faint);
+  font-size: 12px;
+}
+
+.role-select-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.role-select-card-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  background: #fbfcff;
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.role-select-card-item:hover {
+  border-color: var(--c-primary);
+}
+
+.role-select-card-item.active {
+  border-color: var(--c-primary);
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+}
+
+.role-select-card-item strong {
+  color: var(--c-text);
+  font-size: 14px;
+}
+
+.role-select-card-item span {
+  color: var(--c-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.role-select-card-item small {
+  color: var(--c-text-faint);
+  font-size: 11px;
+}
+
+.role-select-card-item.active small {
+  color: var(--c-primary);
+}
+
+.material-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.material-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.material-field label {
+  color: var(--c-text);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .report-preview pre {
@@ -3128,6 +3219,7 @@ textarea {
   .metric-grid,
   .generation-check-grid,
   .repo-center-summary,
+  .role-select-grid,
   .field-grid.two-columns,
   .field-grid.three-columns,
   .field-grid.four-columns,

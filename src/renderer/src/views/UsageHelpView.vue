@@ -81,7 +81,7 @@ const quickStarts = [
   {
     key: 'generate',
     title: '日报生成',
-    desc: '从选中的仓库提取 Git 记录，生成日报正文并支持编辑。',
+    desc: '研发用 Git 提交自动生成，项目/产品经理填写工作素材由 AI 整理成日报。',
     action: 'generate',
     icon: Sparkles,
   },
@@ -110,7 +110,7 @@ const moduleGuides = [
   },
   {
     title: '日报生成',
-    desc: '生成日报正文，查看提交记录与影响文件',
+    desc: '按角色生成日报正文：研发看提交与影响文件，项目/产品经理填素材',
     action: 'generate',
     icon: FileText,
   },
@@ -126,6 +126,10 @@ const faqItems = [
   {
     q: '如何接入 AI？',
     a: '在日报配置页补齐 AI Base URL、API Key 和模型名称后即可生成日报。',
+  },
+  {
+    q: '三种日报角色有什么区别？数据来源一样吗？',
+    a: '数据来源不同：研发日报基于所选仓库的 Git 提交自动生成；项目经理日报和产品经理日报的事实来源不是 Git，需要在生成页填写对应的工作素材（推进事项、里程碑、需求进展、评审验收等），再由 AI 整理成日报。',
   },
   {
     q: '为什么消息中心没有数据？',

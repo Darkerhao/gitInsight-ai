@@ -11,8 +11,11 @@ import type {
   AutoSyncState,
   DailyReportRecord,
   ErrorLogRecord,
+  FeishuAuthSnapshot,
   FeishuFieldOption,
   FeishuProjectOption,
+  MaterialRole,
+  MaterialSection,
   RepoInfo,
   ReportResult,
   ReportTimeRange,
@@ -52,6 +55,7 @@ function createAssistant() {
   const report = ref('');
   const currentReportId = ref<number | null>(null);
   const lastReportResult = ref<ReportResult | null>(null);
+  const materialGenerating = ref(false);
   const dailyReports = ref<DailyReportRecord[]>([]);
   const syncLogs = ref<SyncLogRecord[]>([]);
   const errorLogs = ref<ErrorLogRecord[]>([]);
@@ -61,6 +65,8 @@ function createAssistant() {
   const advancedConfigPanels = ref<string[]>([]);
   const savedConfigSignature = ref('');
   let removeAutoSyncListener: (() => void) | null = null;
+  let removeFeishuAuthListener: (() => void) | null = null;
+  let lastAppliedFeishuAuthSignature = '';
 
   const config = reactive<AppConfig>({
     workspaceDir: '',
@@ -333,6 +339,48 @@ function createAssistant() {
     return saved;
   }
 
+  async function applyFeishuAuthSnapshot(snapshot: FeishuAuthSnapshot, options: { silent?: boolean } = {}) {
+    const nextShareToken = toPlainString(snapshot.shareToken).trim();
+    const nextEndpoint = toPlainString(snapshot.endpoint).trim();
+    const nextCookie = toPlainString(snapshot.cookie).trim();
+    const nextCsrfToken = toPlainString(snapshot.csrfToken).trim();
+    const signature = JSON.stringify({ endpoint: nextEndpoint, shareToken: nextShareToken, cookie: nextCookie, csrfToken: nextCsrfToken });
+
+    if (!nextEndpoint && !nextShareToken && !nextCookie && !nextCsrfToken) return false;
+    if (signature === lastAppliedFeishuAuthSignature) return false;
+
+    let changed = false;
+    if (nextEndpoint && config.feishuForm.endpoint !== nextEndpoint) {
+      config.feishuForm.endpoint = nextEndpoint;
+      changed = true;
+    }
+    if (nextShareToken && config.feishuForm.shareToken !== nextShareToken) {
+      config.feishuForm.shareToken = nextShareToken;
+      changed = true;
+    }
+    if (nextCookie && config.feishuForm.cookie !== nextCookie) {
+      config.feishuForm.cookie = nextCookie;
+      changed = true;
+    }
+    if (nextCsrfToken && config.feishuForm.csrfToken !== nextCsrfToken) {
+      config.feishuForm.csrfToken = nextCsrfToken;
+      changed = true;
+    }
+
+    if (!changed) return false;
+
+    if (!advancedConfigPanels.value.includes('feishu')) {
+      advancedConfigPanels.value = [...advancedConfigPanels.value, 'feishu'];
+    }
+
+    await persistConfig();
+    lastAppliedFeishuAuthSignature = signature;
+    if (!options.silent) {
+      ElMessage.success('飞书登录凭据已自动同步');
+    }
+    return true;
+  }
+
   function countResultFiles(result: ReportResult | null) {
     if (!result) return 0;
     return Array.from(new Set(result.commits.flatMap((commit) => commit.files))).length;
@@ -591,8 +639,9 @@ function createAssistant() {
     feishuLoading.value = true;
     try {
       await persistConfigBeforeAction('打开飞书登录');
-      await window.api.loginFeishu({ config: getConfigPayload().feishuForm });
-      ElMessage.success('已打开飞书登录窗口');
+      const snapshot = await window.api.loginFeishu({ config: getConfigPayload().feishuForm });
+      const synced = await applyFeishuAuthSnapshot(snapshot, { silent: true });
+      ElMessage.success(synced ? '飞书登录凭据已自动同步' : '已打开飞书登录窗口，登录成功后将自动同步凭据');
     } catch (error) {
       ElMessage.error(error instanceof Error ? error.message : '打开飞书登录失败');
     } finally {
@@ -729,6 +778,57 @@ function createAssistant() {
       ElMessage.error(error instanceof Error ? error.message : '生成失败');
     } finally {
       loading.value = false;
+    }
+  }
+
+  async function generateFromMaterial(role: MaterialRole, sections: MaterialSection[], extraNotes: string) {
+    if (!config.reporterName) {
+      ElMessage.warning('请先填写汇报人');
+      return;
+    }
+    const hasContent = sections.some((section) => section.content.trim()) || extraNotes.trim();
+    if (!hasContent) {
+      ElMessage.warning('请至少填写一项工作素材后再生成日报');
+      return;
+    }
+    materialGenerating.value = true;
+    try {
+      if (!config.aiApiKey) {
+        ElMessage.info('未配置 AI 接入，将按素材结构化排版生成');
+      }
+      const result = await window.api.generateReportFromMaterial({
+        role,
+        date: form.date,
+        reporterName: config.reporterName,
+        sections,
+        extraNotes,
+      });
+      // 素材来源没有 commit / 仓库信息，清空研发相关结果以免下游误用。
+      lastReportResult.value = null;
+      currentReportId.value = null;
+      report.value = result.report;
+      status.value = `已根据${role === 'projectManager' ? '项目经理' : '产品经理'}工作素材生成日报`;
+      ElMessage.success('日报已生成');
+    } catch (error) {
+      ElMessage.error(error instanceof Error ? error.message : '生成失败');
+    } finally {
+      materialGenerating.value = false;
+    }
+  }
+
+  async function persistRoleMaterial(role: MaterialRole, sections: MaterialSection[], extraNotes: string) {
+    try {
+      await window.api.saveRoleMaterial({ role, date: form.date, sections, extraNotes });
+    } catch (error) {
+      ElMessage.error(error instanceof Error ? error.message : '保存工作素材失败');
+    }
+  }
+
+  async function restoreRoleMaterial(role: MaterialRole) {
+    try {
+      return await window.api.loadRoleMaterial(role, form.date);
+    } catch {
+      return null;
     }
   }
 
@@ -889,13 +989,20 @@ function createAssistant() {
 
   async function init() {
     removeAutoSyncListener = window.api.onAutoSyncUpdated(applyAutoSyncState);
+    removeFeishuAuthListener = window.api.onFeishuAuthUpdated((snapshot) => {
+      void applyFeishuAuthSnapshot(snapshot).catch((error) => {
+        ElMessage.error(error instanceof Error ? error.message : '飞书登录凭据自动同步失败');
+      });
+    });
     await loadConfig();
     await refreshLocalData();
   }
 
   function dispose() {
     removeAutoSyncListener?.();
+    removeFeishuAuthListener?.();
     removeAutoSyncListener = null;
+    removeFeishuAuthListener = null;
   }
 
   return {
@@ -915,6 +1022,7 @@ function createAssistant() {
     report,
     currentReportId,
     lastReportResult,
+    materialGenerating,
     dailyReports,
     syncLogs,
     errorLogs,
@@ -952,6 +1060,9 @@ function createAssistant() {
     updateProjectWorkHours,
     testSubmitFeishu,
     generate,
+    generateFromMaterial,
+    persistRoleMaterial,
+    restoreRoleMaterial,
     generateAndPush,
     push,
     runAutoSyncNow,

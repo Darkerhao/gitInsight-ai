@@ -19,6 +19,7 @@ import type {
   CommitEntry,
   DailyReportRecord,
   ErrorLogRecord,
+  FeishuAuthSnapshot,
   FeishuFieldOption,
   FeishuFormConfig,
   FeishuLoginPayload,
@@ -26,10 +27,16 @@ import type {
   FeishuProjectOptionsPayload,
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
+  GenerateFromMaterialParams,
   GenerateReportParams,
+  MaterialReportResult,
+  MaterialRole,
+  MaterialSection,
   RepoInfo,
   ReportResult,
   ReportTimeRange,
+  RoleMaterialPayload,
+  RoleMaterialRecord,
   SaveDailyReportPayload,
   StorageInfo,
   SyncLogRecord,
@@ -60,10 +67,15 @@ const DB_FILE = 'gitinsight.db';
 let mainWindow: BrowserWindow | null = null;
 let feishuWindow: BrowserWindow | null = null;
 let autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let feishuAuthSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let removeFeishuAuthSessionWatcher: (() => void) | null = null;
+let lastFeishuAuthSignature = '';
 let autoSyncRunning = false;
 let sqlDatabase: import('sql.js').Database | null = null;
 
 const FEISHU_PARTITION = 'persist:feishu';
+const FEISHU_LOGIN_HOME_URL = 'https://www.feishu.cn/';
+const FEISHU_SHARE_SUBMIT_PATH = '/space/api/bitable/external/share/submit';
 
 function getWindowIconPath() {
   const platformCandidates = process.platform === 'darwin'
@@ -352,6 +364,15 @@ async function getDatabase() {
       detail TEXT,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS role_materials (
+      role TEXT NOT NULL,
+      date TEXT NOT NULL,
+      sections_json TEXT NOT NULL,
+      extra_notes TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (role, date)
+    );
   `);
   ensureDailyReportTimeRangeColumns(sqlDatabase);
   await persistDatabase();
@@ -540,6 +561,66 @@ async function listDailyReports(limit = 10): Promise<DailyReportRecord[]> {
     statement.free();
   }
   return records;
+}
+
+function normalizeMaterialSections(value: unknown): MaterialSection[] {
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+      .map((item) => ({
+        key: String(item.key || ''),
+        label: String(item.label || ''),
+        content: String(item.content || ''),
+      }))
+      .filter((section) => section.key);
+  } catch {
+    return [];
+  }
+}
+
+async function saveRoleMaterial(payload: RoleMaterialPayload): Promise<RoleMaterialRecord> {
+  const db = await getDatabase();
+  const now = new Date().toISOString();
+  const sectionsJson = JSON.stringify(payload.sections ?? []);
+  db.run(
+    `INSERT INTO role_materials (role, date, sections_json, extra_notes, updated_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(role, date) DO UPDATE SET
+       sections_json = excluded.sections_json,
+       extra_notes = excluded.extra_notes,
+       updated_at = excluded.updated_at`,
+    [payload.role, payload.date, sectionsJson, payload.extraNotes ?? '', now],
+  );
+  await persistDatabase();
+  return {
+    role: payload.role,
+    date: payload.date,
+    sections: normalizeMaterialSections(sectionsJson),
+    extraNotes: payload.extraNotes ?? '',
+    updatedAt: now,
+  };
+}
+
+async function loadRoleMaterial(role: MaterialRole, date: string): Promise<RoleMaterialRecord | null> {
+  const db = await getDatabase();
+  const statement = db.prepare('SELECT * FROM role_materials WHERE role = ? AND date = ? LIMIT 1');
+  try {
+    statement.bind([role, date]);
+    if (!statement.step()) return null;
+    const row = statement.getAsObject();
+    return {
+      role,
+      date,
+      sections: normalizeMaterialSections(row.sections_json),
+      extraNotes: String(row.extra_notes || ''),
+      updatedAt: String(row.updated_at || ''),
+    };
+  } finally {
+    statement.free();
+  }
 }
 
 async function listSyncLogs(limit = 20): Promise<SyncLogRecord[]> {
@@ -1257,6 +1338,125 @@ async function generateReport(params: GenerateReportParams): Promise<ReportResul
   return { ...result, historyId: record.id };
 }
 
+const MATERIAL_ROLE_LABELS: Record<MaterialRole, string> = {
+  projectManager: '项目经理',
+  productManager: '产品经理',
+};
+
+/** 把用户填写的分区素材拼成给 AI 或 fallback 使用的文本；空分区会被跳过。 */
+function formatMaterialSections(sections: MaterialSection[], extraNotes: string) {
+  const filledSections = sections.filter((section) => section.content.trim());
+  const sectionText = filledSections
+    .map((section) => `【${section.label}】\n${section.content.trim()}`)
+    .join('\n\n');
+  const normalizedNotes = extraNotes.trim();
+  const notesText = normalizedNotes ? `\n\n【补充说明】\n${normalizedNotes}` : '';
+  return {
+    hasContent: Boolean(filledSections.length || normalizedNotes),
+    text: `${sectionText}${notesText}`.trim(),
+  };
+}
+
+async function callAiMaterialReport(config: AppConfig, params: GenerateFromMaterialParams, materialText: string) {
+  const roleLabel = MATERIAL_ROLE_LABELS[params.role];
+  const prompt = `你是一名资深${roleLabel}。
+
+请根据以下我提供的工作素材，整理成一份正式的中文${roleLabel}日报。
+
+要求：
+1. 使用正式工作日报语言，条理清晰。
+2. 按素材中的分区归纳，同类事项合并表述。
+3. 只能依据我提供的素材整理，禁止补写、推断或编造素材中未出现的任何内容、结论或数据。
+4. 如某方面素材为空，则该部分不输出，不要用占位内容填充。
+5. 保留关键事实（进度、结论、风险、待确认事项等），不要丢失信息。
+
+日期：${params.date}
+汇报人：${params.reporterName}
+
+工作素材：
+${materialText}`;
+
+  const chatCompletionsUrl = getChatCompletionsUrl(config.aiBaseUrl);
+
+  const response = await fetch(chatCompletionsUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.aiApiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.aiModel,
+      messages: [
+        { role: 'system', content: `你是一名严谨的中文${roleLabel}日报助手，只依据用户提供的素材整理，绝不编造。` },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.3,
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(await buildAiErrorMessage(config, response, detail));
+  }
+
+  const data = await response.json();
+  const content = data?.choices?.[0]?.message?.content ?? '';
+  if (!content) {
+    throw new Error('AI接口未返回有效内容');
+  }
+  return content.trim();
+}
+
+/** 无 AI Key 或调用失败时，把素材结构化排版成日报，不做任何推断。 */
+function fallbackMaterialReport(params: GenerateFromMaterialParams) {
+  const roleLabel = MATERIAL_ROLE_LABELS[params.role];
+  const filledSections = params.sections.filter((section) => section.content.trim());
+  const sectionBlocks = filledSections.map((section, index) => {
+    const items = section.content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    return [`${index + 1}、${section.label}`, '', formatNumbered(items)].join('\n');
+  });
+  const normalizedNotes = params.extraNotes.trim();
+  const notesBlock = normalizedNotes ? ['补充说明：', '', normalizedNotes] : [];
+
+  return [
+    `${params.date} ${roleLabel}日报`,
+    '',
+    ...(sectionBlocks.length ? [sectionBlocks.join('\n\n')] : ['本时间段暂无填写的工作素材。']),
+    ...(notesBlock.length ? ['', ...notesBlock] : []),
+    '',
+    `汇报人：${params.reporterName}`,
+    `日期：${params.date}`,
+  ].join('\n');
+}
+
+async function generateReportFromMaterial(params: GenerateFromMaterialParams): Promise<MaterialReportResult> {
+  const config = await loadConfig();
+  const generatedAt = new Date().toISOString();
+  const { hasContent, text } = formatMaterialSections(params.sections, params.extraNotes);
+
+  if (!hasContent) {
+    throw new Error('请至少填写一项工作素材后再生成日报');
+  }
+
+  let report = '';
+  if (config.aiApiKey) {
+    try {
+      report = await callAiMaterialReport(config, params, text);
+    } catch (error) {
+      report = fallbackMaterialReport(params);
+      report = `${report}\n\nAI提示：${error instanceof Error ? error.message : '调用失败'}`;
+    }
+  } else {
+    report = fallbackMaterialReport(params);
+    report = `${report}\n\nAI提示：请先在设置中配置 OpenAI 兼容接口。`;
+  }
+
+  return { report, role: params.role, date: params.date, generatedAt };
+}
+
 function requireFeishuConfigValue(value: string, label: string) {
   const normalizedValue = value.trim();
   if (!normalizedValue) {
@@ -1353,14 +1553,69 @@ function getFeishuRequestContext(endpoint: string, shareToken: string) {
 
 function getFeishuFormPageUrl(config: FeishuFormConfig) {
   const endpoint = requireFeishuConfigValue(config.endpoint, '飞书表单提交接口地址');
-  const shareToken = requireFeishuConfigValue(config.shareToken, '飞书表单 shareToken');
+  const shareToken = requireFeishuConfigValue(getFeishuShareToken(config), '飞书表单 shareToken');
+  const { referer } = getFeishuRequestContext(endpoint, shareToken);
+  return referer;
+}
+
+function extractFeishuShareToken(value: string) {
+  const source = value.trim();
+  if (!source) return '';
+
+  try {
+    const url = new URL(source);
+    const queryToken = url.searchParams.get('shareToken')?.trim();
+    if (queryToken) return queryToken;
+
+    const formToken = url.pathname.match(/\/share\/base\/form\/([^/?#]+)/)?.[1];
+    if (formToken) return decodeURIComponent(formToken);
+  } catch {
+    // The value may already be a raw token or a partial URL.
+  }
+
+  const rawToken = source.match(/\bshr[a-zA-Z0-9_-]+\b/)?.[0];
+  return rawToken ?? '';
+}
+
+function getFeishuShareToken(config: FeishuFormConfig) {
+  return config.shareToken.trim() || extractFeishuShareToken(config.endpoint);
+}
+
+function getCurrentFeishuWindowShareToken() {
+  if (!feishuWindow || feishuWindow.isDestroyed()) return '';
+  return extractFeishuShareToken(feishuWindow.webContents.getURL());
+}
+
+function getCurrentFeishuWindowOrigin() {
+  if (!feishuWindow || feishuWindow.isDestroyed()) return '';
+  try {
+    const url = new URL(feishuWindow.webContents.getURL());
+    return url.origin;
+  } catch {
+    return '';
+  }
+}
+
+function inferFeishuSubmitEndpoint(origin: string) {
+  return origin ? `${origin}${FEISHU_SHARE_SUBMIT_PATH}` : '';
+}
+
+function getFeishuLoginTargetUrl(config: FeishuFormConfig) {
+  const endpoint = config.endpoint.trim();
+  const shareToken = getFeishuShareToken(config);
+  if (!endpoint) {
+    return FEISHU_LOGIN_HOME_URL;
+  }
+  if (!shareToken) {
+    return new URL(endpoint).origin;
+  }
   const { referer } = getFeishuRequestContext(endpoint, shareToken);
   return referer;
 }
 
 function getFeishuContentMetaUrl(config: FeishuFormConfig) {
   const endpoint = requireFeishuConfigValue(config.endpoint, '飞书表单提交接口地址');
-  const shareToken = requireFeishuConfigValue(config.shareToken, '飞书表单 shareToken');
+  const shareToken = requireFeishuConfigValue(getFeishuShareToken(config), '飞书表单 shareToken');
   const url = new URL(endpoint);
   url.pathname = '/space/api/bitable/external/share/content_meta';
   url.search = '';
@@ -1394,9 +1649,71 @@ function getFeishuCsrfToken(cookieHeader: string, fallbackCsrfToken: string) {
   return getCookieValue(cookieHeader, ['_csrf_token', 'swp_csrf_token']) || fallbackCsrfToken.trim();
 }
 
+async function readFeishuAuthSnapshot(config: FeishuFormConfig): Promise<FeishuAuthSnapshot> {
+  const currentOrigin = getCurrentFeishuWindowOrigin();
+  const currentShareToken = getCurrentFeishuWindowShareToken();
+  const shareToken = getFeishuShareToken(config) || currentShareToken;
+  const endpoint = config.endpoint.trim() || (currentShareToken ? inferFeishuSubmitEndpoint(currentOrigin) : '');
+  if (!endpoint) {
+    return {
+      endpoint,
+      shareToken,
+      cookie: config.cookie.trim(),
+      csrfToken: config.csrfToken.trim(),
+    };
+  }
+
+  const origin = new URL(endpoint).origin;
+  const cookie = await getFeishuCookieHeader(origin, config.cookie);
+  return {
+    endpoint,
+    shareToken,
+    cookie,
+    csrfToken: getFeishuCsrfToken(cookie, config.csrfToken),
+  };
+}
+
+function shouldEmitFeishuAuthSnapshot(snapshot: FeishuAuthSnapshot) {
+  return Boolean(snapshot.shareToken || snapshot.cookie || snapshot.csrfToken);
+}
+
+function emitFeishuAuthSnapshot(snapshot: FeishuAuthSnapshot) {
+  if (!mainWindow || mainWindow.isDestroyed() || !shouldEmitFeishuAuthSnapshot(snapshot)) return;
+
+  const signature = JSON.stringify(snapshot);
+  if (signature === lastFeishuAuthSignature) return;
+  lastFeishuAuthSignature = signature;
+  mainWindow.webContents.send('feishu:auth-updated', snapshot);
+}
+
+function scheduleFeishuAuthSync(config: FeishuFormConfig) {
+  if (feishuAuthSyncTimer) {
+    clearTimeout(feishuAuthSyncTimer);
+  }
+
+  feishuAuthSyncTimer = setTimeout(() => {
+    void readFeishuAuthSnapshot(config)
+      .then(emitFeishuAuthSnapshot)
+      .catch((error) => {
+        console.warn('Failed to sync Feishu auth snapshot:', error);
+      });
+  }, 500);
+}
+
+function watchFeishuAuthSession(config: FeishuFormConfig) {
+  removeFeishuAuthSessionWatcher?.();
+  const feishuSession = session.fromPartition(FEISHU_PARTITION);
+  const listener = () => scheduleFeishuAuthSync(config);
+  feishuSession.cookies.on('changed', listener);
+  removeFeishuAuthSessionWatcher = () => {
+    feishuSession.cookies.removeListener('changed', listener);
+    removeFeishuAuthSessionWatcher = null;
+  };
+}
+
 async function resolveFeishuAuth(formConfig: FeishuFormConfig, label: string) {
   const endpoint = requireFeishuConfigValue(formConfig.endpoint, '飞书表单提交接口地址');
-  const shareToken = requireFeishuConfigValue(formConfig.shareToken, '飞书表单 shareToken');
+  const shareToken = requireFeishuConfigValue(getFeishuShareToken(formConfig), '飞书表单 shareToken');
   const { origin, referer } = getFeishuRequestContext(endpoint, shareToken);
   const cookie = await getFeishuCookieHeader(origin, formConfig.cookie);
   const csrfToken = getFeishuCsrfToken(cookie, formConfig.csrfToken);
@@ -1513,7 +1830,7 @@ function parseFeishuProjectOptions(meta: unknown, projectFieldId: string): Feish
 
 async function fetchFeishuContentMeta(formConfig: FeishuFormConfig, label: string) {
   const endpoint = requireFeishuConfigValue(formConfig.endpoint, '飞书表单提交接口地址');
-  const shareToken = requireFeishuConfigValue(formConfig.shareToken, '飞书表单 shareToken');
+  const shareToken = requireFeishuConfigValue(getFeishuShareToken(formConfig), '飞书表单 shareToken');
   const { origin, referer } = getFeishuRequestContext(endpoint, shareToken);
   const cookie = await getFeishuCookieHeader(origin, formConfig.cookie);
   const headers: Record<string, string> = {
@@ -1629,13 +1946,16 @@ async function openFeishuLogin(payload: FeishuLoginPayload) {
     ...DEFAULT_FEISHU_FORM_CONFIG,
     ...payload.config,
   };
-  const targetUrl = getFeishuFormPageUrl(formConfig);
+  const targetUrl = getFeishuLoginTargetUrl(formConfig);
+  watchFeishuAuthSession(formConfig);
 
   if (feishuWindow && !feishuWindow.isDestroyed()) {
     feishuWindow.show();
     feishuWindow.focus();
     await feishuWindow.loadURL(targetUrl);
-    return true;
+    const snapshot = await readFeishuAuthSnapshot(formConfig);
+    emitFeishuAuthSnapshot(snapshot);
+    return snapshot;
   }
 
   feishuWindow = new BrowserWindow({
@@ -1656,9 +1976,14 @@ async function openFeishuLogin(payload: FeishuLoginPayload) {
   feishuWindow.on('closed', () => {
     feishuWindow = null;
   });
+  feishuWindow.webContents.on('did-navigate', () => scheduleFeishuAuthSync(formConfig));
+  feishuWindow.webContents.on('did-navigate-in-page', () => scheduleFeishuAuthSync(formConfig));
+  feishuWindow.webContents.on('did-finish-load', () => scheduleFeishuAuthSync(formConfig));
 
   await feishuWindow.loadURL(targetUrl);
-  return true;
+  const snapshot = await readFeishuAuthSnapshot(formConfig);
+  emitFeishuAuthSnapshot(snapshot);
+  return snapshot;
 }
 
 async function testSubmitFeishuForm(payload: FeishuTestSubmitPayload): Promise<FeishuSubmitResult> {
@@ -1667,7 +1992,7 @@ async function testSubmitFeishuForm(payload: FeishuTestSubmitPayload): Promise<F
     ...payload.config,
   };
   const endpoint = requireFeishuConfigValue(formConfig.endpoint, '飞书表单提交接口地址');
-  const shareToken = requireFeishuConfigValue(formConfig.shareToken, '飞书表单 shareToken');
+  const shareToken = requireFeishuConfigValue(getFeishuShareToken(formConfig), '飞书表单 shareToken');
   const data = buildFeishuTestFormData(formConfig, payload.date);
   const requestId = `gitinsight-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const auth = await resolveFeishuAuth(formConfig, '飞书测试提交失败');
@@ -1900,6 +2225,11 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle('repo:scan', async (_event, workspaceDir: string) => scanRepositories(workspaceDir));
   ipcMain.handle('report:generate', async (_event, params: GenerateReportParams) => generateReport(params));
+  ipcMain.handle('report:generate-from-material', async (_event, params: GenerateFromMaterialParams) => generateReportFromMaterial(params));
+  ipcMain.handle('role-material:save', async (_event, payload: RoleMaterialPayload) => saveRoleMaterial(payload));
+  ipcMain.handle('role-material:load', async (_event, params: { role: MaterialRole; date: string }) =>
+    loadRoleMaterial(params.role, params.date),
+  );
   ipcMain.handle('daily-report:list', async (_event, limit?: number) => listDailyReports(limit));
   ipcMain.handle('daily-report:save', async (_event, payload: SaveDailyReportPayload) => saveDailyReport(payload));
   ipcMain.handle('sync-log:list', async (_event, limit?: number) => listSyncLogs(limit));
@@ -1933,6 +2263,11 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   clearAutoSyncTimer();
+  if (feishuAuthSyncTimer) {
+    clearTimeout(feishuAuthSyncTimer);
+    feishuAuthSyncTimer = null;
+  }
+  removeFeishuAuthSessionWatcher?.();
 });
 
 app.on('activate', () => {

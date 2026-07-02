@@ -25,3 +25,12 @@
 - 完成 P2 体验闭环改动：历史查询命中时打开详情；日报配置页教程入口跳转使用帮助；小屏侧栏改为顶部横向紧凑导航并隐藏提示卡。
 - 完成 P2/P3 维护改动：清理 WelcomeGate 残留 `.donut-progress` 动画和 CSS；补充 favicon；设置页重置文案改为“重置同步默认值”；renderer 构建增加 vendor chunk 拆分。
 - 验证通过：`npm run typecheck`、`npm run build`、`git diff --check`、`rg -n "donut-progress|重置基础配置|请按左侧导航进入对应功能页"` 无残留结果。构建仍有第三方 `@vueuse/core` PURE 注释告警，属于既有依赖告警。
+- 用户要求先设计一版既可给研发使用，也可给项目经理、产品经理使用的 AI 日报助手。
+- 已读取 `planning-with-files-zh` 技能说明、既有规划文件、工作台、日报生成、历史日志、消息中心、共享类型和 `useAssistant`，确认本次只输出设计方案，不改动业务源码。
+- 设计方向确定为“一个事实底座，多角色报告视图”：复用 Git diff/commit/rawInput/历史/飞书链路，新增研发日报、项目经理进展日报、产品经理需求摘要和 AI 审阅问答能力。
+- 用户要求按已确认计划实现多角色 AI 日报助手 MVP。
+- 已新增 `docs/multi-role-ai-daily-assistant-plan.md`，记录产品目标、MVP 范围、交互、数据来源、风险控制、验收标准和后续迭代。
+- 已将 `ReportGenerateView.vue` 从“简洁版/完整版”改为“研发日报/项目经理日报/产品经理摘要”三角色草稿；保存、复制、导出、发布飞书均使用当前角色正文。
+- 已更新 `UsageHelpView.vue`，补充多角色日报入口和常见问题说明。
+- 已调整 `style.css` 中角色切换器为三列布局，避免三角色按钮挤压。
+- 验证通过：`npm run typecheck`、`npm run build`、`git diff --check`。构建仍有第三方 `@vueuse/core` PURE 注释告警，属于既有依赖告警。
