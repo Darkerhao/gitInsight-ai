@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAssistant } from '@/composables/useAssistant';
 import AppSidebar from '@/components/AppSidebar.vue';
@@ -12,9 +12,18 @@ import SystemSettingsView from '@/views/SystemSettingsView.vue';
 import { navKeys } from '@/router';
 import type { NavKey } from '@/router';
 
+type ThemeMode = 'light' | 'dark';
+type ViewTransitionDocument = Document & {
+  startViewTransition?: (callback: () => void) => {
+    finished: Promise<void>;
+  };
+};
+
 const assistant = useAssistant();
+const THEME_STORAGE_KEY = 'gitinsight:theme-mode';
 const WELCOME_STORAGE_KEY = 'gitinsight:welcome-finished';
 const WELCOME_ANIMATION_ENABLED_KEY = 'gitinsight:welcome-animation-enabled';
+const themeMode = ref<ThemeMode>(getInitialThemeMode());
 const showWelcome = ref(shouldShowWelcomeOnLaunch());
 const assistantReady = ref(false);
 const route = useRoute();
@@ -76,6 +85,92 @@ function handleNavigate(value: string) {
   void router.push({ path: `/${target}` });
 }
 
+function isThemeMode(value: string | null): value is ThemeMode {
+  return value === 'light' || value === 'dark';
+}
+
+function getInitialThemeMode(): ThemeMode {
+  try {
+    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (isThemeMode(storedTheme)) return storedTheme;
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
+function applyThemeMode(mode: ThemeMode) {
+  const root = document.documentElement;
+  root.dataset.theme = mode;
+  root.classList.toggle('dark', mode === 'dark');
+  root.style.colorScheme = mode;
+}
+
+function getThemeTransitionOrigin(event?: MouseEvent) {
+  const fallbackX = window.innerWidth - 72;
+  const fallbackY = 42;
+  const x = event?.clientX ?? fallbackX;
+  const y = event?.clientY ?? fallbackY;
+  const endX = Math.max(x, window.innerWidth - x);
+  const endY = Math.max(y, window.innerHeight - y);
+
+  return {
+    x,
+    y,
+    radius: Math.hypot(endX, endY),
+  };
+}
+
+function setThemeTransitionVars(event: MouseEvent | undefined, nextMode: ThemeMode) {
+  const root = document.documentElement;
+  const { x, y, radius } = getThemeTransitionOrigin(event);
+  root.style.setProperty('--theme-transition-x', `${x}px`);
+  root.style.setProperty('--theme-transition-y', `${y}px`);
+  root.style.setProperty('--theme-transition-radius', `${radius}px`);
+  root.dataset.themeTransition = nextMode;
+}
+
+function clearThemeTransitionVars() {
+  const root = document.documentElement;
+  root.removeAttribute('data-theme-transition');
+  root.style.removeProperty('--theme-transition-x');
+  root.style.removeProperty('--theme-transition-y');
+  root.style.removeProperty('--theme-transition-radius');
+}
+
+function runFallbackThemeTransition(nextMode: ThemeMode) {
+  const root = document.documentElement;
+  root.classList.add('theme-transition-fallback');
+  themeMode.value = nextMode;
+  window.setTimeout(() => {
+    root.classList.remove('theme-transition-fallback');
+    clearThemeTransitionVars();
+  }, 420);
+}
+
+function toggleThemeMode(event?: MouseEvent) {
+  const nextMode = themeMode.value === 'dark' ? 'light' : 'dark';
+  const viewTransitionDocument = document as ViewTransitionDocument;
+
+  setThemeTransitionVars(event, nextMode);
+
+  if (
+    !viewTransitionDocument.startViewTransition ||
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  ) {
+    runFallbackThemeTransition(nextMode);
+    return;
+  }
+
+  const transition = viewTransitionDocument.startViewTransition(() => {
+    themeMode.value = nextMode;
+  });
+
+  transition.finished.finally(clearThemeTransitionVars).catch(() => {
+    clearThemeTransitionVars();
+  });
+}
+
 function needsOnboarding() {
   return !assistant.config.workspaceDirs.length || !assistant.config.reporterName;
 }
@@ -100,6 +195,19 @@ function finishWelcome() {
   showWelcome.value = false;
 }
 
+watch(
+  themeMode,
+  (mode) => {
+    applyThemeMode(mode);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, mode);
+    } catch {
+      // Ignore storage failures; the in-memory theme still applies.
+    }
+  },
+  { flush: 'sync', immediate: true },
+);
+
 onMounted(async () => {
   await assistant.init();
   assistantReady.value = true;
@@ -120,7 +228,7 @@ onBeforeUnmount(() => {
     <AppSidebar v-model:active-nav="activeNav" />
 
     <main class="app-main">
-      <AppTopbar />
+      <AppTopbar :theme-mode="themeMode" @toggle-theme="toggleThemeMode" />
 
       <div class="app-scroll">
         <component :is="activeView" @navigate="handleNavigate" />
