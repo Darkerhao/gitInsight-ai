@@ -12,6 +12,7 @@ const emit = defineEmits<{
 
 type NavLeaf = { key: string; label: string; icon: Component; enabled: boolean };
 type NavGroup = { id: string; label: string; icon: Component; children: NavLeaf[] };
+type NavItem = ({ type: 'group' } & NavGroup) | ({ type: 'leaf' } & NavLeaf);
 
 const navGroups: NavGroup[] = [
   {
@@ -32,13 +33,18 @@ const navGroups: NavGroup[] = [
   },
 ];
 
-const activeGroupId = computed(() => {
+const navItems = computed<NavItem[]>(() => {
+  const items: NavItem[] = [];
+
   for (const group of navGroups) {
-    if (group.children.some((child) => child.key === props.activeNav)) {
-      return group.id;
+    if (group.children.length === 1) {
+      items.push({ ...group.children[0], type: 'leaf' });
+    } else {
+      items.push({ ...group, type: 'group' });
     }
   }
-  return '';
+
+  return items;
 });
 
 const compactNav = ref(typeof window !== 'undefined' ? window.matchMedia('(max-width: 920px)').matches : false);
@@ -46,7 +52,7 @@ let compactNavQuery: MediaQueryList | null = null;
 
 const menuMode = computed(() => (compactNav.value ? 'horizontal' : 'vertical'));
 const menuTrigger = computed(() => (compactNav.value ? 'click' : 'hover'));
-const menuDefaultOpeneds = computed(() => (compactNav.value || !activeGroupId.value ? [] : [activeGroupId.value]));
+const menuDefaultOpeneds = computed(() => (compactNav.value ? [] : navGroups.filter((group) => group.children.length > 1).map((group) => group.id)));
 const menuKey = computed(() => `${menuMode.value}:${menuDefaultOpeneds.value.join(',')}`);
 
 function updateCompactNav() {
@@ -87,17 +93,24 @@ onBeforeUnmount(() => {
         :collapse-transition="false"
         @select="onSelect"
       >
-        <el-sub-menu v-for="group in navGroups" :key="group.id" :index="group.id" popper-class="sidebar-menu-popper">
-          <template #title>
-            <component :is="group.icon" :size="18" class="sidebar-menu-icon" />
-            <span class="sidebar-menu-label">{{ group.label }}</span>
-          </template>
+        <template v-for="item in navItems" :key="item.type === 'group' ? item.id : item.key">
+          <el-sub-menu v-if="item.type === 'group'" :index="item.id" popper-class="sidebar-menu-popper">
+            <template #title>
+              <component :is="item.icon" :size="18" class="sidebar-menu-icon" />
+              <span class="sidebar-menu-label">{{ item.label }}</span>
+            </template>
 
-          <el-menu-item v-for="child in group.children" :key="child.key" :index="child.key" :disabled="!child.enabled">
-            <component :is="child.icon" :size="16" class="sidebar-menu-icon" />
-            <span class="sidebar-menu-label">{{ child.label }}</span>
+            <el-menu-item v-for="child in item.children" :key="child.key" :index="child.key" :disabled="!child.enabled">
+              <component :is="child.icon" :size="16" class="sidebar-menu-icon" />
+              <span class="sidebar-menu-label">{{ child.label }}</span>
+            </el-menu-item>
+          </el-sub-menu>
+
+          <el-menu-item v-else :index="item.key" :disabled="!item.enabled">
+            <component :is="item.icon" :size="18" class="sidebar-menu-icon" />
+            <span class="sidebar-menu-label">{{ item.label }}</span>
           </el-menu-item>
-        </el-sub-menu>
+        </template>
       </el-menu>
     </nav>
 
