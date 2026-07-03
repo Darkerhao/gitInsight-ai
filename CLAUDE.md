@@ -30,15 +30,15 @@ There is **no test framework** configured — no `test` script, no test runner. 
 
 Three Electron processes, each a separate bundle target in `electron.vite.config.ts`:
 
-- **Main** — [electron/main.ts](electron/main.ts) (~2000 lines, no submodules): all Node/filesystem/Git/network work. Owns the main window, the Feishu login window, config+secrets persistence, the sql.js database, the auto-sync scheduler, and every IPC handler.
+- **Main** — [electron/main.ts](electron/main.ts) is a thin lifecycle entry. Domain logic lives in [electron/main/](electron/main/): windows, config+secrets persistence, sql.js database, repo scanning, Git collection, AI report generation, Feishu auth/form submission, auto-sync scheduling, and IPC registration.
 - **Preload** — [electron/preload.ts](electron/preload.ts): `contextBridge` exposes a narrow, typed `window.api` (contextIsolation on, nodeIntegration off). The renderer has **no** direct Node access.
-- **Renderer** — [src/renderer/src/App.vue](src/renderer/src/App.vue) is a layout shell (sidebar + topbar + active view) plus a first-launch `WelcomeGate` animation. Navigation uses vue-router with hash history ([src/renderer/src/router.ts](src/renderer/src/router.ts)), but routes render nothing themselves — the route param is just nav state; `App.vue` maps it to one of four views in `src/renderer/src/views/` (`config`→ReportConfigView, `generate`→ReportGenerateView, `history`→HistoryLogsView, `system`→SystemSettingsView) and persists the last route in localStorage. All state and logic live in the module-level singleton composable [src/renderer/src/composables/useAssistant.ts](src/renderer/src/composables/useAssistant.ts) (~1000 lines) — the single source of truth; views and components under `src/renderer/src/components/` only consume it via `useAssistant()`. No store library.
+- **Renderer** — [src/renderer/src/App.vue](src/renderer/src/App.vue) is a layout shell (sidebar + topbar + active view) plus a first-launch `WelcomeGate` animation. Navigation uses vue-router with hash history ([src/renderer/src/router.ts](src/renderer/src/router.ts)), but routes render nothing themselves — the route param is just nav state; `App.vue` maps it to one of four views in `src/renderer/src/views/` (`config`→ReportConfigView, `generate`→ReportGenerateView, `history`→HistoryLogsView, `system`→SystemSettingsView) and persists the last route in localStorage. [src/renderer/src/composables/useAssistant.ts](src/renderer/src/composables/useAssistant.ts) remains the module-level singleton facade; state/actions are split by domain under [src/renderer/src/composables/assistant/](src/renderer/src/composables/assistant/). Views and components consume only `useAssistant()`. No store library.
 
 ### IPC is the only main↔renderer contract
 
 To add or change a feature that crosses the process boundary, edit **four** places in lockstep, or types and runtime drift silently:
 
-1. `ipcMain.handle('channel', ...)` in [electron/main.ts](electron/main.ts) (registered inside `app.whenReady()`).
+1. `ipcMain.handle('channel', ...)` in [electron/main/ipc.ts](electron/main/ipc.ts) via `registerIpcHandlers()`.
 2. The matching `ipcRenderer.invoke('channel', ...)` wrapper in [electron/preload.ts](electron/preload.ts).
 3. The `window.api` method signature in [src/renderer/src/env.d.ts](src/renderer/src/env.d.ts).
 4. Any shared payload/return shapes in [src/shared/types.ts](src/shared/types.ts).
@@ -47,7 +47,7 @@ Invoke channels: `app:load-config`, `app:save-config`, `dialog:select-directory`
 
 Main also **pushes** two events via `webContents.send` — `auto-sync:updated` (AutoSyncState) and `feishu:auth-updated` (FeishuAuthSnapshot) — exposed in preload as `onAutoSyncUpdated`/`onFeishuAuthUpdated` subscription functions that return an unsubscribe. Pushed payloads must be structured-cloneable (`toCloneable` strips reactivity/functions).
 
-### Report generation pipeline (the core domain logic, all in main.ts)
+### Report generation pipeline (the core domain logic in electron/main modules)
 
 `generateReport` → normalize the time range (a single day by default; `startDateTime`/`endDateTime` allow custom windows) → for each selected repo `collectGitData(repoPath, timeRange)`:
 
@@ -69,7 +69,7 @@ Resilience: if `config.aiApiKey` is empty, or the AI call throws, `generateRepor
 
 ### Auto-sync scheduler
 
-A `setTimeout`-based daily scheduler in main (`scheduleAutoSync`), re-armed on config save, app start, and `powerMonitor` resume. Idempotency across restarts is enforced with run keys (`lastRunKey`/`lastScheduledRunKey`/`lastSuccessKey` in `AutoSyncConfig`, derived from date + config fingerprint). A run generates the report for the configured time window (`full-day` or `yesterday-start-to-run`) and submits to Feishu, recording sync/error logs and emitting `auto-sync:updated`.
+A `setTimeout`-based daily scheduler in [electron/main/autoSync.ts](electron/main/autoSync.ts) (`scheduleAutoSync`), re-armed on config save, app start, and `powerMonitor` resume. Idempotency across restarts is enforced with run keys (`lastRunKey`/`lastScheduledRunKey`/`lastSuccessKey` in `AutoSyncConfig`, derived from date + config fingerprint). A run generates the report for the configured time window (`full-day` or `yesterday-start-to-run`) and submits to Feishu, recording sync/error logs and emitting `auto-sync:updated`.
 
 ### Feishu integration
 
@@ -83,6 +83,6 @@ No official API — it drives the Feishu daily-report **web form**: `feishu:logi
 
 - Path aliases (`electron.vite.config.ts` + `tsconfig.json`): `@` → `src/renderer/src`, `@shared` → `src/shared`. The renderer imports shared code as `@shared/types`; main/preload use relative `../src/shared/types.js` (note the `.js` extension required by the bundler config).
 - Renderer styling is global in [src/renderer/src/style.css](src/renderer/src/style.css) (a CSS-variable design-token system + Element Plus theme overrides, light/dark via a root attribute); components use global class names and have **no** scoped `<style>`.
-- The preload file is resolved at runtime in `createWindow()` with a fallback (`../preload/index.js` then `../preload/preload.cjs`) because dev and production emit different preload filenames.
+- The preload file is resolved at runtime in `createMainWindow()` with a fallback (`../preload/index.js` then `../preload/preload.cjs`) because dev and production emit different preload filenames.
 - User-facing strings, prompts, error messages, and the generated report are all in Chinese — match that when touching UI, errors, or AI-prompt text.
 - Design/plan documents live in `docs/` (in Chinese); `task_plan.md`/`findings.md`/`progress.md` at the repo root are working scratch files, not documentation.

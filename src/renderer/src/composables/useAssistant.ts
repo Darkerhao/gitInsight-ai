@@ -1,5 +1,5 @@
-import { computed, reactive, ref } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { reactive, ref } from 'vue';
+import { ElMessage } from 'element-plus';
 import {
   DEFAULT_AI_BASE_URL_OPTIONS,
   DEFAULT_AI_MODEL_OPTIONS,
@@ -11,31 +11,26 @@ import type {
   AutoSyncState,
   DailyReportRecord,
   ErrorLogRecord,
-  FeishuAuthSnapshot,
   FeishuFieldOption,
   FeishuProjectOption,
   RepoInfo,
   ReportResult,
-  ReportTimeRange,
   StorageInfo,
   SyncLogRecord,
 } from '@shared/types';
-
-function formatLocalDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function shiftLocalDate(date: string, deltaDays: number) {
-  const [year, month, day] = date.split('-').map(Number);
-  return formatLocalDate(new Date(year, month - 1, day + deltaDays));
-}
-
-function buildDateTime(date: string, time: string) {
-  return `${date}T${time}:00`;
-}
+import { createAutoSyncState } from './assistant/autoSyncState';
+import { createConfigState } from './assistant/configState';
+import { buildDateTime, formatLocalDate, shiftLocalDate } from './assistant/dateUtils';
+import { createFeishuState } from './assistant/feishuState';
+import { createLocalDataState } from './assistant/localDataState';
+import {
+  normalizeOptions,
+  normalizeProjectWorkHours,
+  normalizeRepoSelections,
+  normalizeWorkspaceDirs,
+} from './assistant/normalizers';
+import { createRepoState } from './assistant/repoState';
+import { createReportState } from './assistant/reportState';
 
 function createAssistant() {
   const today = formatLocalDate(new Date());
@@ -66,7 +61,6 @@ function createAssistant() {
 
   let removeAutoSyncListener: (() => void) | null = null;
   let removeFeishuAuthListener: (() => void) | null = null;
-  let lastAppliedFeishuAuthSignature = '';
 
   const config = reactive<AppConfig>({
     workspaceDir: '',
@@ -90,399 +84,82 @@ function createAssistant() {
     endDateTime: buildDateTime(tomorrow, '00:00'),
   });
 
-  function toPlainString(value: unknown) {
-    return typeof value === 'string' ? value : value == null ? '' : String(value);
-  }
+  let repoState: ReturnType<typeof createRepoState>;
+  let autoSyncStateApi: ReturnType<typeof createAutoSyncState>;
+  let reportState: ReturnType<typeof createReportState>;
 
-  function normalizeOptions(options: unknown[]) {
-    return Array.from(new Set(options.map((item) => toPlainString(item).trim()).filter(Boolean)));
-  }
-
-  function normalizeWorkspaceDirs(options: unknown[]) {
-    return Array.from(new Set(options.map((item) => toPlainString(item).trim()).filter(Boolean)));
-  }
-
-  function normalizeRepoSelections(paths: string[]) {
-    const selectedPathMap = new Map<string, string>();
-    for (const path of paths) {
-      if (path.trim()) selectedPathMap.set(getRepoKey(path), path);
-    }
-    return Array.from(selectedPathMap.values());
-  }
-
-  function normalizeWorkHours(value: unknown, fallback = DEFAULT_FEISHU_FORM_CONFIG.defaultWorkHours) {
-    const normalized = Number(value);
-    if (!Number.isFinite(normalized) || normalized <= 0) return fallback;
-    return Math.min(Math.max(normalized, 0.5), 24);
-  }
-
-  function normalizeProjectWorkHours(value: unknown) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .map(([key, hours]) => [key.trim(), normalizeWorkHours(hours)] as const)
-        .filter(([key]) => key),
-    );
-  }
-
-  function normalizeTimeValue(value: unknown) {
-    if (typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
-      return value;
-    }
-
-    if (value instanceof Date && !Number.isNaN(value.getTime())) {
-      return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
-    }
-
-    const maybeFormatter = (value as { format?: unknown } | null)?.format;
-    if (typeof maybeFormatter === 'function') {
-      try {
-        const formatted = maybeFormatter.call(value, 'HH:mm');
-        if (typeof formatted === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(formatted)) {
-          return formatted;
-        }
-      } catch {
-        // Fall through to default.
-      }
-    }
-
-    return DEFAULT_AUTO_SYNC_CONFIG.time;
-  }
-
-  function normalizeAutoSyncTimeWindowMode(value: unknown) {
-    return value === 'yesterday-start-to-run' ? 'yesterday-start-to-run' : DEFAULT_AUTO_SYNC_CONFIG.timeWindowMode;
-  }
-
-  function mergeCurrentOption(options: string[], currentValue: string) {
-    const normalizedValue = currentValue.trim();
-    if (!normalizedValue || options.includes(normalizedValue)) return options;
-    return [normalizedValue, ...options];
-  }
-
-  function getRepoKey(path: string) {
-    return path.trim().toLocaleLowerCase();
-  }
-
-  function getWorkspaceDirs() {
-    const workspaceDirs = normalizeWorkspaceDirs([...config.workspaceDirs, config.workspaceDir]);
-    config.workspaceDirs = workspaceDirs;
-    return workspaceDirs;
-  }
-
-  function mergeRepos(currentRepos: RepoInfo[], nextRepos: RepoInfo[]) {
-    const repoMap = new Map<string, RepoInfo>();
-    for (const repo of [...currentRepos, ...nextRepos]) {
-      repoMap.set(getRepoKey(repo.path), repo);
-    }
-    return Array.from(repoMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
-  }
-
-  function filterIgnoredRepos(repoItems: RepoInfo[]) {
-    const ignoredRepoKeys = new Set(normalizeRepoSelections(config.ignoredRepoPaths ?? []).map(getRepoKey));
-    return repoItems.filter((repo) => !ignoredRepoKeys.has(getRepoKey(repo.path)));
-  }
-
-  function sortReposForDisplay(repoItems: RepoInfo[]) {
-    const pinnedOrder = new Map(normalizeRepoSelections(config.pinnedRepoPaths ?? []).map((path, index) => [getRepoKey(path), index]));
-    return [...repoItems].sort((a, b) => {
-      const pinnedA = pinnedOrder.get(getRepoKey(a.path));
-      const pinnedB = pinnedOrder.get(getRepoKey(b.path));
-      if (pinnedA !== undefined && pinnedB !== undefined) return pinnedA - pinnedB;
-      if (pinnedA !== undefined) return -1;
-      if (pinnedB !== undefined) return 1;
-      return a.name.localeCompare(b.name, 'zh-Hans-CN');
-    });
-  }
-
-  async function scanWorkspaceDirs(workspaceDirs: string[], options: { includeIgnored?: boolean } = {}) {
-    const scannedGroups = await Promise.all(workspaceDirs.map((workspaceDir) => window.api.scanRepositories(workspaceDir)));
-    const scannedRepos = scannedGroups.flat();
-    return options.includeIgnored ? scannedRepos : filterIgnoredRepos(scannedRepos);
-  }
-
-  const reporterOptions = computed(() => (config.reporterName ? [config.reporterName] : []));
-  const aiBaseUrlOptions = computed(() => mergeCurrentOption(config.aiBaseUrlOptions, config.aiBaseUrl));
-  const aiModelOptions = computed(() => mergeCurrentOption(config.aiModelOptions, config.aiModel));
-  const pinnedRepoKeys = computed(() => new Set(normalizeRepoSelections(config.pinnedRepoPaths ?? []).map(getRepoKey)));
-  const sortedRepos = computed(() => sortReposForDisplay(repos.value));
-  const selectedRepos = computed(() => sortedRepos.value.filter((item) => selectedRepoPaths.value.includes(item.path)));
-  const autoSyncRunning = computed(() => autoSyncLoading.value || Boolean(autoSyncState.value?.isRunning));
-
-  const autoSyncStatusType = computed(() => {
-    const statusValue = autoSyncState.value?.lastStatus ?? config.autoSync.lastStatus;
-    if (statusValue === 'success') return 'success';
-    if (statusValue === 'failed') return 'danger';
-    if (statusValue === 'running') return 'warning';
-    if (statusValue === 'skipped') return 'info';
-    return 'info';
+  const configState = createConfigState({
+    config,
+    selectedRepoPaths,
+    savedConfigSignature,
+    getWorkspaceDirs: () => repoState.getWorkspaceDirs(),
+    getRepoKey: (path: string) => repoState.getRepoKey(path),
+    validateAutoSyncBeforeSave: (payload: AppConfig) => autoSyncStateApi.validateAutoSyncBeforeSave(payload),
+    refreshAutoSyncState: () => autoSyncStateApi.refreshAutoSyncState(),
   });
 
-  const autoSyncStatusLabel = computed(() => {
-    const statusValue = autoSyncState.value?.lastStatus ?? config.autoSync.lastStatus;
-    const statusMap: Record<string, string> = {
-      idle: '未执行',
-      running: '执行中',
-      success: '成功',
-      failed: '失败',
-      skipped: '已跳过',
-    };
-    return statusMap[statusValue] ?? '未执行';
+  repoState = createRepoState({
+    config,
+    repos,
+    selectedRepoPaths,
+    loading,
+    status,
+    persistConfig: () => configState.persistConfig(),
   });
 
-  function getConfigPayload(): AppConfig {
-    const workspaceDirs = getWorkspaceDirs();
-    const normalizedSelectedRepoPaths = normalizeRepoSelections(selectedRepoPaths.value);
-    const normalizedIgnoredRepoPaths = normalizeRepoSelections(config.ignoredRepoPaths ?? []);
-    const ignoredRepoKeys = new Set(normalizedIgnoredRepoPaths.map(getRepoKey));
-    const normalizedPinnedRepoPaths = normalizeRepoSelections(config.pinnedRepoPaths ?? []).filter(
-      (path) => !ignoredRepoKeys.has(getRepoKey(path)),
-    );
+  const localDataState = createLocalDataState({
+    dailyReports,
+    syncLogs,
+    errorLogs,
+    storageInfo,
+  });
 
-    selectedRepoPaths.value = normalizedSelectedRepoPaths;
-    config.selectedRepoPaths = normalizedSelectedRepoPaths;
-    config.ignoredRepoPaths = normalizedIgnoredRepoPaths;
-    config.pinnedRepoPaths = normalizedPinnedRepoPaths;
+  const feishuState = createFeishuState({
+    config,
+    form,
+    status,
+    feishuLoading,
+    fieldLoading,
+    projectLoading,
+    projectOptions,
+    feishuFieldOptions,
+    advancedConfigPanels,
+    getConfigPayload: () => configState.getConfigPayload(),
+    persistConfig: () => configState.persistConfig(),
+    persistConfigBeforeAction: (actionLabel: string) => configState.persistConfigBeforeAction(actionLabel),
+  });
 
-    return {
-      workspaceDir: toPlainString(config.workspaceDir),
-      workspaceDirs,
-      selectedRepoPaths: normalizedSelectedRepoPaths,
-      ignoredRepoPaths: normalizedIgnoredRepoPaths,
-      pinnedRepoPaths: normalizedPinnedRepoPaths,
-      reporterName: toPlainString(config.reporterName),
-      aiBaseUrl: toPlainString(config.aiBaseUrl),
-      aiApiKey: toPlainString(config.aiApiKey),
-      aiModel: toPlainString(config.aiModel),
-      aiBaseUrlOptions: normalizeOptions([...config.aiBaseUrlOptions, config.aiBaseUrl]),
-      aiModelOptions: normalizeOptions([...config.aiModelOptions, config.aiModel]),
-      feishuForm: {
-        endpoint: toPlainString(config.feishuForm.endpoint),
-        shareToken: toPlainString(config.feishuForm.shareToken),
-        csrfToken: toPlainString(config.feishuForm.csrfToken),
-        cookie: toPlainString(config.feishuForm.cookie),
-        reporterUserId: toPlainString(config.feishuForm.reporterUserId),
-        reporterName: toPlainString(config.feishuForm.reporterName),
-        reporterAvatarUrl: toPlainString(config.feishuForm.reporterAvatarUrl),
-        projectOptionId: toPlainString(config.feishuForm.projectOptionId),
-        projectName: toPlainString(config.feishuForm.projectName),
-        defaultWorkHours: normalizeWorkHours(config.feishuForm.defaultWorkHours),
-        projectWorkHours: normalizeProjectWorkHours(config.feishuForm.projectWorkHours),
-        questionId: toPlainString(config.feishuForm.questionId),
-        dateFieldId: toPlainString(config.feishuForm.dateFieldId),
-        userFieldId: toPlainString(config.feishuForm.userFieldId),
-        projectFieldId: toPlainString(config.feishuForm.projectFieldId),
-        hoursFieldId: toPlainString(config.feishuForm.hoursFieldId),
-        contentFieldId: toPlainString(config.feishuForm.contentFieldId),
-      },
-      autoSync: {
-        enabled: Boolean(config.autoSync.enabled),
-        time: normalizeTimeValue(config.autoSync.time),
-        timeWindowMode: normalizeAutoSyncTimeWindowMode(config.autoSync.timeWindowMode),
-        windowStartTime: normalizeTimeValue(config.autoSync.windowStartTime),
-        lastRunAt: toPlainString(config.autoSync.lastRunAt),
-        lastSuccessAt: toPlainString(config.autoSync.lastSuccessAt),
-        lastStatus: config.autoSync.lastStatus,
-        lastMessage: toPlainString(config.autoSync.lastMessage),
-        lastRunKey: toPlainString(config.autoSync.lastRunKey),
-        lastScheduledRunKey: toPlainString(config.autoSync.lastScheduledRunKey),
-        lastSuccessKey: toPlainString(config.autoSync.lastSuccessKey),
-      },
-    };
-  }
+  autoSyncStateApi = createAutoSyncState({
+    config,
+    status,
+    autoSyncLoading,
+    autoSyncState,
+    report,
+    lastReportResult,
+    currentReportId,
+    getConfigPayload: () => configState.getConfigPayload(),
+    persistConfigBeforeAction: (actionLabel: string) => configState.persistConfigBeforeAction(actionLabel),
+    applyReportTimeRange: (date: string, timeRange: any) => reportState.applyReportTimeRange(date, timeRange),
+    applyFullDayReportRange: (date: string) => reportState.applyFullDayReportRange(date),
+    refreshLocalData: () => localDataState.refreshLocalData(),
+    today,
+  });
 
-  function getEditableConfigSignature() {
-    return JSON.stringify({
-      workspaceDir: toPlainString(config.workspaceDir),
-      workspaceDirs: normalizeWorkspaceDirs([...(config.workspaceDirs ?? []), config.workspaceDir]),
-      selectedRepoPaths: normalizeRepoSelections(selectedRepoPaths.value),
-      ignoredRepoPaths: normalizeRepoSelections(config.ignoredRepoPaths ?? []),
-      pinnedRepoPaths: normalizeRepoSelections(config.pinnedRepoPaths ?? []),
-      reporterName: toPlainString(config.reporterName),
-      aiBaseUrl: toPlainString(config.aiBaseUrl),
-      aiApiKey: toPlainString(config.aiApiKey),
-      aiModel: toPlainString(config.aiModel),
-      aiBaseUrlOptions: normalizeOptions([...config.aiBaseUrlOptions, config.aiBaseUrl]),
-      aiModelOptions: normalizeOptions([...config.aiModelOptions, config.aiModel]),
-      feishuForm: {
-        ...config.feishuForm,
-        defaultWorkHours: normalizeWorkHours(config.feishuForm.defaultWorkHours),
-        projectWorkHours: normalizeProjectWorkHours(config.feishuForm.projectWorkHours),
-      },
-      autoSync: {
-        enabled: Boolean(config.autoSync.enabled),
-        time: normalizeTimeValue(config.autoSync.time),
-        timeWindowMode: normalizeAutoSyncTimeWindowMode(config.autoSync.timeWindowMode),
-        windowStartTime: normalizeTimeValue(config.autoSync.windowStartTime),
-      },
-    });
-  }
-
-  function markConfigSaved() {
-    savedConfigSignature.value = getEditableConfigSignature();
-  }
-
-  const isConfigDirty = computed(() => Boolean(savedConfigSignature.value) && savedConfigSignature.value !== getEditableConfigSignature());
-
-  async function persistConfig() {
-    const saved = await window.api.saveConfig(getConfigPayload());
-    markConfigSaved();
-    return saved;
-  }
-
-  async function persistConfigBeforeAction(actionLabel: string) {
-    const shouldNotify = isConfigDirty.value;
-    const saved = await persistConfig();
-    if (shouldNotify) {
-      ElMessage.info(`检测到配置修改，已先保存后${actionLabel}`);
-    }
-    return saved;
-  }
-
-  async function applyFeishuAuthSnapshot(snapshot: FeishuAuthSnapshot, options: { silent?: boolean } = {}) {
-    const nextShareToken = toPlainString(snapshot.shareToken).trim();
-    const nextEndpoint = toPlainString(snapshot.endpoint).trim();
-    const nextCookie = toPlainString(snapshot.cookie).trim();
-    const nextCsrfToken = toPlainString(snapshot.csrfToken).trim();
-    const signature = JSON.stringify({ endpoint: nextEndpoint, shareToken: nextShareToken, cookie: nextCookie, csrfToken: nextCsrfToken });
-
-    if (!nextEndpoint && !nextShareToken && !nextCookie && !nextCsrfToken) return false;
-    if (signature === lastAppliedFeishuAuthSignature) return false;
-
-    let changed = false;
-    if (nextEndpoint && config.feishuForm.endpoint !== nextEndpoint) {
-      config.feishuForm.endpoint = nextEndpoint;
-      changed = true;
-    }
-    if (nextShareToken && config.feishuForm.shareToken !== nextShareToken) {
-      config.feishuForm.shareToken = nextShareToken;
-      changed = true;
-    }
-    if (nextCookie && config.feishuForm.cookie !== nextCookie) {
-      config.feishuForm.cookie = nextCookie;
-      changed = true;
-    }
-    if (nextCsrfToken && config.feishuForm.csrfToken !== nextCsrfToken) {
-      config.feishuForm.csrfToken = nextCsrfToken;
-      changed = true;
-    }
-
-    if (!changed) return false;
-
-    if (!advancedConfigPanels.value.includes('feishu')) {
-      advancedConfigPanels.value = [...advancedConfigPanels.value, 'feishu'];
-    }
-
-    await persistConfig();
-    lastAppliedFeishuAuthSignature = signature;
-    if (!options.silent) {
-      ElMessage.success('飞书登录凭据已自动同步');
-    }
-    return true;
-  }
-
-  function countResultFiles(result: ReportResult | null) {
-    if (!result) return 0;
-    return Array.from(new Set(result.commits.flatMap((commit) => commit.files))).length;
-  }
-
-  async function refreshDailyReports() {
-    dailyReports.value = await window.api.listDailyReports(10);
-  }
-
-  async function refreshLocalData() {
-    const [reports, syncRecords, errorRecords, storage] = await Promise.all([
-      window.api.listDailyReports(50),
-      window.api.listSyncLogs(50),
-      window.api.listErrorLogs(50),
-      window.api.getStorageInfo(),
-    ]);
-    dailyReports.value = reports;
-    syncLogs.value = syncRecords;
-    errorLogs.value = errorRecords;
-    storageInfo.value = storage;
-  }
-
-  function applyAutoSyncState(state: AutoSyncState) {
-    autoSyncState.value = state;
-    Object.assign(config.autoSync, {
-      enabled: state.enabled,
-      time: state.time,
-      timeWindowMode: state.timeWindowMode,
-      windowStartTime: state.windowStartTime,
-      lastRunAt: state.lastRunAt,
-      lastSuccessAt: state.lastSuccessAt,
-      lastStatus: state.lastStatus,
-      lastMessage: state.lastMessage,
-      lastRunKey: state.lastRunKey,
-      lastScheduledRunKey: state.lastScheduledRunKey,
-      lastSuccessKey: state.lastSuccessKey,
-    });
-  }
-
-  async function refreshAutoSyncState() {
-    applyAutoSyncState(await window.api.getAutoSyncState());
-  }
-
-  function formatDateTime(value?: string) {
-    if (!value) return '暂无';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '暂无';
-    return new Intl.DateTimeFormat('zh-CN', {
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date);
-  }
-
-  function applyFullDayReportRange(date: string) {
-    form.date = date;
-    form.startDateTime = buildDateTime(date, '00:00');
-    form.endDateTime = buildDateTime(shiftLocalDate(date, 1), '00:00');
-  }
-
-  function applyReportTimeRange(date: string, timeRange?: ReportTimeRange) {
-    form.date = date;
-    if (timeRange?.startDateTime && timeRange.endDateTime) {
-      form.startDateTime = timeRange.startDateTime;
-      form.endDateTime = timeRange.endDateTime;
-      return;
-    }
-    applyFullDayReportRange(date);
-  }
-
-  function getReportRangePayload() {
-    const startMs = new Date(form.startDateTime).getTime();
-    const endMs = new Date(form.endDateTime).getTime();
-    if (Number.isNaN(startMs) || Number.isNaN(endMs) || startMs >= endMs) return null;
-    return {
-      startDateTime: form.startDateTime,
-      endDateTime: form.endDateTime,
-    };
-  }
-
-  function getCurrentReportTimeRange(): ReportTimeRange | undefined {
-    const payload = getReportRangePayload();
-    if (!payload) return undefined;
-
-    const resultRange = lastReportResult.value?.timeRange;
-    if (resultRange?.startDateTime === payload.startDateTime && resultRange.endDateTime === payload.endDateTime) {
-      return resultRange;
-    }
-
-    return {
-      ...payload,
-      label: `${formatDateTime(payload.startDateTime)} 至 ${formatDateTime(payload.endDateTime)}`,
-    };
-  }
-
-  async function validateAutoSyncBeforeSave(payload: AppConfig) {
-    if (!payload.autoSync.enabled) return true;
-    const result = await window.api.validateAutoSync(payload);
-    if (result.valid) return true;
-    ElMessage.warning(result.message);
-    return false;
-  }
+  reportState = createReportState({
+    config,
+    form,
+    loading,
+    pushing,
+    report,
+    currentReportId,
+    lastReportResult,
+    selectedRepoPaths,
+    selectedRepos: repoState.selectedRepos,
+    status,
+    persistConfigBeforeAction: (actionLabel: string) => configState.persistConfigBeforeAction(actionLabel),
+    getConfigPayload: () => configState.getConfigPayload(),
+    refreshLocalData: () => localDataState.refreshLocalData(),
+  });
 
   async function loadConfig() {
     const saved = await window.api.loadConfig();
@@ -531,423 +208,29 @@ function createAssistant() {
     ];
 
     if (config.feishuForm.shareToken) {
-      await loadFeishuFields({ silent: true });
+      await feishuState.loadFeishuFields({ silent: true });
       if (config.feishuForm.projectFieldId) {
-        await loadFeishuProjects({ silent: true });
+        await feishuState.loadFeishuProjects({ silent: true });
       }
     }
 
     if (config.workspaceDirs.length) {
-      await refreshRepos();
+      await repoState.refreshRepos();
     }
 
-    await refreshAutoSyncState();
-    markConfigSaved();
-  }
-
-  async function chooseWorkspace() {
-    const dir = await window.api.selectDirectory();
-    if (!dir) return;
-
-    loading.value = true;
-    try {
-      const scannedRepos = await scanWorkspaceDirs([dir], { includeIgnored: true });
-      if (!scannedRepos.length) {
-        status.value = '所选目录下未识别到 Git 仓库';
-        ElMessage.warning('未在所选目录下识别到 Git 仓库，请选择包含 .git 的项目目录或工作区');
-        return;
-      }
-
-      config.workspaceDir = dir;
-      config.workspaceDirs = normalizeWorkspaceDirs([...config.workspaceDirs, dir]);
-      const scannedRepoKeys = new Set(scannedRepos.map((repo) => getRepoKey(repo.path)));
-      config.ignoredRepoPaths = normalizeRepoSelections((config.ignoredRepoPaths ?? []).filter((path) => !scannedRepoKeys.has(getRepoKey(path))));
-      repos.value = mergeRepos(repos.value, scannedRepos);
-      selectedRepoPaths.value = normalizeRepoSelections([...selectedRepoPaths.value, ...scannedRepos.map((repo) => repo.path)]);
-      await persistConfig();
-      status.value = `已添加 ${scannedRepos.length} 个仓库，当前共 ${repos.value.length} 个仓库`;
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '扫描失败');
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  async function refreshRepos() {
-    const workspaceDirs = getWorkspaceDirs();
-    if (!workspaceDirs.length) {
-      repos.value = [];
-      selectedRepoPaths.value = [];
-      return;
-    }
-
-    loading.value = true;
-    try {
-      repos.value = mergeRepos([], await scanWorkspaceDirs(workspaceDirs));
-      const repoPathSet = new Set(repos.value.map((repo) => getRepoKey(repo.path)));
-      const selectedPaths = selectedRepoPaths.value.filter((path) => repoPathSet.has(getRepoKey(path)));
-      const firstDisplayRepo = sortReposForDisplay(repos.value)[0];
-      selectedRepoPaths.value = selectedPaths.length || !firstDisplayRepo ? selectedPaths : [firstDisplayRepo.path];
-      config.selectedRepoPaths = normalizeRepoSelections(selectedRepoPaths.value);
-      status.value = `已扫描到 ${repos.value.length} 个仓库`;
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '扫描失败');
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  async function saveSettings() {
-    const payload = getConfigPayload();
-    if (!(await validateAutoSyncBeforeSave(payload))) return;
-    try {
-      const saved = await persistConfig();
-      Object.assign(config.autoSync, {
-        ...DEFAULT_AUTO_SYNC_CONFIG,
-        ...saved.autoSync,
-      });
-      markConfigSaved();
-      await refreshAutoSyncState();
-      ElMessage.success('配置已保存');
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '配置保存失败');
-    }
-  }
-
-  function rememberAiBaseUrlOption(value: string) {
-    config.aiBaseUrlOptions = normalizeOptions([...config.aiBaseUrlOptions, value]);
-  }
-
-  function rememberAiModelOption(value: string) {
-    config.aiModelOptions = normalizeOptions([...config.aiModelOptions, value]);
-  }
-
-  async function removeAiBaseUrlOption(value: string) {
-    config.aiBaseUrlOptions = config.aiBaseUrlOptions.filter((item) => item !== value);
-    if (config.aiBaseUrl === value) config.aiBaseUrl = '';
-    await persistConfig();
-    ElMessage.success('接口地址选项已删除');
-  }
-
-  async function removeAiModelOption(value: string) {
-    config.aiModelOptions = config.aiModelOptions.filter((item) => item !== value);
-    if (config.aiModel === value) config.aiModel = '';
-    await persistConfig();
-    ElMessage.success('模型选项已删除');
-  }
-
-  async function loginFeishu() {
-    feishuLoading.value = true;
-    try {
-      await persistConfigBeforeAction('打开飞书登录');
-      const snapshot = await window.api.loginFeishu({ config: getConfigPayload().feishuForm });
-      const synced = await applyFeishuAuthSnapshot(snapshot, { silent: true });
-      ElMessage.success(synced ? '飞书登录凭据已自动同步' : '已打开飞书登录窗口，登录成功后将自动同步凭据');
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '打开飞书登录失败');
-    } finally {
-      feishuLoading.value = false;
-    }
-  }
-
-  async function loadFeishuFields(options: { silent?: boolean } = {}) {
-    fieldLoading.value = true;
-    try {
-      await persistConfigBeforeAction('解析飞书字段');
-      feishuFieldOptions.value = await window.api.listFeishuFields({ config: getConfigPayload().feishuForm });
-      status.value = `已解析 ${feishuFieldOptions.value.length} 个飞书表单字段`;
-      if (!options.silent) ElMessage.success('飞书字段已解析');
-    } catch (error) {
-      if (!options.silent) {
-        ElMessage.error(error instanceof Error ? error.message : '解析飞书字段失败');
-      }
-    } finally {
-      fieldLoading.value = false;
-    }
-  }
-
-  async function loadFeishuProjects(options: { silent?: boolean } = {}) {
-    if (!config.feishuForm.projectFieldId.trim()) {
-      if (!options.silent) ElMessage.warning('请先选择或填写所属项目字段 ID');
-      return;
-    }
-
-    projectLoading.value = true;
-    try {
-      await persistConfigBeforeAction('刷新飞书项目');
-      projectOptions.value = await window.api.listFeishuProjects({ config: getConfigPayload().feishuForm });
-      const selected = projectOptions.value.find((item) => item.id === config.feishuForm.projectOptionId);
-      if (selected) {
-        config.feishuForm.projectName = selected.name;
-      }
-      status.value = `已获取 ${projectOptions.value.length} 个飞书项目选项`;
-      if (!options.silent) ElMessage.success('飞书项目选项已刷新');
-    } catch (error) {
-      if (!options.silent) {
-        ElMessage.error(error instanceof Error ? error.message : '获取飞书项目列表失败');
-      }
-    } finally {
-      projectLoading.value = false;
-    }
-  }
-
-  function selectFeishuProject(optionId: string) {
-    const selected = projectOptions.value.find((item) => item.id === optionId);
-    config.feishuForm.projectName = selected?.name ?? '';
-    const projectHours = config.feishuForm.projectWorkHours?.[optionId];
-    config.feishuForm.defaultWorkHours = normalizeWorkHours(projectHours, config.feishuForm.defaultWorkHours);
-  }
-
-  function updateProjectWorkHours(value: number | undefined) {
-    const hours = normalizeWorkHours(value, config.feishuForm.defaultWorkHours);
-    config.feishuForm.defaultWorkHours = hours;
-    const optionId = config.feishuForm.projectOptionId.trim();
-    if (!optionId) return;
-    config.feishuForm.projectWorkHours = {
-      ...normalizeProjectWorkHours(config.feishuForm.projectWorkHours),
-      [optionId]: hours,
-    };
-  }
-
-  async function testSubmitFeishu() {
-    try {
-      await ElMessageBox.confirm('测试提交会向当前飞书表单写入一条带测试标记的真实记录，确认继续？', '确认测试提交', {
-        confirmButtonText: '写入测试记录',
-        cancelButtonText: '取消',
-        type: 'warning',
-      });
-    } catch (error) {
-      if (error !== 'cancel' && error !== 'close') {
-        ElMessage.error(error instanceof Error ? error.message : '测试提交已取消');
-      }
-      return;
-    }
-
-    feishuLoading.value = true;
-    try {
-      await persistConfigBeforeAction('测试提交');
-      const payloadConfig = {
-        ...getConfigPayload().feishuForm,
-        reporterName: config.feishuForm.reporterName || config.reporterName,
-      };
-      const result = await window.api.testSubmitFeishu({
-        config: payloadConfig,
-        date: form.date,
-      });
-      status.value = `飞书测试提交成功，code=${result.code}`;
-      ElMessage.success('飞书测试提交成功');
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '飞书测试提交失败');
-    } finally {
-      feishuLoading.value = false;
-    }
-  }
-
-  async function generate() {
-    if (!selectedRepos.value.length) {
-      ElMessage.warning('请至少选择一个项目');
-      return;
-    }
-    if (!config.reporterName) {
-      ElMessage.warning('请先填写汇报人');
-      return;
-    }
-    const reportRange = getReportRangePayload();
-    if (!reportRange) {
-      ElMessage.warning('请选择有效的提交时间段');
-      return;
-    }
-
-    loading.value = true;
-    try {
-      await persistConfigBeforeAction('生成日报');
-      const result = await window.api.generateReport({
-        repoPaths: [...selectedRepoPaths.value],
-        date: form.date,
-        ...reportRange,
-        reporterName: config.reporterName,
-      });
-      lastReportResult.value = result;
-      currentReportId.value = result.historyId ?? null;
-      report.value = result.report;
-      status.value = `已汇总 ${result.repos.length} 个仓库，生成 ${result.commits.length} 条记录`;
-      await refreshLocalData();
-      if (!result.commits.length) {
-        ElMessage.warning('未匹配到可用于生成日报的提交记录');
-        return;
-      }
-      ElMessage.success('日报已生成');
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '生成失败');
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  async function generateAndPush() {
-    await generate();
-    if (!report.value) return;
-    await push();
-  }
-
-  async function push(reportContent = report.value) {
-    const content = reportContent.trim();
-    if (!content) {
-      ElMessage.warning('请先生成日报');
-      return;
-    }
-
-    pushing.value = true;
-    try {
-      await persistConfigBeforeAction('同步飞书');
-      await window.api.syncFeishuDaily({
-        config: getConfigPayload().feishuForm,
-        report: content,
-        date: form.date,
-        reporterName: config.reporterName,
-        workHours: normalizeWorkHours(config.feishuForm.defaultWorkHours),
-        reportId: currentReportId.value ?? undefined,
-        triggerType: 'manual',
-      });
-      ElMessage.success('已同步到飞书日报表');
-      await refreshLocalData();
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '同步飞书失败');
-    } finally {
-      pushing.value = false;
-    }
-  }
-
-  async function runAutoSyncNow() {
-    const payload = getConfigPayload();
-    if (!(await validateAutoSyncBeforeSave(payload))) return;
-
-    autoSyncLoading.value = true;
-    try {
-      await persistConfigBeforeAction('执行自动同步');
-      const result = await window.api.runAutoSyncNow(getConfigPayload());
-      status.value = result.message;
-      if (result.report) {
-        report.value = result.report;
-        lastReportResult.value = null;
-        currentReportId.value = null;
-        if (result.date) {
-          applyReportTimeRange(result.date, result.timeRange);
-        } else {
-          applyFullDayReportRange(today);
-        }
-      }
-
-      if (result.status === 'success') ElMessage.success(result.message);
-      else if (result.status === 'skipped') ElMessage.warning(result.message);
-      else if (result.status === 'failed') ElMessage.error(result.message);
-      else ElMessage.info(result.message);
-
-      await refreshAutoSyncState();
-      await refreshLocalData();
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '自动同步执行失败');
-    } finally {
-      autoSyncLoading.value = false;
-    }
-  }
-
-  async function saveRepoSelection() {
-    try {
-      await persistConfig();
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '保存项目选择失败');
-    }
-  }
-
-  function toggleRepo(path: string) {
-    const hasSelected = selectedRepoPaths.value.includes(path);
-    if (hasSelected) {
-      selectedRepoPaths.value = selectedRepoPaths.value.filter((item) => item !== path);
-    } else {
-      selectedRepoPaths.value = [...selectedRepoPaths.value, path];
-    }
-    void saveRepoSelection();
-  }
-
-  function isRepoPinned(path: string) {
-    return pinnedRepoKeys.value.has(getRepoKey(path));
-  }
-
-  async function toggleRepoPin(path: string) {
-    const repo = repos.value.find((item) => getRepoKey(item.path) === getRepoKey(path));
-    const repoPath = repo?.path ?? path;
-    const repoKey = getRepoKey(repoPath);
-    const pinnedRepoPaths = normalizeRepoSelections(config.pinnedRepoPaths ?? []);
-    const alreadyPinned = pinnedRepoPaths.some((item) => getRepoKey(item) === repoKey);
-    config.pinnedRepoPaths = alreadyPinned
-      ? pinnedRepoPaths.filter((item) => getRepoKey(item) !== repoKey)
-      : [repoPath, ...pinnedRepoPaths.filter((item) => getRepoKey(item) !== repoKey)];
-
-    try {
-      await persistConfig();
-      ElMessage.success(alreadyPinned ? '已取消置顶项目' : '项目已置顶');
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '保存项目置顶状态失败');
-    }
-  }
-
-  async function removeRepo(path: string) {
-    const repo = repos.value.find((item) => getRepoKey(item.path) === getRepoKey(path));
-    const repoPath = repo?.path ?? path;
-    const repoKey = getRepoKey(repoPath);
-    repos.value = repos.value.filter((item) => getRepoKey(item.path) !== repoKey);
-    selectedRepoPaths.value = selectedRepoPaths.value.filter((item) => getRepoKey(item) !== repoKey);
-    config.selectedRepoPaths = normalizeRepoSelections(selectedRepoPaths.value);
-    config.ignoredRepoPaths = normalizeRepoSelections([...(config.ignoredRepoPaths ?? []), repoPath]);
-    config.pinnedRepoPaths = normalizeRepoSelections(config.pinnedRepoPaths ?? []).filter((item) => getRepoKey(item) !== repoKey);
-    config.workspaceDirs = normalizeWorkspaceDirs((config.workspaceDirs ?? []).filter((item) => getRepoKey(item) !== repoKey));
-    if (getRepoKey(config.workspaceDir) === repoKey) {
-      config.workspaceDir = config.workspaceDirs[0] ?? '';
-    }
-    await persistConfig();
-    status.value = `已从项目列表移除 ${repo?.name ?? repoPath}`;
-    ElMessage.success('项目已从列表移除，本地文件不会被删除');
-  }
-
-  async function saveCurrentReport(reportContent = report.value) {
-    const content = reportContent.trim();
-    if (!content) {
-      ElMessage.warning('当前没有可保存的日报内容');
-      return null;
-    }
-
-    const selected = selectedRepos.value;
-    const result = lastReportResult.value;
-    const record = await window.api.saveDailyReport({
-      id: currentReportId.value ?? undefined,
-      date: form.date,
-      reporterName: config.reporterName,
-      repoNames: result?.repos.map((item) => item.name) ?? selected.map((item) => item.name),
-      repoPaths: result?.repos.map((item) => item.path) ?? selected.map((item) => item.path),
-      report: content,
-      status: result?.commits.length ? 'success' : 'draft',
-      commitsCount: result?.commits.length ?? 0,
-      filesCount: countResultFiles(result),
-      generatedAt: result?.generatedAt,
-      timeRange: getCurrentReportTimeRange(),
-      rawInput: result?.rawInput,
-    });
-    currentReportId.value = record.id;
-    await refreshLocalData();
-    ElMessage.success('日报已保存');
-    return record;
+    await autoSyncStateApi.refreshAutoSyncState();
+    configState.markConfigSaved();
   }
 
   async function init() {
-    removeAutoSyncListener = window.api.onAutoSyncUpdated(applyAutoSyncState);
+    removeAutoSyncListener = window.api.onAutoSyncUpdated(autoSyncStateApi.applyAutoSyncState);
     removeFeishuAuthListener = window.api.onFeishuAuthUpdated((snapshot) => {
-      void applyFeishuAuthSnapshot(snapshot).catch((error) => {
-        ElMessage.error(error instanceof Error ? error.message : '飞书登录凭据自动同步失败');
+      void feishuState.applyFeishuAuthSnapshot(snapshot).catch((error: unknown) => {
+        ElMessage.error(error instanceof Error ? error.message : '??????????????????');
       });
     });
     await loadConfig();
-    await refreshLocalData();
+    await localDataState.refreshLocalData();
   }
 
   function dispose() {
@@ -981,42 +264,42 @@ function createAssistant() {
     advancedConfigPanels,
     config,
     form,
-    reporterOptions,
-    aiBaseUrlOptions,
-    aiModelOptions,
-    sortedRepos,
-    selectedRepos,
-    autoSyncRunning,
-    autoSyncStatusType,
-    autoSyncStatusLabel,
-    isConfigDirty,
-    applyFullDayReportRange,
-    applyReportTimeRange,
-    formatDateTime,
-    chooseWorkspace,
-    refreshRepos,
-    saveSettings,
-    rememberAiBaseUrlOption,
-    rememberAiModelOption,
-    removeAiBaseUrlOption,
-    removeAiModelOption,
-    loginFeishu,
-    loadFeishuProjects,
-    loadFeishuFields,
-    selectFeishuProject,
-    updateProjectWorkHours,
-    testSubmitFeishu,
-    generate,
-    generateAndPush,
-    push,
-    runAutoSyncNow,
-    refreshDailyReports,
-    refreshLocalData,
-    saveCurrentReport,
-    toggleRepo,
-    isRepoPinned,
-    toggleRepoPin,
-    removeRepo,
+    reporterOptions: configState.reporterOptions,
+    aiBaseUrlOptions: configState.aiBaseUrlOptions,
+    aiModelOptions: configState.aiModelOptions,
+    sortedRepos: repoState.sortedRepos,
+    selectedRepos: repoState.selectedRepos,
+    autoSyncRunning: autoSyncStateApi.autoSyncRunning,
+    autoSyncStatusType: autoSyncStateApi.autoSyncStatusType,
+    autoSyncStatusLabel: autoSyncStateApi.autoSyncStatusLabel,
+    isConfigDirty: configState.isConfigDirty,
+    applyFullDayReportRange: reportState.applyFullDayReportRange,
+    applyReportTimeRange: reportState.applyReportTimeRange,
+    formatDateTime: reportState.formatDateTime,
+    chooseWorkspace: repoState.chooseWorkspace,
+    refreshRepos: repoState.refreshRepos,
+    saveSettings: configState.saveSettings,
+    rememberAiBaseUrlOption: configState.rememberAiBaseUrlOption,
+    rememberAiModelOption: configState.rememberAiModelOption,
+    removeAiBaseUrlOption: configState.removeAiBaseUrlOption,
+    removeAiModelOption: configState.removeAiModelOption,
+    loginFeishu: feishuState.loginFeishu,
+    loadFeishuProjects: feishuState.loadFeishuProjects,
+    loadFeishuFields: feishuState.loadFeishuFields,
+    selectFeishuProject: feishuState.selectFeishuProject,
+    updateProjectWorkHours: feishuState.updateProjectWorkHours,
+    testSubmitFeishu: feishuState.testSubmitFeishu,
+    generate: reportState.generate,
+    generateAndPush: reportState.generateAndPush,
+    push: reportState.push,
+    runAutoSyncNow: autoSyncStateApi.runAutoSyncNow,
+    refreshDailyReports: localDataState.refreshDailyReports,
+    refreshLocalData: localDataState.refreshLocalData,
+    saveCurrentReport: reportState.saveCurrentReport,
+    toggleRepo: repoState.toggleRepo,
+    isRepoPinned: repoState.isRepoPinned,
+    toggleRepoPin: repoState.toggleRepoPin,
+    removeRepo: repoState.removeRepo,
     init,
     dispose,
   };
