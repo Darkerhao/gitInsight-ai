@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-GitInsight AI (中文界面 "AI日报助手") is an Electron desktop app that scans local Git repositories, summarizes a day's commits into a Chinese work report via an OpenAI-compatible chat API, and syncs it to a Feishu daily report form. Stack: Electron + Vue 3 (`<script setup>`) + Element Plus + TypeScript, bundled with electron-vite.
+GitInsight AI (中文界面 "AI日报助手") is an Electron desktop app that scans local Git repositories, summarizes a time range of commits into a Chinese work report via an OpenAI-compatible chat API, and syncs it to a Feishu daily report form — manually or on a daily auto-sync schedule. Report/sync/error history is persisted locally in SQLite. Stack: Electron + Vue 3 (`<script setup>`) + Vue Router + Element Plus + TypeScript, bundled with electron-vite.
+
+The app ships as two **editions**, Lite (简洁版) and Standard (标准版). Editions are resolved at build time from the `APP_EDITION` env var (`electron.vite.config.ts` turns it into `__APP_EDITION__`/`__APP_EDITION_LABEL__`/`__APP_PRODUCT_NAME__` defines, read by [src/shared/edition.ts](src/shared/edition.ts); `electron-builder.config.cjs` picks appId/productName/output dir from it). Currently the editions differ **only in branding and packaging** — there is no feature gating in code.
 
 ## Commands
 
@@ -12,21 +14,25 @@ GitInsight AI (中文界面 "AI日报助手") is an Electron desktop app that sc
 npm run dev        # electron-vite dev with HMR (renderer served at 127.0.0.1:5174, strictPort)
 npm run build      # bundle main + preload + renderer into out/
 npm start          # electron . — runs the already-built out/main/main.js (run build first)
-npm run preview    # electron-vite preview
 npm run typecheck  # vue-tsc --noEmit (the only static check; there is no ESLint/Prettier)
+npm run check      # typecheck + build
 ```
 
 There is **no test framework** configured — no `test` script, no test runner. Do not assume one exists.
 
 `npm run dev` requires TCP port **5174** to be free (`strictPort: true`). On Windows this commonly fails with `listen EACCES ... 127.0.0.1:5174` when the port is in an excluded/reserved range (see `dev.stderr.log`); change the port in `electron.vite.config.ts` if so.
 
+### Packaging & release
+
+`npm run dist:<win|mac|linux>:<lite|standard>` (or `npm run dist -- --edition lite --win`) runs [scripts/dist-edition.mjs](scripts/dist-edition.mjs), which builds then invokes electron-builder with `APP_EDITION` set; artifacts land in `release/<version>/<edition>/`. `npm run release:tag` tags `v<package.json version>` (refuses on dirty tree or existing tag) and pushes it; GitHub Actions (`.github/workflows/release.yml`) then builds both editions as Release assets. sql.js's wasm is `asarUnpack`ed — keep `node_modules/sql.js/**` in the builder `files` list.
+
 ## Architecture
 
 Three Electron processes, each a separate bundle target in `electron.vite.config.ts`:
 
-- **Main** — [electron/main.ts](electron/main.ts): all Node/filesystem/Git/network work lives here. Owns the window and every IPC handler.
-- **Preload** — [electron/preload.ts](electron/preload.ts): `contextBridge` exposes a narrow, typed `window.api` (contextIsolation is on, nodeIntegration off). The renderer has **no** direct Node access.
-- **Renderer** — [src/renderer/src/App.vue](src/renderer/src/App.vue) is a thin layout shell (sidebar + topbar + center config column + right info aside). All renderer state and logic live in a single module-level singleton composable [src/renderer/src/composables/useAssistant.ts](src/renderer/src/composables/useAssistant.ts); presentational pieces are split under `src/renderer/src/components/` (`AppSidebar`, `AppTopbar`, `panels/*`, `aside/*`, `common/SectionTitle`). No router, no store, no component library beyond Element Plus. To change behavior, edit `useAssistant.ts` (the single source of truth) — components only consume it via `useAssistant()`. The sidebar shows 5 nav items but only **日报配置** is implemented; the rest are visual placeholders (`ElMessage.info('敬请期待')`). The right aside's stat cards / sync-log history are visual — the backend only persists a single last-sync state, so they show derived-or-placeholder data, not real history.
+- **Main** — [electron/main.ts](electron/main.ts) (~2000 lines, no submodules): all Node/filesystem/Git/network work. Owns the main window, the Feishu login window, config+secrets persistence, the sql.js database, the auto-sync scheduler, and every IPC handler.
+- **Preload** — [electron/preload.ts](electron/preload.ts): `contextBridge` exposes a narrow, typed `window.api` (contextIsolation on, nodeIntegration off). The renderer has **no** direct Node access.
+- **Renderer** — [src/renderer/src/App.vue](src/renderer/src/App.vue) is a layout shell (sidebar + topbar + active view) plus a first-launch `WelcomeGate` animation. Navigation uses vue-router with hash history ([src/renderer/src/router.ts](src/renderer/src/router.ts)), but routes render nothing themselves — the route param is just nav state; `App.vue` maps it to one of four views in `src/renderer/src/views/` (`config`→ReportConfigView, `generate`→ReportGenerateView, `history`→HistoryLogsView, `system`→SystemSettingsView) and persists the last route in localStorage. All state and logic live in the module-level singleton composable [src/renderer/src/composables/useAssistant.ts](src/renderer/src/composables/useAssistant.ts) (~1000 lines) — the single source of truth; views and components under `src/renderer/src/components/` only consume it via `useAssistant()`. No store library.
 
 ### IPC is the only main↔renderer contract
 
@@ -37,30 +43,46 @@ To add or change a feature that crosses the process boundary, edit **four** plac
 3. The `window.api` method signature in [src/renderer/src/env.d.ts](src/renderer/src/env.d.ts).
 4. Any shared payload/return shapes in [src/shared/types.ts](src/shared/types.ts).
 
-Current channels: `app:load-config`, `app:save-config`, `dialog:select-directory`, `repo:scan`, `report:generate`, `feishu:login`, `feishu:list-projects`, `feishu:test-submit`, `report:sync-feishu`.
+Invoke channels: `app:load-config`, `app:save-config`, `dialog:select-directory`, `repo:scan`, `report:generate`, `daily-report:list`, `daily-report:save`, `sync-log:list`, `error-log:list`, `storage:info`, `feishu:login`, `feishu:list-fields`, `feishu:list-projects`, `feishu:test-submit`, `report:sync-feishu`, `auto-sync:get-state`, `auto-sync:validate`, `auto-sync:run-now`.
+
+Main also **pushes** two events via `webContents.send` — `auto-sync:updated` (AutoSyncState) and `feishu:auth-updated` (FeishuAuthSnapshot) — exposed in preload as `onAutoSyncUpdated`/`onFeishuAuthUpdated` subscription functions that return an unsubscribe. Pushed payloads must be structured-cloneable (`toCloneable` strips reactivity/functions).
 
 ### Report generation pipeline (the core domain logic, all in main.ts)
 
-`generateReport` → for each selected repo `collectGitData(repoPath, date)`:
-- Runs `git log` for the single day (`--since`/`--until` span midnight-to-midnight, `--no-merges`) with a `__COMMIT__` marker + `%x09` tab format that is parsed line-by-line into `CommitEntry[]`.
-- Runs `git show --stat` per commit; each diff is truncated to 4000 chars, the combined diff to 12000 chars (LLM context budgeting — preserve these caps when editing).
-- Builds a fixed Chinese prompt and calls `callAiReport` against the OpenAI-compatible `/chat/completions` endpoint.
+`generateReport` → normalize the time range (a single day by default; `startDateTime`/`endDateTime` allow custom windows) → for each selected repo `collectGitData(repoPath, timeRange)`:
+
+- `git log` via **simple-git** with a `__COMMIT__` marker + `%x09` tab format parsed line-by-line into `CommitEntry[]`. Filtering is deliberately two-phase: a coarse `--since` at *committer* date (range start minus 2 days, no `--until`), then a precise JS filter on *author* date (`%ad`) against the range — because rebase/merge refreshes committer date while author date keeps the original authoring time. Don't "simplify" this back to `--since`/`--until`.
+- Commits are then filtered to those whose git author matches `reporterName` (case-insensitive).
+- `git show --stat --summary` per commit; each capped at 4000 chars, the combined diff at 12000 chars (LLM context budgeting — preserve these caps).
+- A fixed Chinese prompt goes to `callAiReport` against the OpenAI-compatible `/chat/completions` endpoint.
+- Every generated report is recorded into the local DB (`recordGeneratedReport`), returning a `historyId` the renderer uses for later saves/syncs.
 
 Resilience: if `config.aiApiKey` is empty, or the AI call throws, `generateReport` returns a locally-templated `fallbackReport` instead and appends an `AI提示：...` note — it never rejects to the UI. When changing report logic, keep both the AI path and the fallback path working.
 
-`aiBaseUrl` is normalized so the user may enter either a base like `https://api.openai.com/v1` (→ `/chat/completions`, `/models` are appended) or a full `.../chat/completions` URL. On a 404 "unsupported model" error, it queries `/models` to suggest alternatives.
+`aiBaseUrl` is normalized so the user may enter either a base like `https://api.openai.com/v1` (→ `/chat/completions`, `/models` appended) or a full `.../chat/completions` URL. On a 404 "unsupported model" error, it queries `/models` to suggest alternatives.
 
-### Config persistence
+### Persistence (three files in `app.getPath('userData')`, none in the repo)
 
-`AppConfig` (workspace dir, reporter name, AI base URL / key / model, Feishu form config) is stored as `config.json` in Electron's `app.getPath('userData')` — **not** in the repo. `loadConfig` always spreads over `DEFAULT_CONFIG`, so adding a field there makes it backward-compatible automatically.
+- **config.json** — `AppConfig` minus secrets. `normalizeConfig` always spreads over defaults, so new fields are backward-compatible automatically.
+- **secrets.json** — `aiApiKey` + Feishu `cookie`/`csrfToken`, encrypted with Electron `safeStorage`. These fields are stripped from config.json on save and merged back on load. If OS-level encryption is unavailable, `saveConfig` **throws** rather than writing secrets in plaintext.
+- **gitinsight.db** — SQLite via **sql.js** (in-memory, explicitly persisted to disk after writes by `persistDatabase`). Tables: `daily_reports`, `sync_logs`, `error_logs`. Schema is created with `CREATE TABLE IF NOT EXISTS` in `getDatabase()`; column additions are handled by ad-hoc migration helpers (e.g. `ensureDailyReportTimeRangeColumns`). In production the wasm loads from `app.asar.unpacked`.
+
+### Auto-sync scheduler
+
+A `setTimeout`-based daily scheduler in main (`scheduleAutoSync`), re-armed on config save, app start, and `powerMonitor` resume. Idempotency across restarts is enforced with run keys (`lastRunKey`/`lastScheduledRunKey`/`lastSuccessKey` in `AutoSyncConfig`, derived from date + config fingerprint). A run generates the report for the configured time window (`full-day` or `yesterday-start-to-run`) and submits to Feishu, recording sync/error logs and emitting `auto-sync:updated`.
+
+### Feishu integration
+
+No official API — it drives the Feishu daily-report **web form**: `feishu:login` opens a dedicated `BrowserWindow` on the `persist:feishu` session partition; cookie changes and navigations trigger `readFeishuAuthSnapshot`, which harvests cookie + CSRF token and pushes `feishu:auth-updated` so the renderer can auto-fill auth config. Submissions POST the form endpoint with field IDs from `FeishuFormConfig` (every required value goes through `requireFeishuConfigValue`, which throws a labeled Chinese error).
 
 ### Repo scanning
 
-`scanRepositories` does an iterative DFS from the workspace dir, treats any directory containing `.git` as a repo (and stops descending into it), and skips `IGNORED_DIRS` (`node_modules`, `.git`, `dist`, `out`, …) and dotfolders.
+`scanRepositories` does an iterative DFS from each workspace dir, treats any directory containing `.git` as a repo (and stops descending into it), skipping `IGNORED_DIRS` (`node_modules`, `.git`, `dist`, `out`, …) and dotfolders. Config supports multiple workspace dirs plus pinned/ignored repo lists.
 
 ## Conventions
 
-- Path aliases (`electron.vite.config.ts` + `tsconfig.json`): `@` → `src/renderer/src`, `@shared` → `src/shared`. The renderer imports shared types as `@shared/types`; main/preload use relative `../src/shared/types.js` (note the `.js` extension required by the bundler config).
-- Renderer styling is global in [src/renderer/src/style.css](src/renderer/src/style.css) (a CSS-variable design-token system + Element Plus theme overrides); components use global class names and have **no** scoped `<style>`.
+- Path aliases (`electron.vite.config.ts` + `tsconfig.json`): `@` → `src/renderer/src`, `@shared` → `src/shared`. The renderer imports shared code as `@shared/types`; main/preload use relative `../src/shared/types.js` (note the `.js` extension required by the bundler config).
+- Renderer styling is global in [src/renderer/src/style.css](src/renderer/src/style.css) (a CSS-variable design-token system + Element Plus theme overrides, light/dark via a root attribute); components use global class names and have **no** scoped `<style>`.
 - The preload file is resolved at runtime in `createWindow()` with a fallback (`../preload/index.js` then `../preload/preload.cjs`) because dev and production emit different preload filenames.
-- User-facing strings, prompts, and the generated report are all in Chinese — match that when touching UI or AI-prompt text.
+- User-facing strings, prompts, error messages, and the generated report are all in Chinese — match that when touching UI, errors, or AI-prompt text.
+- Design/plan documents live in `docs/` (in Chinese); `task_plan.md`/`findings.md`/`progress.md` at the repo root are working scratch files, not documentation.
