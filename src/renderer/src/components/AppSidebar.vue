@@ -114,7 +114,7 @@ onBeforeUnmount(() => {
       </el-menu>
     </nav>
 
-    <div class="sidebar-tip">
+    <div v-if="activeNav !== 'generate'" class="sidebar-tip">
       <div class="sidebar-tip-icon"><Bot :size="28" /></div>
       <div class="sidebar-tip-title">
         <Sparkles :size="14" />

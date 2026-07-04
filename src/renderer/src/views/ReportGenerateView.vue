@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { CalendarDays, CheckCircle2, CircleAlert, ClipboardCopy, Download, ExternalLink, FileText, Pin, Plus, RotateCcw, Save, Search, Send, Trash2 } from 'lucide-vue-next';
+import { CalendarDays, CheckCircle2, CircleAlert, ClipboardCopy, Download, ExternalLink, FileText, Pin, Plus, Save, Search, Send, Trash2 } from 'lucide-vue-next';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
@@ -43,7 +43,6 @@ const {
 const dateShortcut = ref<'today' | 'yesterday' | 'rolling' | 'custom'>('today');
 const repoKeyword = ref('');
 const workHourPresets = [1, 2, 4, 6, 7, 7.5, 8];
-const workHourOptions = Array.from({ length: 48 }, (_, index) => (index + 1) * 0.5);
 
 const selectedRepoSummary = computed(() => {
   if (!selectedRepos.value.length) return '请选择要生成日报的仓库';
@@ -125,6 +124,8 @@ const generationChecks = computed(() => [
 ]);
 
 const blockedGenerationCheck = computed(() => generationChecks.value.find((item) => item.required && !item.ok));
+const pendingGenerationChecks = computed(() => generationChecks.value.filter((item) => !item.ok));
+const generateButtonLabel = computed(() => (report.value.trim() ? '重新生成日报' : '开始生成日报'));
 
 function formatDate(date: Date) {
   const year = date.getFullYear();
@@ -419,25 +420,22 @@ async function confirmRemoveRepo(item: RepoInfo) {
         </section>
 
         <section class="surface-card step-card">
-          <div class="step-title with-action">
-            <div>
-              <span>2</span>
-              <strong>生成与编辑</strong>
-            </div>
-            <el-button :icon="FileText" type="primary" :loading="loading" @click="handleGenerate">开始生成</el-button>
+          <div class="step-title">
+            <span>2</span>
+            <strong>生成与编辑</strong>
           </div>
 
-          <div class="generation-check-grid">
+          <div v-if="pendingGenerationChecks.length" class="generation-check-grid">
             <el-button
-              v-for="item in generationChecks"
+              v-for="item in pendingGenerationChecks"
               :key="item.key"
               class="generation-check-card"
-              :class="{ ready: item.ok, warning: !item.ok && item.required, optional: !item.required }"
+              :class="{ warning: item.required, optional: !item.required }"
               :disabled="!item.action"
               plain
               @click="item.action && emit('navigate', item.action)"
             >
-              <component :is="item.ok ? CheckCircle2 : CircleAlert" :size="18" />
+              <CircleAlert :size="18" />
               <span class="generation-check-copy">
                 <strong>{{ item.label }}</strong>
                 <small>{{ item.detail }}</small>
@@ -445,14 +443,11 @@ async function confirmRemoveRepo(item: RepoInfo) {
             </el-button>
           </div>
 
-          <div class="notice-line">
-            <StatusBadge
-              status="info"
-              :label="selectedRepos.length ? `将基于 ${selectedRepos.length} 个已选仓库和 ${reportRangeLabel} 生成研发日报` : '请先选择要参与生成的仓库'"
-            />
-          </div>
+          <el-button class="generate-cta" :icon="FileText" type="primary" size="large" :loading="loading" @click="handleGenerate">
+            {{ generateButtonLabel }}
+          </el-button>
 
-          <div class="metric-grid">
+          <div v-if="lastReportResult" class="metric-grid">
             <div v-for="item in metrics" :key="item.label" class="metric-card">
               <span>{{ item.label }}</span>
               <strong>{{ item.value }}</strong>
@@ -465,13 +460,6 @@ async function confirmRemoveRepo(item: RepoInfo) {
               <span>生成时间：{{ generatedAtText }}</span>
             </div>
 
-            <div class="report-mode-row">
-              <div class="report-mode-copy">
-                <strong>研发日报</strong>
-                <span>基于 Git 提交、影响文件与时间范围生成，可直接继续编辑。</span>
-              </div>
-            </div>
-
             <el-input
               v-model="report"
               class="editable-report"
@@ -482,13 +470,10 @@ async function confirmRemoveRepo(item: RepoInfo) {
             />
           </article>
 
-          <div class="button-row between">
-            <el-button :icon="RotateCcw" plain :loading="loading" @click="handleGenerate">重新生成</el-button>
-            <div class="button-row">
-              <el-button :icon="Save" plain @click="handleSaveCurrentReport">保存修改</el-button>
-              <el-button :icon="ClipboardCopy" plain @click="copyReport">复制内容</el-button>
-              <el-button :icon="Download" type="primary" plain @click="exportMarkdown">导出 Markdown</el-button>
-            </div>
+          <div class="button-row end">
+            <el-button :icon="Save" plain @click="handleSaveCurrentReport">保存修改</el-button>
+            <el-button :icon="ClipboardCopy" plain @click="copyReport">复制内容</el-button>
+            <el-button :icon="Download" type="primary" plain @click="exportMarkdown">导出 Markdown</el-button>
           </div>
           <p v-if="status" class="muted-text">{{ status }}</p>
         </section>
@@ -525,9 +510,6 @@ async function confirmRemoveRepo(item: RepoInfo) {
               />
               <span>小时</span>
             </div>
-            <el-select :model-value="Number(config.feishuForm.defaultWorkHours)" placeholder="选择工作时长" @change="updateProjectWorkHours">
-              <el-option v-for="hours in workHourOptions" :key="hours" :label="`${hours}h`" :value="hours" />
-            </el-select>
             <div class="hour-presets">
               <el-button
                 v-for="hours in workHourPresets"
