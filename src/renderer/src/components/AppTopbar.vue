@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Moon, Save, Sun } from 'lucide-vue-next';
 import { useAssistant } from '@/composables/useAssistant';
+import CheckinRewardCenter from '@/components/rewards/CheckinRewardCenter.vue';
 
 const props = defineProps<{
   themeMode: 'light' | 'dark';
@@ -38,6 +39,8 @@ const configStatusType = computed(() => (isConfigDirty.value ? 'warning' : 'succ
     </div>
 
     <div class="topbar-actions">
+      <CheckinRewardCenter />
+
       <el-tooltip :content="themeLabel" placement="bottom">
         <el-button
           class="topbar-theme-btn"

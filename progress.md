@@ -25,3 +25,21 @@
 - 完成 P2 体验闭环改动：历史查询命中时打开详情；日报配置页教程入口跳转使用帮助；小屏侧栏改为顶部横向紧凑导航并隐藏提示卡。
 - 完成 P2/P3 维护改动：清理 WelcomeGate 残留 `.donut-progress` 动画和 CSS；补充 favicon；设置页重置文案改为“重置同步默认值”；renderer 构建增加 vendor chunk 拆分。
 - 验证通过：`npm run typecheck`、`npm run build`、`git diff --check`、`rg -n "donut-progress|重置基础配置|请按左侧导航进入对应功能页"` 无残留结果。构建仍有第三方 `@vueuse/core` PURE 注释告警，属于既有依赖告警。
+
+## 2026-07-04
+
+- 用户要求在奖励中心继续新增 15 种特效，并保持“一个特效一个组件”。
+- 已确认现有奖励特效组件集中在 `src/renderer/src/components/rewards/effects`，通过 `RewardEffectOverlay.vue` 和 `rewardEffects.ts` 接入。
+- 当前计划：新增 15 个独立 effect 组件，扩展 key/时长、overlay 映射、商店配置和背景样式，最后运行类型检查与构建验证。
+- 已新增 15 个组件：赛博霓虹数据流、骑行速度光轨、城市扫描线、驾驶舱 HUD、神经网络思考、时间折叠过渡、雨夜玻璃 UI、代码实体化、能量加载环、无人机飞行视角、量子闪烁、呼吸 UI、数据风暴、玻璃折射层、空间跃迁。
+- 已完成 `rewardEffects.ts`、`RewardEffectOverlay.vue`、`CheckinRewardCenter.vue` 接入，进入类型检查和构建验证阶段。
+- 验证通过：`npm run typecheck`、`npm run build`、`git diff --check`、`rg -n "[ \t]+$" "src/renderer/src/components/rewards"`。构建仍输出第三方 `@vueuse/core` PURE 注释警告，属于既有依赖警告。
+- 用户要求自动再优化一版，让特效更炫酷、更有眼前一亮的感觉。
+- 完成全局舞台增强：`RewardEffectOverlay.vue` 增加按特效变色的光晕、开场白闪、中心冲击波、扫描线、暗角和动态粒纹层。
+- 完成商店视觉增强：`CheckinRewardCenter.vue` 增加特效卡片扫光、图标能量环、特级卡片光效和更有层次的 popover 背景。
+- 完成代表特效强化：`CrownEffect.vue` 加冕徽章化；`CyberDataFlowEffect.vue` 增加扫屏和故障场；`SpaceJumpEffect.vue` 增加引力透镜；`EnergyRingEffect.vue` 增加完成爆波；`RainGlassEffect.vue` 增加闪电和玻璃水滴。
+- 再优化验证通过：`npm run typecheck`、`npm run build`、`git diff --check`、`rg -n "[ \t]+$" "src/renderer/src/components/rewards"`。构建仍输出第三方 `@vueuse/core` PURE 注释警告，属于既有依赖警告。
+- 用户提出发布日报到飞书后，需要快速验证飞书侧是否已有提交记录。
+- 完成飞书提交记录入口：主进程新增 `openFeishuSubmissionRecords()`，通过 `feishu:open-submission-records` 暴露给渲染层，复用飞书登录窗口和 `persist:feishu` 会话，打开表单页后自动尝试点击“我的提交记录/提交记录”。
+- `ReportGenerateView.vue` 在“发布研发日报到飞书”按钮下方新增“查看日报提交记录”按钮；缺少飞书表单地址或 shareToken 时提示并跳转配置页。
+- 验证通过：`npm run typecheck`、`npm run build`、`git diff --check`。构建仍输出第三方 `@vueuse/core` PURE 注释警告，属于既有依赖警告。

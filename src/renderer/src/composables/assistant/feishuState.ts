@@ -94,6 +94,22 @@ export function createFeishuState(ctx: FeishuStateContext) {
   }
 
 
+  async function openFeishuSubmissionRecords() {
+    feishuLoading.value = true;
+    try {
+      await persistConfigBeforeAction('打开飞书提交记录');
+      const openedRecords = await window.api.openFeishuSubmissionRecords({ config: getConfigPayload().feishuForm });
+      ElMessage[openedRecords ? 'success' : 'warning'](
+        openedRecords ? '已打开飞书提交记录' : '已打开飞书表单页，未自动定位到提交记录，可在页面中点击“我的提交记录”',
+      );
+    } catch (error) {
+      ElMessage.error(error instanceof Error ? error.message : '打开飞书提交记录失败');
+    } finally {
+      feishuLoading.value = false;
+    }
+  }
+
+
   async function loadFeishuFields(options: { silent?: boolean } = {}) {
     fieldLoading.value = true;
     try {
@@ -196,6 +212,7 @@ export function createFeishuState(ctx: FeishuStateContext) {
   return {
     applyFeishuAuthSnapshot,
     loginFeishu,
+    openFeishuSubmissionRecords,
     loadFeishuFields,
     loadFeishuProjects,
     selectFeishuProject,

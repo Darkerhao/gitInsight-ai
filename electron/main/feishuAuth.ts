@@ -17,6 +17,28 @@ export const FEISHU_LOGIN_HOME_URL = 'https://www.feishu.cn/';
 
 export const FEISHU_SHARE_SUBMIT_PATH = '/space/api/bitable/external/share/submit';
 
+const FEISHU_SUBMISSION_RECORD_SCRIPT = `
+(() => {
+  const normalizeText = (value) => String(value || '').replace(/\\s+/g, '');
+  const labels = ['我的提交记录', '提交记录'];
+  const isVisible = (element) => {
+    const rect = element.getBoundingClientRect();
+    const style = window.getComputedStyle(element);
+    return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+  };
+  const elements = Array.from(document.querySelectorAll('button,a,[role="button"],span,div'));
+  const candidates = elements
+    .map((element) => ({ element, text: normalizeText(element.textContent) }))
+    .filter(({ element, text }) => isVisible(element) && labels.some((label) => text === label || (text.includes(label) && text.length <= 24)))
+    .sort((a, b) => a.text.length - b.text.length);
+  const target = candidates[0]?.element;
+  if (!target) return normalizeText(document.body?.textContent).includes('我的提交记录');
+  const clickable = target.closest('button,a,[role="button"],[class*="tab"],[class*="Tab"],[class*="record"],[class*="Record"]') || target;
+  clickable.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  return true;
+})()
+`;
+
 
 export function requireFeishuConfigValue(value: string, label: string) {
   const normalizedValue = value.trim();
@@ -220,6 +242,26 @@ export async function resolveFeishuAuth(formConfig: FeishuFormConfig, label: str
 }
 
 
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+
+export async function focusFeishuSubmissionRecords(targetWindow: BrowserWindow) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (targetWindow.isDestroyed()) return false;
+    try {
+      const opened = await targetWindow.webContents.executeJavaScript(FEISHU_SUBMISSION_RECORD_SCRIPT, true);
+      if (opened) return true;
+    } catch {
+      // The page may still be navigating; retry shortly.
+    }
+    await wait(350);
+  }
+  return false;
+}
+
+
 export async function openFeishuLogin(payload: FeishuLoginPayload) {
   const formConfig = {
     ...DEFAULT_FEISHU_FORM_CONFIG,
@@ -263,6 +305,55 @@ export async function openFeishuLogin(payload: FeishuLoginPayload) {
   const snapshot = await readFeishuAuthSnapshot(formConfig);
   emitFeishuAuthSnapshot(snapshot);
   return snapshot;
+}
+
+
+export async function openFeishuSubmissionRecords(payload: FeishuLoginPayload) {
+  const formConfig = {
+    ...DEFAULT_FEISHU_FORM_CONFIG,
+    ...payload.config,
+  };
+  const targetUrl = getFeishuFormPageUrl(formConfig);
+  watchFeishuAuthSession(formConfig);
+
+  if (feishuWindow && !feishuWindow.isDestroyed()) {
+    feishuWindow.setTitle('飞书提交记录');
+    feishuWindow.show();
+    feishuWindow.focus();
+    await feishuWindow.loadURL(targetUrl);
+    const openedRecords = await focusFeishuSubmissionRecords(feishuWindow);
+    const snapshot = await readFeishuAuthSnapshot(formConfig);
+    emitFeishuAuthSnapshot(snapshot);
+    return openedRecords;
+  }
+
+  feishuWindow = new BrowserWindow({
+    width: 1200,
+    height: 860,
+    minWidth: 960,
+    minHeight: 720,
+    title: '飞书提交记录',
+    icon: getWindowOptionsIcon(),
+    webPreferences: {
+      partition: FEISHU_PARTITION,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  feishuWindow.on('closed', () => {
+    feishuWindow = null;
+  });
+  feishuWindow.webContents.on('did-navigate', () => scheduleFeishuAuthSync(formConfig));
+  feishuWindow.webContents.on('did-navigate-in-page', () => scheduleFeishuAuthSync(formConfig));
+  feishuWindow.webContents.on('did-finish-load', () => scheduleFeishuAuthSync(formConfig));
+
+  await feishuWindow.loadURL(targetUrl);
+  const openedRecords = await focusFeishuSubmissionRecords(feishuWindow);
+  const snapshot = await readFeishuAuthSnapshot(formConfig);
+  emitFeishuAuthSnapshot(snapshot);
+  return openedRecords;
 }
 
 

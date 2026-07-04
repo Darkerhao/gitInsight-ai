@@ -1772,6 +1772,23 @@ textarea {
   font-size: 15px;
 }
 
+.publish-panel > .el-button + .el-button {
+  margin-left: 0;
+}
+
+.submission-record-btn.el-button {
+  border-color: var(--c-border-strong);
+  color: var(--c-text-muted);
+  font-weight: 700;
+}
+
+.submission-record-btn.el-button:hover,
+.submission-record-btn.el-button:focus-visible {
+  border-color: var(--c-primary);
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+}
+
 .publish-hint {
   border: 1px solid var(--c-border);
   border-radius: var(--radius-block);

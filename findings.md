@@ -72,3 +72,16 @@
 2. 再决定同步任务页的产品方向：继续收敛为全局同步范围，或正式实现独立任务表。
 3. 清理/降级用户可见假数据：开屏固定指标、工作台规则助手、测试提交污染。
 4. 最后处理文案和死代码：工作台快捷操作、系统设置重置文案、未引用组件。
+
+## 2026-07-04 奖励特效扩展发现
+
+- 当前会话未暴露 codebase-memory MCP 图工具资源，`list_mcp_resources` 返回空；本轮基于源文件阅读和工程命令验证推进。
+- 奖励特效现有实现未要求组件 props，组件由 overlay 重新挂载触发 CSS 动画；新增组件应保持无 props、局部样式、`pointer-events: none` 语义。
+- `CheckinRewardCenter.vue` 的商店配置和 `RewardEffectOverlay.vue` 的映射都需要同步更新，否则新增 key 会出现可购买但无法渲染或类型不完整的问题。
+- 当前 `src/renderer/src/components/rewards/` 目录在 `git status` 中为 untracked；本轮新增和接入文件位于该目录，构建已实际引用并通过。
+- 二次视觉增强优先采用全局 overlay 舞台层，收益覆盖全部特效；局部强化集中在视觉记忆点最强的 Crown、CyberDataFlow、SpaceJump、EnergyRing、RainGlass，避免把所有组件都堆到同一种光效风格。
+
+## 2026-07-04 飞书提交记录入口发现
+
+- 飞书外部表单提交记录页没有在现有配置中单独保存稳定深链；更稳妥的方案是复用已有 `endpoint/shareToken` 打开表单页，并通过页面文案自动点击“我的提交记录/提交记录”入口。
+- 新入口复用 `persist:feishu` 分区，能共享“登录飞书”窗口的登录态；如果飞书页面 DOM 或文案变化导致自动点击失败，会保留表单页打开并提示用户手动点击“我的提交记录”。

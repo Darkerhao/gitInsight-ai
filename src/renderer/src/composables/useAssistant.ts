@@ -284,6 +284,7 @@ function createAssistant() {
     removeAiBaseUrlOption: configState.removeAiBaseUrlOption,
     removeAiModelOption: configState.removeAiModelOption,
     loginFeishu: feishuState.loginFeishu,
+    openFeishuSubmissionRecords: feishuState.openFeishuSubmissionRecords,
     loadFeishuProjects: feishuState.loadFeishuProjects,
     loadFeishuFields: feishuState.loadFeishuFields,
     selectFeishuProject: feishuState.selectFeishuProject,

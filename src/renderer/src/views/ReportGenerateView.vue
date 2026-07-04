@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { CalendarDays, CheckCircle2, CircleAlert, ClipboardCopy, Download, FileText, Pin, Plus, RotateCcw, Save, Search, Send, Trash2 } from 'lucide-vue-next';
+import { CalendarDays, CheckCircle2, CircleAlert, ClipboardCopy, Download, ExternalLink, FileText, Pin, Plus, RotateCcw, Save, Search, Send, Trash2 } from 'lucide-vue-next';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
@@ -19,6 +19,7 @@ const {
   status,
   loading,
   pushing,
+  feishuLoading,
   sortedRepos,
   selectedRepoPaths,
   selectedRepos,
@@ -28,6 +29,7 @@ const {
   chooseWorkspace,
   generate,
   push,
+  openFeishuSubmissionRecords,
   saveCurrentReport,
   toggleRepo,
   isRepoPinned,
@@ -236,6 +238,16 @@ function exportMarkdown() {
 
 async function publishActiveReport() {
   await push(report.value);
+}
+
+async function handleOpenFeishuSubmissionRecords() {
+  if (!config.feishuForm.endpoint.trim() || !config.feishuForm.shareToken.trim()) {
+    ElMessage.warning('请先完成飞书表单连接配置');
+    emit('navigate', 'config');
+    return;
+  }
+
+  await openFeishuSubmissionRecords();
 }
 
 async function confirmRemoveRepo(item: RepoInfo) {
@@ -532,6 +544,9 @@ async function confirmRemoveRepo(item: RepoInfo) {
           </div>
           <el-button :icon="Send" type="primary" :loading="pushing" :disabled="!report.trim()" @click="publishActiveReport">
             发布研发日报到飞书
+          </el-button>
+          <el-button class="submission-record-btn" :icon="ExternalLink" plain :loading="feishuLoading" @click="handleOpenFeishuSubmissionRecords">
+            查看日报提交记录
           </el-button>
         </section>
 

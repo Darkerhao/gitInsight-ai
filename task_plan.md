@@ -30,3 +30,31 @@
 - 优先改现有文件，除必要类型或测试外不新增无关文件。
 - 每完成一个阶段更新本文件和 `progress.md`。
 - 遇到错误记录到 `findings.md`，并更换修复方案。
+
+## 2026-07-04 奖励特效扩展任务
+
+| 阶段 | 状态 | 内容 |
+| --- | --- | --- |
+| 1. 现状确认 | complete | 已确认奖励特效通过 `RewardEffectKey`、`RewardEffectOverlay.vue` 映射和 `CheckinRewardCenter.vue` 商店配置接入 |
+| 2. 新增 15 个组件 | complete | 为用户列出的 15 种特效分别新增独立 Vue 组件 |
+| 3. 接入入口 | complete | 扩展 effect key、持续时间、overlay component map、商店入口和背景氛围 |
+| 4. 质量验证 | complete | `npm run typecheck`、`npm run build`、`git diff --check`、rewards 尾随空白扫描均通过 |
+
+## 2026-07-04 奖励特效视觉增强任务
+
+| 阶段 | 状态 | 内容 |
+| --- | --- | --- |
+| 1. 视觉审片 | complete | 确认主要短板在全局电影感层、商店高级感和少数代表特效爆点 |
+| 2. 全局增强 | complete | 增加开场白闪、中心冲击波、动态光晕、扫描线、暗角和按特效变色的舞台变量 |
+| 3. 商店增强 | complete | 增加卡片扫光、图标能量环、特级卡片高亮和 popover 氛围背景 |
+| 4. 单体强化 | complete | 强化 Crown、CyberDataFlow、SpaceJump、EnergyRing、RainGlass 的光圈、扫光、冲击波和环境效果 |
+| 5. 质量验证 | complete | `npm run typecheck`、`npm run build`、`git diff --check`、rewards 尾随空白扫描均通过 |
+
+## 2026-07-04 飞书提交记录入口任务
+
+| 阶段 | 状态 | 内容 |
+| --- | --- | --- |
+| 1. 发布流程定位 | complete | 已定位右侧“发布研发日报到飞书”按钮、飞书配置来源和现有飞书登录窗口复用逻辑 |
+| 2. 主进程跳转能力 | complete | 新增 `feishu:open-submission-records` IPC，复用 `persist:feishu` 登录态打开飞书表单并自动点击“我的提交记录” |
+| 3. 页面入口 | complete | 在发布按钮下方新增“查看日报提交记录”按钮，缺少飞书连接配置时引导到配置页 |
+| 4. 质量验证 | complete | `npm run typecheck`、`npm run build`、`git diff --check` 均通过 |
