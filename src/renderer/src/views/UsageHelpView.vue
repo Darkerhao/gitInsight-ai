@@ -176,7 +176,7 @@ async function runHealthCheck() {
             <strong>{{ item.label }}</strong>
           </div>
           <span>{{ item.detail }}</span>
-          <button type="button" @click="emit('navigate', item.action)">去处理</button>
+          <el-button link type="primary" @click="emit('navigate', item.action)">去处理</el-button>
         </div>
       </div>
     </section>
@@ -193,13 +193,13 @@ async function runHealthCheck() {
           </div>
         </template>
         <div class="help-card-grid">
-          <button v-for="item in quickStarts" :key="item.key" class="help-module-card" @click="emit('navigate', item.action)">
+          <el-button v-for="item in quickStarts" :key="item.key" class="help-module-card" @click="emit('navigate', item.action)">
             <span class="help-card-icon"><component :is="item.icon" :size="18" /></span>
             <span class="help-card-copy">
               <strong>{{ item.title }}</strong>
               <span>{{ item.desc }}</span>
             </span>
-          </button>
+          </el-button>
         </div>
       </el-collapse-item>
 
@@ -214,13 +214,13 @@ async function runHealthCheck() {
           </div>
         </template>
         <div class="help-action-list">
-          <button v-for="item in moduleGuides" :key="item.title" class="help-list-item" @click="emit('navigate', item.action)">
+          <el-button v-for="item in moduleGuides" :key="item.title" class="help-list-item" @click="emit('navigate', item.action)">
             <span class="help-card-icon"><component :is="item.icon" :size="18" /></span>
             <span class="help-card-copy">
               <strong>{{ item.title }}</strong>
               <span>{{ item.desc }}</span>
             </span>
-          </button>
+          </el-button>
         </div>
       </el-collapse-item>
 

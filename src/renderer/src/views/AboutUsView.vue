@@ -99,18 +99,18 @@ async function refreshInfo() {
           <div class="panel-head">
             <h3>快捷操作</h3>
           </div>
-          <button class="about-action-btn" @click="emit('navigate', 'config')">
+          <el-button class="about-action-btn" @click="emit('navigate', 'config')">
             <FolderOpen :size="16" />
             <span>进入日报配置</span>
-          </button>
-          <button class="about-action-btn" @click="emit('navigate', 'history')">
+          </el-button>
+          <el-button class="about-action-btn" @click="emit('navigate', 'history')">
             <FolderOpen :size="16" />
             <span>查看历史日志</span>
-          </button>
-          <button class="about-action-btn" @click="copyUserDataPath">
+          </el-button>
+          <el-button class="about-action-btn" @click="copyUserDataPath">
             <Copy :size="16" />
             <span>复制本地数据目录</span>
-          </button>
+          </el-button>
         </section>
 
         <section class="surface-card about-side-card">

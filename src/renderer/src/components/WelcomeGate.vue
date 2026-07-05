@@ -625,12 +625,14 @@ onBeforeUnmount(() => {
             <span>{{ space.label }}</span>
           </div>
         </header>
-        <ul>
-          <li v-for="item in space.items" :key="item">
-            <span class="space-node" />
+        <el-timeline class="structure-list">
+          <el-timeline-item v-for="item in space.items" :key="item" class="structure-item">
+            <template #dot>
+              <span class="space-node" />
+            </template>
             {{ item }}
-          </li>
-        </ul>
+          </el-timeline-item>
+        </el-timeline>
       </article>
     </div>
 
@@ -723,10 +725,10 @@ onBeforeUnmount(() => {
         <span :style="{ width: `${progressPercent}%` }" />
       </div>
 
-      <button class="accelerate-btn" type="button" :aria-pressed="accelerated" @click.stop="accelerate">
+      <el-button class="accelerate-btn" :aria-pressed="accelerated" @click.stop="accelerate">
         <FastForward :size="15" stroke-width="2" />
         <span>{{ accelerated ? '加速中' : '加速构建' }}</span>
-      </button>
+      </el-button>
     </footer>
   </section>
 </template>
@@ -1048,7 +1050,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
-.structure-panel ul {
+.structure-panel .structure-list {
   position: relative;
   z-index: 1;
   display: grid;
@@ -1058,12 +1060,23 @@ onBeforeUnmount(() => {
   list-style: none;
 }
 
-.structure-panel li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.structure-panel .el-timeline-item {
+  padding-bottom: 0;
+}
+
+.structure-panel .el-timeline-item__tail {
+  display: none;
+}
+
+.structure-panel .el-timeline-item__wrapper {
+  top: 0;
+  padding-left: 17px;
+}
+
+.structure-panel .el-timeline-item__content {
   color: rgba(234, 242, 255, 0.74);
   font-size: 13px;
+  line-height: 1.35;
 }
 
 .space-node {
@@ -1399,6 +1412,12 @@ onBeforeUnmount(() => {
   outline-offset: 2px;
 }
 
+.accelerate-btn.el-button > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .accelerate-btn span {
   font-size: 12px;
   font-weight: 700;
@@ -1442,7 +1461,7 @@ onBeforeUnmount(() => {
     min-height: 148px;
   }
 
-  .structure-panel ul {
+  .structure-panel .structure-list {
     display: none;
   }
 

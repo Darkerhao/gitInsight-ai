@@ -1,19 +1,27 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ChevronDown, CircleHelp, MessageCircleMore, Save } from 'lucide-vue-next';
+import { ChevronDown, CircleHelp, MessageCircleMore, Moon, Save, Sun } from 'lucide-vue-next';
 import { useAssistant } from '@/composables/useAssistant';
 import { useMessages } from '@/composables/useMessages';
+import CheckinRewardCenter from '@/components/rewards/CheckinRewardCenter.vue';
+
+const props = defineProps<{
+  themeMode: 'light' | 'dark';
+}>();
+
+const emit = defineEmits<{
+  (e: 'navigate', value: string): void;
+  (e: 'toggle-theme', payload: MouseEvent): void;
+}>();
 
 const assistant = useAssistant();
 const { config, isConfigDirty, saveSettings } = assistant;
 const { unreadCount } = useMessages();
 
-const emit = defineEmits<{
-  (e: 'navigate', value: string): void;
-}>();
-
 const reporterName = computed(() => config.reporterName || '默认用户');
-const avatarText = computed(() => reporterName.value.slice(-2));
+const avatarText = computed(() => reporterName.value.trim().slice(0, 1) || '用');
+const themeIcon = computed(() => (props.themeMode === 'dark' ? Sun : Moon));
+const themeLabel = computed(() => (props.themeMode === 'dark' ? '切换浅色模式' : '切换深色模式'));
 const greetingText = computed(() => {
   const hour = new Date().getHours();
   if (hour < 6) return '午夜好';
@@ -43,24 +51,46 @@ function navigateToAbout() {
     </div>
 
     <div class="topbar-actions">
-      <button v-if="isConfigDirty" class="topbar-pill is-warning" @click="saveSettings">
-        <Save :size="16" />
-        <span>保存配置</span>
-      </button>
+      <CheckinRewardCenter />
 
-      <button class="topbar-pill" @click="navigateToHelp">
-        <CircleHelp :size="16" />
-        <span>使用帮助</span>
-      </button>
+      <el-tooltip :content="themeLabel" placement="bottom">
+        <el-button
+          class="topbar-theme-btn"
+          circle
+          :icon="themeIcon"
+          :aria-label="themeLabel"
+          @click="emit('toggle-theme', $event)"
+        />
+      </el-tooltip>
 
-      <button class="topbar-bell" @click="navigateToMessages">
-        <MessageCircleMore :size="18" />
-        <span v-if="unreadCount" class="topbar-badge">{{ unreadCount }}</span>
-      </button>
+      <el-button
+        v-if="isConfigDirty"
+        class="topbar-save-btn"
+        type="warning"
+        plain
+        :icon="Save"
+        @click="saveSettings"
+      >
+        保存配置
+      </el-button>
+
+      <el-button class="topbar-help-btn" plain :icon="CircleHelp" @click="navigateToHelp">
+        使用帮助
+      </el-button>
+
+      <el-badge :value="unreadCount" :hidden="!unreadCount" :max="99" class="topbar-message-badge">
+        <el-button
+          class="topbar-message-btn"
+          circle
+          :icon="MessageCircleMore"
+          aria-label="消息"
+          @click="navigateToMessages"
+        />
+      </el-badge>
 
       <el-dropdown trigger="click">
         <div class="topbar-user">
-          <div class="topbar-avatar">{{ avatarText }}</div>
+          <el-avatar class="topbar-avatar">{{ avatarText }}</el-avatar>
           <span class="topbar-user-name">{{ reporterName }}</span>
           <ChevronDown :size="14" />
         </div>

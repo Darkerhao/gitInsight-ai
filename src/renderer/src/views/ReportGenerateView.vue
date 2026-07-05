@@ -499,9 +499,9 @@ async function confirmRemoveRepo(item: RepoInfo) {
             <span class="loading-game-chip chip-a">commit</span>
             <span class="loading-game-chip chip-b">diff</span>
             <span class="loading-game-chip chip-c">report</span>
-            <button type="button" class="loading-game-target" :style="gameTargetStyle" @click="hitGameTarget">
+            <el-button class="loading-game-target" circle :style="gameTargetStyle" @click="hitGameTarget">
               <Sparkles :size="20" />
-            </button>
+            </el-button>
           </div>
           <p>连续命中 {{ gameStreak }} 次，日报生成完成后会自动关闭。</p>
         </div>
@@ -521,10 +521,9 @@ async function confirmRemoveRepo(item: RepoInfo) {
         <span>不同角色的事实来源不同，生成方式也不同</span>
       </div>
       <div class="role-select-grid">
-        <button
+        <el-button
           v-for="item in reportRoles"
           :key="item.key"
-          type="button"
           class="role-select-card-item"
           :class="{ active: activeRole === item.key }"
           @click="switchRole(item.key)"
@@ -532,7 +531,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
           <strong>{{ item.label }}</strong>
           <span>{{ item.description }}</span>
           <small>{{ item.source }}</small>
-        </button>
+        </el-button>
       </div>
     </section>
 
@@ -548,13 +547,13 @@ async function confirmRemoveRepo(item: RepoInfo) {
               <label>选择仓库</label>
               <el-popover placement="bottom-start" trigger="click" :width="620" popper-class="repo-picker-popper">
                 <template #reference>
-                  <button type="button" class="repo-picker-trigger">
-                    <div>
+                  <el-button class="repo-picker-trigger">
+                    <span class="repo-picker-trigger-copy">
                       <strong>{{ selectedRepoSummary }}</strong>
                       <span>{{ selectedRepos.length ? selectedRepos.map((repo) => repo.name).join('、') : '支持多仓库汇总生成日报' }}</span>
-                    </div>
+                    </span>
                     <small>{{ selectedRepoPaths.length }}/{{ sortedRepos.length }}</small>
-                  </button>
+                  </el-button>
                 </template>
 
                 <div class="repo-picker-panel">
@@ -569,9 +568,9 @@ async function confirmRemoveRepo(item: RepoInfo) {
                   <el-input v-model="repoKeyword" :prefix-icon="Search" clearable placeholder="搜索仓库名称或路径" />
 
                   <div class="repo-picker-list">
-                    <button v-if="!sortedRepos.length" type="button" class="repo-picker-empty" @click="chooseWorkspace">
+                    <el-button v-if="!sortedRepos.length" class="repo-picker-empty" @click="chooseWorkspace">
                       暂无仓库，点击选择工作目录
-                    </button>
+                    </el-button>
 
                     <div
                       v-for="repo in filteredRepos"
@@ -579,7 +578,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
                       class="repo-picker-item"
                       :class="{ active: selectedRepoPaths.includes(repo.path), pinned: isRepoPinned(repo.path) }"
                     >
-                      <button type="button" class="repo-picker-main" @click="toggleRepo(repo.path)">
+                      <el-button class="repo-picker-main" text @click="toggleRepo(repo.path)">
                         <span class="repo-picker-check">
                           <CheckCircle2 v-if="selectedRepoPaths.includes(repo.path)" :size="16" />
                         </span>
@@ -587,25 +586,25 @@ async function confirmRemoveRepo(item: RepoInfo) {
                           <strong>{{ repo.name }}</strong>
                           <small>{{ repo.path }}</small>
                         </span>
-                      </button>
+                      </el-button>
 
                       <el-tooltip :content="isRepoPinned(repo.path) ? '取消置顶' : '置顶仓库'" placement="top">
-                        <button
-                          type="button"
+                        <el-button
                           class="repo-picker-icon"
+                          text
                           :class="{ active: isRepoPinned(repo.path) }"
                           :aria-label="isRepoPinned(repo.path) ? `取消置顶 ${repo.name}` : `置顶 ${repo.name}`"
                           :aria-pressed="isRepoPinned(repo.path)"
                           @click.stop="toggleRepoPin(repo.path)"
                         >
                           <Pin :size="15" />
-                        </button>
+                        </el-button>
                       </el-tooltip>
 
                       <el-tooltip content="从列表移除" placement="top">
-                        <button type="button" class="repo-picker-icon danger" :aria-label="`移除 ${repo.name}`" @click.stop="confirmRemoveRepo(repo)">
+                        <el-button class="repo-picker-icon danger" text :aria-label="`移除 ${repo.name}`" @click.stop="confirmRemoveRepo(repo)">
                           <Trash2 :size="15" />
-                        </button>
+                        </el-button>
                       </el-tooltip>
                     </div>
 
@@ -645,12 +644,12 @@ async function confirmRemoveRepo(item: RepoInfo) {
               />
             </div>
           </div>
-          <div class="segmented-actions">
-            <button :class="{ active: dateShortcut === 'today' }" @click="setDateShortcut('today')">今天</button>
-            <button :class="{ active: dateShortcut === 'yesterday' }" @click="setDateShortcut('yesterday')">昨天</button>
-            <button :class="{ active: dateShortcut === 'rolling' }" @click="setDateShortcut('rolling')">昨日9点至现在</button>
-            <button :class="{ active: dateShortcut === 'custom' }" @click="setDateShortcut('custom')">自定义范围</button>
-          </div>
+          <el-button-group class="segmented-actions">
+            <el-button :type="dateShortcut === 'today' ? 'primary' : 'default'" plain @click="setDateShortcut('today')">今天</el-button>
+            <el-button :type="dateShortcut === 'yesterday' ? 'primary' : 'default'" plain @click="setDateShortcut('yesterday')">昨天</el-button>
+            <el-button :type="dateShortcut === 'rolling' ? 'primary' : 'default'" plain @click="setDateShortcut('rolling')">昨日9点至现在</el-button>
+            <el-button :type="dateShortcut === 'custom' ? 'primary' : 'default'" plain @click="setDateShortcut('custom')">自定义范围</el-button>
+          </el-button-group>
         </section>
 
         <section v-else class="surface-card step-card">
@@ -702,21 +701,20 @@ async function confirmRemoveRepo(item: RepoInfo) {
             <el-button :icon="Sparkles" type="primary" :loading="busy" @click="handleGenerate">开始生成</el-button>
           </div>
           <div v-if="isDeveloperRole" class="generation-check-grid">
-            <button
+            <el-button
               v-for="item in generationChecks"
               :key="item.key"
-              type="button"
               class="generation-check-card"
               :class="{ ready: item.ok, warning: !item.ok && item.required, optional: !item.required }"
               :disabled="!item.action"
               @click="item.action && emit('navigate', item.action)"
             >
               <component :is="item.ok ? CheckCircle2 : CircleAlert" :size="18" />
-              <span>
+              <span class="generation-check-copy">
                 <strong>{{ item.label }}</strong>
                 <small>{{ item.detail }}</small>
               </span>
-            </button>
+            </el-button>
           </div>
           <div class="notice-line">
             <StatusBadge
@@ -806,7 +804,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
           <h3>发布到飞书</h3>
           <div class="publish-hint">
             <span>定时自动同步已移至同步任务统一管理</span>
-            <button type="button" @click="emit('navigate', 'sync:list')">去配置</button>
+            <el-button link type="primary" @click="emit('navigate', 'sync:list')">去配置</el-button>
           </div>
           <div class="field">
             <label>选择目标</label>
@@ -841,15 +839,16 @@ async function confirmRemoveRepo(item: RepoInfo) {
               />
             </el-select>
             <div class="hour-presets">
-              <button
+              <el-button
                 v-for="hours in workHourPresets"
                 :key="hours"
-                type="button"
-                :class="{ active: Number(config.feishuForm.defaultWorkHours) === hours }"
+                class="hour-preset-btn"
+                :type="Number(config.feishuForm.defaultWorkHours) === hours ? 'primary' : 'default'"
+                plain
                 @click="updateProjectWorkHours(hours)"
               >
                 {{ hours }}h
-              </button>
+              </el-button>
             </div>
           </div>
           <el-button :icon="Send" type="primary" :loading="pushing" :disabled="!activeReportContent.trim()" @click="publishActiveReport">

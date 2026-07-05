@@ -143,10 +143,9 @@ function statusLabel(status: MessageStatus) {
         </div>
 
         <div class="message-list">
-          <button
+          <el-button
             v-for="item in filteredMessages"
             :key="item.id"
-            type="button"
             class="message-card"
             :class="{ unread: !isRead(item.id) }"
             @click="openDetail(item)"
@@ -157,7 +156,7 @@ function statusLabel(status: MessageStatus) {
             </div>
             <span class="message-card-meta">{{ typeLabel(item.type) }} · {{ formatDateTime(item.createdAt) }}</span>
             <p>{{ item.content }}</p>
-          </button>
+          </el-button>
 
           <div v-if="!filteredMessages.length" class="empty-state">暂无符合条件的真实消息记录</div>
         </div>

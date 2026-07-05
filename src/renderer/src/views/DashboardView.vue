@@ -538,10 +538,10 @@ onBeforeUnmount(() => {
               <h3>快捷操作</h3>
             </div>
             <div class="quick-action-grid">
-              <button v-for="item in quickActions" :key="item.title" type="button" @click="item.action">
+              <el-button v-for="item in quickActions" :key="item.title" @click="item.action">
                 <component :is="item.icon" :size="24" />
                 <span>{{ item.title }}</span>
-              </button>
+              </el-button>
             </div>
           </section>
         </div>
@@ -570,15 +570,9 @@ onBeforeUnmount(() => {
           <div class="panel-head">
             <h3>快速开始</h3>
           </div>
-          <ol class="dashboard-guide">
-            <li v-for="(step, index) in guideSteps" :key="step.title">
-              <span>{{ index + 1 }}</span>
-              <div>
-                <strong>{{ step.title }}</strong>
-                <p>{{ step.desc }}</p>
-              </div>
-            </li>
-          </ol>
+          <el-steps class="dashboard-guide" direction="vertical" :active="guideSteps.length" finish-status="success">
+            <el-step v-for="step in guideSteps" :key="step.title" :title="step.title" :description="step.desc" />
+          </el-steps>
           <el-button class="full-width" plain type="primary" @click="emit('navigate', 'sync')">配置同步计划</el-button>
         </section>
 
@@ -594,9 +588,9 @@ onBeforeUnmount(() => {
           <el-button type="primary" :icon="Send" @click="askRuleAdvice()" />
           <p>{{ ruleAdvice }}</p>
           <div class="assistant-questions">
-            <button type="button" @click="askRuleAdvice('如何配置日报生成规则？')">如何配置日报生成规则？</button>
-            <button type="button" @click="askRuleAdvice('如何同步到飞书？')">如何同步到飞书？</button>
-            <button type="button" @click="askRuleAdvice('日报生成失败怎么办？')">日报生成失败怎么办？</button>
+            <el-button @click="askRuleAdvice('如何配置日报生成规则？')">如何配置日报生成规则？</el-button>
+            <el-button @click="askRuleAdvice('如何同步到飞书？')">如何同步到飞书？</el-button>
+            <el-button @click="askRuleAdvice('日报生成失败怎么办？')">日报生成失败怎么办？</el-button>
           </div>
         </section>
       </aside>

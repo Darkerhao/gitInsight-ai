@@ -300,28 +300,19 @@ function formatDateTime(value: string) {
             <el-button :icon="Download" type="primary" plain @click="exportActiveLog">导出</el-button>
           </div>
           <StatusBadge :status="activeLog.status" :label="activeLog.status === 'success' ? '成功' : activeLog.status === 'failed' ? '失败' : '信息'" />
-          <dl class="detail-list">
-            <dt>日志类型</dt>
-            <dd>{{ activeLog.type }}</dd>
-            <dt>操作内容</dt>
-            <dd>{{ activeLog.action }}</dd>
-            <dt>项目</dt>
-            <dd>{{ activeLog.project }}</dd>
-            <dt>执行时间</dt>
-            <dd>{{ formatDateTime(activeLog.time) }}</dd>
-            <template v-if="activeLog.reportRecord?.timeRange">
-              <dt>日报时间段</dt>
-              <dd>{{ activeLog.reportRecord.timeRange.label }}</dd>
-            </template>
-            <dt>执行时长</dt>
-            <dd>{{ activeLog.duration }}</dd>
-            <dt>操作人</dt>
-            <dd>{{ activeLog.operator }}</dd>
-            <dt>触发方式</dt>
-            <dd>{{ activeLog.trigger }}</dd>
-            <dt>生成文件</dt>
-            <dd>{{ activeLog.file || '-' }}</dd>
-          </dl>
+          <el-descriptions class="detail-list" :column="1" border>
+            <el-descriptions-item label="日志类型">{{ activeLog.type }}</el-descriptions-item>
+            <el-descriptions-item label="操作内容">{{ activeLog.action }}</el-descriptions-item>
+            <el-descriptions-item label="项目">{{ activeLog.project }}</el-descriptions-item>
+            <el-descriptions-item label="执行时间">{{ formatDateTime(activeLog.time) }}</el-descriptions-item>
+            <el-descriptions-item v-if="activeLog.reportRecord?.timeRange" label="日报时间段">
+              {{ activeLog.reportRecord.timeRange.label }}
+            </el-descriptions-item>
+            <el-descriptions-item label="执行时长">{{ activeLog.duration }}</el-descriptions-item>
+            <el-descriptions-item label="操作人">{{ activeLog.operator }}</el-descriptions-item>
+            <el-descriptions-item label="触发方式">{{ activeLog.trigger }}</el-descriptions-item>
+            <el-descriptions-item label="生成文件">{{ activeLog.file || '-' }}</el-descriptions-item>
+          </el-descriptions>
           <div class="process-list">
             <h4>详情内容</h4>
             <pre class="log-detail-text">{{ activeLog.detail || '-' }}</pre>

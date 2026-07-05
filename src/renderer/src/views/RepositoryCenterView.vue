@@ -77,10 +77,10 @@ async function confirmRemoveRepo(item: RepoInfo) {
       </div>
 
       <div class="repo-center-list">
-        <button v-if="!sortedRepos.length" type="button" class="repo-center-empty" @click="chooseWorkspace">
+        <el-button v-if="!sortedRepos.length" class="repo-center-empty" @click="chooseWorkspace">
           <FolderOpen :size="22" />
           <span>暂无仓库，点击选择工作目录</span>
-        </button>
+        </el-button>
 
         <div
           v-for="repo in filteredRepos"
@@ -88,7 +88,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
           class="repo-center-item"
           :class="{ active: selectedRepoPaths.includes(repo.path), pinned: isRepoPinned(repo.path) }"
         >
-          <button type="button" class="repo-center-main" @click="toggleRepo(repo.path)">
+          <el-button class="repo-center-main" text @click="toggleRepo(repo.path)">
             <span class="repo-center-check">
               <CheckCircle2 v-if="selectedRepoPaths.includes(repo.path)" :size="18" />
             </span>
@@ -96,26 +96,26 @@ async function confirmRemoveRepo(item: RepoInfo) {
               <strong>{{ repo.name }}</strong>
               <small>{{ repo.path }}</small>
             </span>
-          </button>
+          </el-button>
 
           <div class="repo-center-actions">
             <el-tooltip :content="isRepoPinned(repo.path) ? '取消置顶' : '置顶仓库'" placement="top">
-              <button
-                type="button"
+              <el-button
                 class="repo-action-btn"
+                text
                 :class="{ active: isRepoPinned(repo.path) }"
                 :aria-label="isRepoPinned(repo.path) ? `取消置顶 ${repo.name}` : `置顶 ${repo.name}`"
                 :aria-pressed="isRepoPinned(repo.path)"
                 @click.stop="toggleRepoPin(repo.path)"
               >
                 <Pin :size="16" />
-              </button>
+              </el-button>
             </el-tooltip>
 
             <el-tooltip content="从列表移除" placement="top">
-              <button type="button" class="repo-action-btn danger" :aria-label="`移除 ${repo.name}`" @click.stop="confirmRemoveRepo(repo)">
+              <el-button class="repo-action-btn danger" text :aria-label="`移除 ${repo.name}`" @click.stop="confirmRemoveRepo(repo)">
                 <Trash2 :size="16" />
-              </button>
+              </el-button>
             </el-tooltip>
           </div>
         </div>

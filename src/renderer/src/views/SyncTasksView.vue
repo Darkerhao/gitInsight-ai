@@ -756,10 +756,9 @@ async function handleBatchCommand(command: string) {
               <span>周日</span>
             </div>
             <div class="calendar-grid calendar-days">
-              <button
+              <el-button
                 v-for="day in calendarDays"
                 :key="day.key"
-                type="button"
                 class="calendar-cell"
                 :class="{ muted: !day.isCurrentMonth, today: day.isToday, selected: day.isSelected }"
                 @click="selectCalendarDay(day)"
@@ -777,7 +776,7 @@ async function handleBatchCommand(command: string) {
                   <em>{{ item.statusLabel }}</em>
                 </span>
                 <em v-if="day.occurrences.length > 3">+{{ day.occurrences.length - 3 }}</em>
-              </button>
+              </el-button>
             </div>
           </div>
 
@@ -854,9 +853,9 @@ async function handleBatchCommand(command: string) {
               <StatusBadge :status="item.status" :label="item.statusLabel" />
             </div>
           </div>
-          <button v-if="selectedDateOccurrences.length > 4" type="button" class="more-day-task">
+          <el-button v-if="selectedDateOccurrences.length > 4" class="more-day-task">
             还有 {{ selectedDateOccurrences.length - 4 }} 个同步范围在当天执行
-          </button>
+          </el-button>
         </section>
       </aside>
     </div>

@@ -180,13 +180,14 @@ async function resetSettings() {
             <h3>文件与存储</h3>
             <StatusBadge :status="storageInfo?.encryptionAvailable ? 'success' : 'failed'" :label="storageInfo?.encryptionAvailable ? '密钥保护可用' : '密钥保护不可用'" />
           </div>
-          <div class="storage-table">
-            <div v-for="item in storageRows" :key="item.label" class="storage-row">
-              <strong>{{ item.label }}</strong>
-              <span>{{ item.path }}</span>
-              <em>{{ formatBytes(item.size) }}</em>
-            </div>
-          </div>
+          <el-descriptions class="settings-descriptions" :column="1" border>
+            <el-descriptions-item v-for="item in storageRows" :key="item.label" :label="item.label">
+              <div class="storage-description-value">
+                <span>{{ item.path }}</span>
+                <el-tag effect="plain" round>{{ formatBytes(item.size) }}</el-tag>
+              </div>
+            </el-descriptions-item>
+          </el-descriptions>
         </div>
 
         <div v-if="activeTab === 'logs'" class="settings-section">
@@ -204,16 +205,20 @@ async function resetSettings() {
         <div v-if="activeTab === 'logs'" class="settings-section">
           <h3>系统操作</h3>
           <div class="operation-grid">
-            <button class="operation-card" @click="refreshStorage">
-              <RefreshCw :size="18" />
-              <strong>刷新本地数据状态</strong>
-              <span>重新读取配置文件、数据库记录数量和存储文件大小</span>
-            </button>
-            <button class="operation-card" @click="resetSettings">
-              <Settings :size="18" />
-              <strong>重置同步默认值</strong>
-              <span>恢复自动同步时间和默认工时，保存后写入 config.json</span>
-            </button>
+            <el-button class="operation-card" @click="refreshStorage">
+              <span class="operation-card-icon"><RefreshCw :size="18" /></span>
+              <span class="operation-card-copy">
+                <strong>刷新本地数据状态</strong>
+                <span>重新读取配置文件、数据库记录数量和存储文件大小</span>
+              </span>
+            </el-button>
+            <el-button class="operation-card" @click="resetSettings">
+              <span class="operation-card-icon"><Settings :size="18" /></span>
+              <span class="operation-card-copy">
+                <strong>重置同步默认值</strong>
+                <span>恢复自动同步时间和默认工时，保存后写入 config.json</span>
+              </span>
+            </el-button>
           </div>
         </div>
 

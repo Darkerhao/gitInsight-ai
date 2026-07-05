@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ArrowRight, CheckCircle2 } from 'lucide-vue-next';
+
 const emit = defineEmits<{
   (e: 'navigate', value: string): void;
 }>();
@@ -12,19 +14,21 @@ const steps = [
 </script>
 
 <template>
-  <section class="aside-card">
+  <section class="aside-card usage-guide-card">
     <div class="aside-card-head">
       <h3>使用指南</h3>
     </div>
-    <ol class="usage-guide-list">
-      <li v-for="(step, index) in steps" :key="step.title" class="usage-guide-item">
-        <span class="usage-guide-index">{{ index + 1 }}</span>
-        <div class="usage-guide-body">
+    <ul class="usage-guide-list" aria-label="使用指南">
+      <li v-for="step in steps" :key="step.title" class="usage-guide-item">
+        <span class="usage-guide-index">
+          <CheckCircle2 :size="15" />
+        </span>
+        <span class="usage-guide-body">
           <strong>{{ step.title }}</strong>
           <span>{{ step.desc }}</span>
-        </div>
+        </span>
       </li>
-    </ol>
-    <button class="usage-guide-btn" @click="emit('navigate', 'help')">查看详细教程</button>
+    </ul>
+    <el-button class="usage-guide-btn" :icon="ArrowRight" @click="emit('navigate', 'help')">查看详细教程</el-button>
   </section>
 </template>
