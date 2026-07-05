@@ -48,7 +48,16 @@ import SupernovaEffect from '@/components/rewards/effects/SupernovaEffect.vue';
 import TimeFoldEffect from '@/components/rewards/effects/TimeFoldEffect.vue';
 import VelocityTrailEffect from '@/components/rewards/effects/VelocityTrailEffect.vue';
 import WarpEffect from '@/components/rewards/effects/WarpEffect.vue';
+import { EFFECT_OPTION_MAP, EFFECT_TIERS } from '@/components/rewards/rewardEffects';
 import type { RewardEffectKey } from '@/components/rewards/rewardEffects';
+
+/**
+ * NEXUS 统一电影舞台：所有特效在同一套「深空指挥舰桥」里演出。
+ * 舞台按 rewardEffects.ts 的分级与镜头数据施加统一的
+ * 开幕（光圈展开 + 能量注入）→ 相机运动 → 后期处理（扫描线/噪点/
+ * 色差/暗角/电影黑边）→ 协议 HUD → 闭幕（世界回收）。
+ * 特效组件只负责内容层，屏幕语言全部由舞台数据驱动。
+ */
 
 const props = defineProps<{
   effect: RewardEffectKey | null;
@@ -106,34 +115,117 @@ const effectComponentMap: Record<RewardEffectKey, Component> = {
 };
 
 const activeComponent = computed(() => (props.effect ? effectComponentMap[props.effect] : null));
+const option = computed(() => (props.effect ? EFFECT_OPTION_MAP[props.effect] : null));
+const tierMeta = computed(() => (option.value ? EFFECT_TIERS[option.value.tier] : null));
+
+const SHAKE_AMPLITUDES = ['0px', '2.5px', '4.5px'] as const;
+
+const stageClasses = computed(() => {
+  if (!option.value) return [];
+  return [
+    `is-${option.value.key}`,
+    `fx-tier-${option.value.tier}`,
+    `fx-cam-${option.value.camera}`,
+    option.value.shake > 0 ? 'fx-has-shake' : '',
+    option.value.apex ? 'fx-apex' : '',
+  ].filter(Boolean);
+});
+
+const stageVars = computed(() => {
+  if (!option.value) return {};
+  const { phases, accent, secondary, shake } = option.value;
+  const total = phases.entry + phases.loop + phases.exit;
+  return {
+    '--fx-accent': accent,
+    '--fx-secondary': secondary,
+    '--fx-ms': `${total}ms`,
+    '--fx-entry-ms': `${phases.entry}ms`,
+    '--fx-exit-ms': `${phases.exit}ms`,
+    '--fx-exit-delay': `${total - phases.exit}ms`,
+    '--fx-shake-amp': SHAKE_AMPLITUDES[shake],
+  };
+});
+
+const seedLabel = computed(() => String(props.seed % 10000).padStart(4, '0'));
 </script>
 
 <template>
   <Teleport to="body">
     <div
-      v-if="props.effect && activeComponent"
+      v-if="props.effect && activeComponent && option && tierMeta"
       :key="`${props.effect}-${props.seed}`"
       class="reward-effect-overlay"
-      :class="`is-${props.effect}`"
+      :class="stageClasses"
+      :style="stageVars"
       aria-hidden="true"
     >
-      <div class="reward-effect-backdrop" />
-      <div class="reward-effect-bloom" />
-      <span class="reward-effect-shockwave" />
-      <span class="reward-effect-shockwave is-delayed" />
-      <div class="reward-effect-grain" />
-      <div class="reward-effect-scanlines" />
-      <div class="reward-effect-vignette" />
-      <div class="reward-effect-flash" />
-      <component :is="activeComponent" :seed="props.seed" class="reward-effect-content" />
+      <div class="fx-backdrop" :style="{ background: option.backdrop }" />
+
+      <div class="fx-camera">
+        <div class="fx-shake-rig">
+          <div class="fx-bloom" />
+          <span class="fx-shockwave" />
+          <span class="fx-shockwave is-delayed" />
+          <span class="fx-shockwave is-third" />
+          <component :is="activeComponent" :seed="props.seed" class="fx-content" />
+        </div>
+      </div>
+
+      <div class="fx-injectors">
+        <span
+          v-for="beam in 8"
+          :key="beam"
+          class="fx-injector"
+          :style="{ '--beam-rotate': `${(beam - 1) * 45}deg`, animationDelay: `${(beam % 4) * 45}ms` }"
+        />
+      </div>
+
+      <div class="fx-grain" />
+      <div class="fx-scanlines" />
+      <div class="fx-chroma" />
+      <div class="fx-vignette" />
+      <span class="fx-restore" />
+
+      <div class="fx-cinebar is-top" />
+      <div class="fx-cinebar is-bottom" />
+
+      <div class="fx-hud">
+        <span class="fx-hud-bracket is-tl" />
+        <span class="fx-hud-bracket is-tr" />
+        <span class="fx-hud-bracket is-bl" />
+        <span class="fx-hud-bracket is-br" />
+        <div class="fx-hud-protocol">
+          <small>NEXUS · VISUAL PROTOCOL</small>
+          <strong>{{ option.codename }}</strong>
+          <span>
+            {{ tierMeta.codename }} CLASS · {{ option.label }}
+            <em v-if="option.apex">APEX EVENT</em>
+          </span>
+        </div>
+        <div class="fx-hud-status">
+          <span class="fx-hud-status-run">ENERGY −{{ option.cost }} ⬢ · SEED {{ seedLabel }} · RUNNING</span>
+          <span class="fx-hud-status-done">PROTOCOL COMPLETE · SYSTEM RESTORED</span>
+        </div>
+      </div>
+
+      <div class="fx-flash" />
     </div>
   </Teleport>
 </template>
 
 <style>
 .reward-effect-overlay {
-  --reward-accent: #60a5fa;
-  --reward-secondary: #f472b6;
+  --fx-accent: #60a5fa;
+  --fx-secondary: #f472b6;
+  --fx-ms: 5000ms;
+  --fx-entry-ms: 600ms;
+  --fx-exit-ms: 800ms;
+  --fx-exit-delay: 4200ms;
+  --fx-shake-amp: 0px;
+  /* 分级压制系数：默认 = 信标级，战术/奇点级逐级抬升 */
+  --fx-grain-o: 0.08;
+  --fx-scanline-o: 0.16;
+  --fx-vignette-o: 0.62;
   position: fixed;
   inset: 0;
   z-index: 10000;
@@ -142,63 +234,161 @@ const activeComponent = computed(() => (props.effect ? effectComponentMap[props.
   isolation: isolate;
 }
 
-.reward-effect-backdrop,
-.reward-effect-bloom,
-.reward-effect-grain,
-.reward-effect-scanlines,
-.reward-effect-vignette,
-.reward-effect-flash {
+.fx-backdrop,
+.fx-camera,
+.fx-shake-rig,
+.fx-bloom,
+.fx-content,
+.fx-grain,
+.fx-scanlines,
+.fx-chroma,
+.fx-vignette,
+.fx-flash {
   position: absolute;
   inset: 0;
 }
 
-.reward-effect-backdrop {
+/* ── 背景幕：特效专属氛围（数据驱动），T3 附加环境熔化 ── */
+.fx-backdrop {
   z-index: -4;
   opacity: 0;
-  animation: reward-backdrop 4.2s ease both;
+  animation: fx-backdrop var(--fx-ms) ease both;
 }
 
-.reward-effect-bloom {
-  z-index: -3;
-  opacity: 0;
-  background:
-    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--reward-accent) 34%, transparent), transparent 31%),
-    radial-gradient(circle at 28% 28%, color-mix(in srgb, var(--reward-secondary) 18%, transparent), transparent 26%),
-    radial-gradient(circle at 76% 72%, color-mix(in srgb, var(--reward-accent) 20%, transparent), transparent 30%);
-  filter: blur(20px) saturate(1.18);
-  mix-blend-mode: screen;
-  transform: scale(0.82);
-  animation: reward-bloom 4.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+.fx-tier-singularity .fx-backdrop {
+  backdrop-filter: blur(3px) saturate(1.12);
 }
 
-.reward-effect-content {
+/* ── 相机 rig：镜头预设作用于内容 + 辉光 + 冲击波 ── */
+.fx-camera {
+  z-index: 1;
+  will-change: transform;
+  transform-origin: 50% 50%;
+}
+
+.fx-cam-still .fx-camera {
+  animation: fx-cam-still var(--fx-ms) ease both;
+}
+
+.fx-cam-drift .fx-camera {
+  animation: fx-cam-drift var(--fx-ms) ease-in-out both;
+}
+
+.fx-cam-dolly .fx-camera {
+  animation: fx-cam-dolly var(--fx-ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.fx-cam-sweep .fx-camera {
+  animation: fx-cam-sweep var(--fx-ms) ease-in-out both;
+}
+
+.fx-cam-ascend .fx-camera {
+  animation: fx-cam-ascend var(--fx-ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.fx-cam-warp .fx-camera {
+  animation: fx-cam-warp var(--fx-ms) ease-in-out both;
+}
+
+.fx-cam-punch .fx-camera {
+  animation: fx-cam-punch var(--fx-ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.fx-cam-collapse .fx-camera {
+  animation: fx-cam-collapse var(--fx-ms) cubic-bezier(0.4, 0, 0.6, 1) both;
+}
+
+.fx-has-shake .fx-shake-rig {
+  animation: fx-shake var(--fx-ms) steps(2, jump-none) both;
+}
+
+/* ── 内容与辉光 ── */
+.fx-content {
   z-index: 2;
 }
 
-.reward-effect-shockwave {
+.fx-bloom {
+  z-index: -1;
+  opacity: 0;
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--fx-accent) 34%, transparent), transparent 31%),
+    radial-gradient(circle at 28% 28%, color-mix(in srgb, var(--fx-secondary) 18%, transparent), transparent 26%),
+    radial-gradient(circle at 76% 72%, color-mix(in srgb, var(--fx-accent) 20%, transparent), transparent 30%);
+  filter: blur(20px) saturate(1.18);
+  mix-blend-mode: screen;
+  transform: scale(0.82);
+  animation: fx-bloom var(--fx-ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── 开幕光圈：冲击波三连（第三道仅奇点级） ── */
+.fx-shockwave {
   position: absolute;
   left: 50%;
   top: 50%;
   z-index: 1;
   width: 22vmin;
   height: 22vmin;
-  border: 1px solid color-mix(in srgb, var(--reward-accent) 68%, rgba(255, 255, 255, 0.7));
+  border: 1px solid color-mix(in srgb, var(--fx-accent) 68%, rgba(255, 255, 255, 0.7));
   border-radius: 50%;
   box-shadow:
-    inset 0 0 24px color-mix(in srgb, var(--reward-accent) 20%, transparent),
-    0 0 42px color-mix(in srgb, var(--reward-accent) 36%, transparent);
+    inset 0 0 24px color-mix(in srgb, var(--fx-accent) 20%, transparent),
+    0 0 42px color-mix(in srgb, var(--fx-accent) 36%, transparent);
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.22);
-  animation: reward-shockwave 1.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: fx-shockwave 1.8s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.reward-effect-shockwave.is-delayed {
+.fx-shockwave.is-delayed {
   animation-delay: 260ms;
 }
 
-.reward-effect-grain {
+.fx-shockwave.is-third {
+  display: none;
+  border-color: color-mix(in srgb, var(--fx-secondary) 66%, rgba(255, 255, 255, 0.6));
+  animation-delay: 520ms;
+}
+
+.fx-tier-singularity .fx-shockwave.is-third {
+  display: block;
+}
+
+/* ── 能量注入：甲币能量自屏幕边缘汇入舞台中心（entry 阶段） ── */
+.fx-injectors {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: none;
+}
+
+.fx-tier-tactical .fx-injectors,
+.fx-tier-singularity .fx-injectors {
+  display: block;
+}
+
+.fx-injector {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56vmax;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--fx-accent) 88%, #fff) 0, color-mix(in srgb, var(--fx-accent) 40%, transparent) 42%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--fx-accent) 46%, transparent);
+  opacity: 0;
+  transform: rotate(var(--beam-rotate)) scaleX(1);
+  transform-origin: left center;
+  animation: fx-inject var(--fx-entry-ms) cubic-bezier(0.7, 0, 0.3, 1) both;
+}
+
+/* 战术级只保留正交四束，奇点级八向全开 */
+.fx-tier-tactical .fx-injector:nth-child(even) {
+  display: none;
+}
+
+/* ── 后期处理层（屏幕空间，不随相机运动） ── */
+.fx-grain {
   z-index: 4;
-  opacity: 0.1;
+  opacity: 0;
   background-image:
     radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.2) 0 1px, transparent 1.5px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
@@ -206,483 +396,266 @@ const activeComponent = computed(() => (props.effect ? effectComponentMap[props.
   background-size: 18px 18px, 42px 42px, 42px 42px;
   mask-image: radial-gradient(circle at center, #000 0 62%, transparent 78%);
   mix-blend-mode: overlay;
-  animation: reward-grain 4.2s ease both;
+  animation: fx-grain var(--fx-ms) ease both;
 }
 
-.reward-effect-scanlines {
+.fx-scanlines {
   z-index: 5;
   opacity: 0;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, transparent 0 48%, color-mix(in srgb, var(--reward-accent) 16%, transparent), transparent 52%);
+    linear-gradient(90deg, transparent 0 48%, color-mix(in srgb, var(--fx-accent) 16%, transparent), transparent 52%);
   background-size: 100% 5px, 180px 100%;
   mix-blend-mode: soft-light;
-  animation: reward-scanlines 4.8s ease both;
+  animation: fx-scanlines var(--fx-ms) ease both;
 }
 
-.reward-effect-vignette {
+/* 色差撕裂：仅奇点级，左品红右青的边缘色散 + 脉冲 */
+.fx-chroma {
+  z-index: 5;
+  display: none;
+  opacity: 0;
+  background:
+    linear-gradient(90deg, rgba(244, 62, 156, 0.16), transparent 12% 88%, rgba(34, 211, 238, 0.16)),
+    linear-gradient(0deg, rgba(34, 211, 238, 0.07), transparent 16% 84%, rgba(244, 62, 156, 0.07));
+  mix-blend-mode: screen;
+  animation: fx-chroma var(--fx-ms) ease both;
+}
+
+.fx-tier-singularity .fx-chroma {
+  display: block;
+}
+
+.fx-vignette {
   z-index: 6;
   opacity: 0;
   background:
     radial-gradient(circle at center, transparent 0 46%, rgba(2, 6, 23, 0.18) 66%, rgba(2, 6, 23, 0.58) 100%),
-    linear-gradient(90deg, color-mix(in srgb, var(--reward-secondary) 12%, transparent), transparent 26% 74%, color-mix(in srgb, var(--reward-accent) 12%, transparent));
-  animation: reward-vignette 4.8s ease both;
+    linear-gradient(90deg, color-mix(in srgb, var(--fx-secondary) 12%, transparent), transparent 26% 74%, color-mix(in srgb, var(--fx-accent) 12%, transparent));
+  animation: fx-vignette var(--fx-ms) ease both;
 }
 
-.reward-effect-flash {
+/* ── 世界回收：exit 阶段一道向心收束环 ── */
+.fx-restore {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 6;
+  width: 120vmin;
+  height: 120vmin;
+  border: 1px solid color-mix(in srgb, var(--fx-accent) 54%, rgba(255, 255, 255, 0.6));
+  border-radius: 50%;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(1.1);
+  animation: fx-restore var(--fx-exit-ms) cubic-bezier(0.7, 0, 0.84, 0) var(--fx-exit-delay) both;
+}
+
+/* ── 电影黑边：仅奇点级 ── */
+.fx-cinebar {
+  position: absolute;
+  left: 0;
+  right: 0;
   z-index: 7;
+  height: 7vh;
+  display: none;
+  background: linear-gradient(180deg, rgba(1, 3, 10, 0.96), rgba(1, 3, 10, 0.88));
+}
+
+.fx-tier-singularity .fx-cinebar {
+  display: block;
+}
+
+.fx-cinebar.is-top {
+  top: 0;
+  transform-origin: center top;
+  animation: fx-cinebar var(--fx-ms) ease both;
+}
+
+.fx-cinebar.is-bottom {
+  bottom: 0;
+  transform-origin: center bottom;
+  animation: fx-cinebar var(--fx-ms) ease both;
+}
+
+/* ── 协议 HUD：战术级起显示，奇点级强化 ── */
+.fx-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: none;
+  color: color-mix(in srgb, var(--fx-accent) 76%, #fff);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.fx-tier-tactical .fx-hud,
+.fx-tier-singularity .fx-hud {
+  display: block;
+}
+
+.fx-hud-bracket {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  border: 2px solid color-mix(in srgb, var(--fx-accent) 62%, transparent);
+  opacity: 0;
+  animation: fx-hud-in var(--fx-ms) ease both;
+}
+
+.fx-hud-bracket.is-tl {
+  left: 3.2%;
+  top: 4.4%;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.fx-hud-bracket.is-tr {
+  right: 3.2%;
+  top: 4.4%;
+  border-left: 0;
+  border-bottom: 0;
+}
+
+.fx-hud-bracket.is-bl {
+  left: 3.2%;
+  bottom: 4.4%;
+  border-right: 0;
+  border-top: 0;
+}
+
+.fx-hud-bracket.is-br {
+  right: 3.2%;
+  bottom: 4.4%;
+  border-left: 0;
+  border-top: 0;
+}
+
+.fx-tier-singularity .fx-hud-bracket.is-tl,
+.fx-tier-singularity .fx-hud-bracket.is-tr {
+  top: calc(7vh + 2.2%);
+}
+
+.fx-tier-singularity .fx-hud-bracket.is-bl,
+.fx-tier-singularity .fx-hud-bracket.is-br {
+  bottom: calc(7vh + 2.2%);
+}
+
+.fx-hud-protocol {
+  position: absolute;
+  left: 4.6%;
+  top: 6.4%;
+  display: grid;
+  gap: 4px;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--fx-accent) 42%, transparent);
+  opacity: 0;
+  animation: fx-hud-in var(--fx-ms) ease both;
+}
+
+.fx-tier-singularity .fx-hud-protocol {
+  top: calc(7vh + 3.6%);
+}
+
+.fx-hud-protocol small {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.34em;
+  opacity: 0.78;
+}
+
+.fx-hud-protocol strong {
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: #fff;
+  text-shadow:
+    0 0 22px color-mix(in srgb, var(--fx-accent) 66%, transparent),
+    0 0 46px color-mix(in srgb, var(--fx-secondary) 36%, transparent);
+}
+
+.fx-apex .fx-hud-protocol strong {
+  background: linear-gradient(92deg, #fff 0%, color-mix(in srgb, var(--fx-accent) 74%, #fff) 46%, color-mix(in srgb, var(--fx-secondary) 76%, #fff) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.fx-hud-protocol span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  opacity: 0.85;
+}
+
+.fx-hud-protocol em {
+  border: 1px solid color-mix(in srgb, var(--fx-secondary) 62%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--fx-secondary) 16%, transparent);
+  color: color-mix(in srgb, var(--fx-secondary) 78%, #fff);
+  font-size: 9px;
+  font-style: normal;
+  letter-spacing: 0.3em;
+  padding: 2px 6px 2px 8px;
+  animation: fx-apex-pulse 1.4s ease-in-out infinite;
+}
+
+.fx-hud-status {
+  position: absolute;
+  right: 4.6%;
+  bottom: 6.2%;
+  display: grid;
+  justify-items: end;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-shadow: 0 0 16px color-mix(in srgb, var(--fx-accent) 40%, transparent);
+}
+
+.fx-tier-singularity .fx-hud-status {
+  bottom: calc(7vh + 3.2%);
+}
+
+.fx-hud-status span {
+  grid-area: 1 / 1;
+}
+
+.fx-hud-status-run {
+  opacity: 0;
+  animation: fx-status-run var(--fx-ms) ease both;
+}
+
+.fx-hud-status-done {
+  color: #fff;
+  opacity: 0;
+  animation: fx-status-done var(--fx-exit-ms) ease var(--fx-exit-delay) both;
+}
+
+/* ── 起幕白闪 ── */
+.fx-flash {
+  z-index: 9;
   opacity: 0;
   background:
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.92), color-mix(in srgb, var(--reward-accent) 36%, transparent) 22%, transparent 48%);
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.92), color-mix(in srgb, var(--fx-accent) 36%, transparent) 22%, transparent 48%);
   mix-blend-mode: screen;
-  animation: reward-flash 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: fx-flash 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.reward-effect-overlay.is-fireworks,
-.reward-effect-overlay.is-sparkle {
-  --reward-accent: #f59e0b;
-  --reward-secondary: #60a5fa;
+/* ── 分级压制系数 ── */
+.fx-tier-tactical {
+  --fx-grain-o: 0.12;
+  --fx-scanline-o: 0.3;
+  --fx-vignette-o: 0.84;
 }
 
-.reward-effect-overlay.is-birthday {
-  --reward-accent: #ec4899;
-  --reward-secondary: #fbbf24;
+.fx-tier-singularity {
+  --fx-grain-o: 0.17;
+  --fx-scanline-o: 0.38;
+  --fx-vignette-o: 1;
 }
 
-.reward-effect-overlay.is-aurora,
-.reward-effect-overlay.is-breathingUi {
-  --reward-accent: #22c55e;
-  --reward-secondary: #38bdf8;
-}
-
-.reward-effect-overlay.is-warp,
-.reward-effect-overlay.is-timeFold,
-.reward-effect-overlay.is-energyRing {
-  --reward-accent: #60a5fa;
-  --reward-secondary: #2dd4bf;
-}
-
-.reward-effect-overlay.is-matrix,
-.reward-effect-overlay.is-codeMaterialize,
-.reward-effect-overlay.is-dataStorm {
-  --reward-accent: #34d399;
-  --reward-secondary: #22d3ee;
-}
-
-.reward-effect-overlay.is-crown {
-  --reward-accent: #facc15;
-  --reward-secondary: #f97316;
-}
-
-.reward-effect-overlay.is-neonDrive {
-  --reward-accent: #f472b6;
-  --reward-secondary: #22d3ee;
-}
-
-.reward-effect-overlay.is-cockpit,
-.reward-effect-overlay.is-floatingHud,
-.reward-effect-overlay.is-cyberDataFlow,
-.reward-effect-overlay.is-cityScan,
-.reward-effect-overlay.is-rainGlass,
-.reward-effect-overlay.is-droneFlyover,
-.reward-effect-overlay.is-glassRefraction {
-  --reward-accent: #22d3ee;
-  --reward-secondary: #a78bfa;
-}
-
-.reward-effect-overlay.is-holoCore,
-.reward-effect-overlay.is-quantumGate,
-.reward-effect-overlay.is-neuralThink,
-.reward-effect-overlay.is-quantumFlicker,
-.reward-effect-overlay.is-spaceJump {
-  --reward-accent: #a78bfa;
-  --reward-secondary: #22d3ee;
-}
-
-.reward-effect-overlay.is-laserGrid,
-.reward-effect-overlay.is-velocityTrail {
-  --reward-accent: #2dd4bf;
-  --reward-secondary: #f472b6;
-}
-
-.reward-effect-overlay.is-fireworks .reward-effect-backdrop {
-  background:
-    radial-gradient(circle at 50% 72%, rgba(59, 108, 246, 0.18), transparent 38%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.56), rgba(15, 23, 42, 0.18));
-}
-
-.reward-effect-overlay.is-birthday .reward-effect-backdrop {
-  animation-duration: 4.6s;
-  background:
-    radial-gradient(circle at 50% 46%, rgba(236, 72, 153, 0.22), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(59, 108, 246, 0.1));
-}
-
-.reward-effect-overlay.is-sparkle .reward-effect-backdrop {
-  background:
-    radial-gradient(circle at 50% 48%, rgba(251, 191, 36, 0.18), transparent 36%),
-    linear-gradient(120deg, rgba(255, 255, 255, 0.12), rgba(251, 191, 36, 0.1));
-}
-
-.reward-effect-overlay.is-aurora .reward-effect-backdrop {
-  animation-duration: 5.2s;
-  background:
-    linear-gradient(180deg, rgba(2, 6, 23, 0.7), rgba(15, 23, 42, 0.22)),
-    radial-gradient(circle at 50% 100%, rgba(34, 197, 94, 0.18), transparent 46%);
-}
-
-.reward-effect-overlay.is-warp .reward-effect-backdrop {
-  background:
-    radial-gradient(circle at center, rgba(96, 165, 250, 0.26), rgba(15, 23, 42, 0.5) 45%, rgba(15, 23, 42, 0.12));
-}
-
-.reward-effect-overlay.is-matrix .reward-effect-backdrop {
-  background:
-    linear-gradient(180deg, rgba(2, 6, 23, 0.66), rgba(6, 78, 59, 0.2)),
-    radial-gradient(circle at center, rgba(52, 211, 153, 0.14), transparent 48%);
-}
-
-.reward-effect-overlay.is-crown .reward-effect-backdrop {
-  animation-duration: 4.8s;
-  background:
-    radial-gradient(circle at 50% 44%, rgba(250, 204, 21, 0.22), transparent 36%),
-    linear-gradient(180deg, rgba(66, 32, 6, 0.4), rgba(250, 204, 21, 0.08));
-}
-
-.reward-effect-overlay.is-neonDrive .reward-effect-backdrop {
-  animation-duration: 5.2s;
-  background:
-    radial-gradient(circle at 50% 70%, rgba(244, 114, 182, 0.24), transparent 34%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.72), rgba(76, 29, 149, 0.24));
-}
-
-.reward-effect-overlay.is-cockpit .reward-effect-backdrop {
-  animation-duration: 5.2s;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.18), transparent 42%),
-    linear-gradient(180deg, rgba(8, 47, 73, 0.56), rgba(2, 6, 23, 0.26));
-}
-
-.reward-effect-overlay.is-holoCore .reward-effect-backdrop {
-  animation-duration: 5.4s;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(167, 139, 250, 0.24), transparent 36%),
-    linear-gradient(180deg, rgba(30, 27, 75, 0.58), rgba(2, 6, 23, 0.22));
-}
-
-.reward-effect-overlay.is-laserGrid .reward-effect-backdrop {
-  animation-duration: 5s;
-  background:
-    radial-gradient(circle at 50% 62%, rgba(45, 212, 191, 0.2), transparent 38%),
-    linear-gradient(180deg, rgba(6, 78, 59, 0.42), rgba(2, 6, 23, 0.2));
-}
-
-.reward-effect-overlay.is-quantumGate .reward-effect-backdrop {
-  animation-duration: 5.6s;
-  background:
-    radial-gradient(circle at center, rgba(129, 140, 248, 0.3), transparent 32%),
-    linear-gradient(180deg, rgba(49, 46, 129, 0.62), rgba(2, 6, 23, 0.22));
-}
-
-.reward-effect-overlay.is-cyberDataFlow .reward-effect-backdrop {
-  animation-duration: 4.8s;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.22), transparent 42%),
-    linear-gradient(135deg, rgba(2, 6, 23, 0.78), rgba(76, 29, 149, 0.22));
-}
-
-.reward-effect-overlay.is-velocityTrail .reward-effect-backdrop {
-  animation-duration: 4.8s;
-  background:
-    radial-gradient(circle at 52% 68%, rgba(14, 165, 233, 0.24), transparent 36%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.72), rgba(12, 74, 110, 0.22));
-}
-
-.reward-effect-overlay.is-cityScan .reward-effect-backdrop {
-  animation-duration: 4.8s;
-  background:
-    linear-gradient(180deg, rgba(8, 47, 73, 0.68), rgba(2, 6, 23, 0.18)),
-    radial-gradient(circle at 50% 80%, rgba(45, 212, 191, 0.2), transparent 44%);
-}
-
-.reward-effect-overlay.is-floatingHud .reward-effect-backdrop {
-  animation-duration: 5.2s;
-  background:
-    radial-gradient(circle at center, rgba(34, 211, 238, 0.2), transparent 46%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.62), rgba(8, 47, 73, 0.22));
-}
-
-.reward-effect-overlay.is-neuralThink .reward-effect-backdrop {
-  animation-duration: 5.2s;
-  background:
-    radial-gradient(circle at 50% 45%, rgba(167, 139, 250, 0.24), transparent 40%),
-    linear-gradient(180deg, rgba(30, 27, 75, 0.64), rgba(2, 6, 23, 0.2));
-}
-
-.reward-effect-overlay.is-timeFold .reward-effect-backdrop {
-  animation-duration: 4.9s;
-  background:
-    radial-gradient(circle at center, rgba(147, 197, 253, 0.22), transparent 38%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.64), rgba(30, 64, 175, 0.16));
-}
-
-.reward-effect-overlay.is-rainGlass .reward-effect-backdrop {
-  animation-duration: 5.4s;
-  background:
-    radial-gradient(circle at 30% 20%, rgba(56, 189, 248, 0.2), transparent 34%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.78), rgba(30, 41, 59, 0.34));
-}
-
-.reward-effect-overlay.is-codeMaterialize .reward-effect-backdrop {
-  animation-duration: 5s;
-  background:
-    radial-gradient(circle at 62% 62%, rgba(34, 197, 94, 0.2), transparent 40%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.7), rgba(20, 83, 45, 0.18));
-}
-
-.reward-effect-overlay.is-energyRing .reward-effect-backdrop {
-  animation-duration: 4.8s;
-  background:
-    radial-gradient(circle at center, rgba(96, 165, 250, 0.28), transparent 36%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.62), rgba(45, 212, 191, 0.14));
-}
-
-.reward-effect-overlay.is-droneFlyover .reward-effect-backdrop {
-  animation-duration: 5.2s;
-  background:
-    radial-gradient(circle at 50% 78%, rgba(45, 212, 191, 0.2), transparent 42%),
-    linear-gradient(180deg, rgba(12, 74, 110, 0.58), rgba(2, 6, 23, 0.24));
-}
-
-.reward-effect-overlay.is-quantumFlicker .reward-effect-backdrop {
-  animation-duration: 4.8s;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(196, 181, 253, 0.28), transparent 34%),
-    linear-gradient(180deg, rgba(49, 46, 129, 0.62), rgba(2, 6, 23, 0.22));
-}
-
-.reward-effect-overlay.is-breathingUi .reward-effect-backdrop {
-  animation-duration: 5.6s;
-  background:
-    radial-gradient(circle at center, rgba(34, 197, 94, 0.2), transparent 42%),
-    linear-gradient(180deg, rgba(20, 83, 45, 0.48), rgba(2, 6, 23, 0.18));
-}
-
-.reward-effect-overlay.is-dataStorm .reward-effect-backdrop {
-  animation-duration: 5s;
-  background:
-    radial-gradient(circle at 50% 62%, rgba(45, 212, 191, 0.24), transparent 40%),
-    linear-gradient(180deg, rgba(6, 78, 59, 0.46), rgba(2, 6, 23, 0.24));
-}
-
-.reward-effect-overlay.is-glassRefraction .reward-effect-backdrop {
-  animation-duration: 5.2s;
-  background:
-    radial-gradient(circle at 30% 24%, rgba(125, 249, 255, 0.16), transparent 34%),
-    radial-gradient(circle at 72% 78%, rgba(244, 114, 182, 0.14), transparent 34%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.52), rgba(2, 6, 23, 0.18));
-}
-
-.reward-effect-overlay.is-spaceJump .reward-effect-backdrop {
-  animation-duration: 5s;
-  background:
-    radial-gradient(circle at center, rgba(129, 140, 248, 0.3), rgba(15, 23, 42, 0.56) 42%, rgba(15, 23, 42, 0.14)),
-    linear-gradient(180deg, rgba(30, 27, 75, 0.58), rgba(2, 6, 23, 0.24));
-}
-
-.reward-effect-overlay.is-blackHole,
-.reward-effect-overlay.is-supernova,
-.reward-effect-overlay.is-solarFlare,
-.reward-effect-overlay.is-rocketLaunch {
-  --reward-accent: #fb923c;
-  --reward-secondary: #93c5fd;
-}
-
-.reward-effect-overlay.is-gravityWave,
-.reward-effect-overlay.is-galaxyMap,
-.reward-effect-overlay.is-skyUplink {
-  --reward-accent: #93c5fd;
-  --reward-secondary: #818cf8;
-}
-
-.reward-effect-overlay.is-riftTear,
-.reward-effect-overlay.is-aiAwaken {
-  --reward-accent: #c084fc;
-  --reward-secondary: #f472b6;
-}
-
-.reward-effect-overlay.is-dysonRing,
-.reward-effect-overlay.is-empBlast {
-  --reward-accent: #facc15;
-  --reward-secondary: #fb923c;
-}
-
-.reward-effect-overlay.is-collider,
-.reward-effect-overlay.is-mechaBoot,
-.reward-effect-overlay.is-satelliteSweep,
-.reward-effect-overlay.is-deepSonar {
-  --reward-accent: #22d3ee;
-  --reward-secondary: #2dd4bf;
-}
-
-.reward-effect-overlay.is-orbitalStrike {
-  --reward-accent: #f87171;
-  --reward-secondary: #67e8f9;
-}
-
-.reward-effect-overlay.is-nanoSwarm,
-.reward-effect-overlay.is-bioScan,
-.reward-effect-overlay.is-energyShield {
-  --reward-accent: #4ade80;
-  --reward-secondary: #a3e635;
-}
-
-.reward-effect-overlay.is-holoDisassemble {
-  --reward-accent: #7dd3fc;
-  --reward-secondary: #a78bfa;
-}
-
-.reward-effect-overlay.is-blackHole .reward-effect-backdrop {
-  animation-duration: 6s;
-  background:
-    radial-gradient(circle at center, rgba(251, 146, 60, 0.16), rgba(2, 6, 23, 0.78) 40%, rgba(2, 6, 23, 0.5)),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.72), rgba(23, 12, 4, 0.4));
-}
-
-.reward-effect-overlay.is-supernova .reward-effect-backdrop {
-  animation-duration: 5.8s;
-  background:
-    radial-gradient(circle at center, rgba(245, 158, 11, 0.24), transparent 38%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.7), rgba(69, 26, 3, 0.26));
-}
-
-.reward-effect-overlay.is-gravityWave .reward-effect-backdrop {
-  animation-duration: 6.2s;
-  background:
-    radial-gradient(circle at center, rgba(147, 197, 253, 0.2), transparent 42%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.74), rgba(30, 58, 138, 0.2));
-}
-
-.reward-effect-overlay.is-riftTear .reward-effect-backdrop {
-  animation-duration: 6s;
-  background:
-    radial-gradient(circle at center, rgba(192, 132, 252, 0.22), transparent 36%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.78), rgba(59, 7, 100, 0.3));
-}
-
-.reward-effect-overlay.is-aiAwaken .reward-effect-backdrop {
-  animation-duration: 6s;
-  background:
-    radial-gradient(circle at center, rgba(244, 114, 182, 0.18), transparent 40%),
-    linear-gradient(180deg, rgba(1, 2, 8, 0.86), rgba(80, 7, 36, 0.24));
-}
-
-.reward-effect-overlay.is-dysonRing .reward-effect-backdrop {
-  animation-duration: 5.8s;
-  background:
-    radial-gradient(circle at center, rgba(250, 204, 21, 0.2), transparent 36%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.72), rgba(66, 32, 6, 0.3));
-}
-
-.reward-effect-overlay.is-collider .reward-effect-backdrop {
-  animation-duration: 5.6s;
-  background:
-    radial-gradient(circle at 50% 24%, rgba(45, 212, 191, 0.22), transparent 36%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.74), rgba(4, 47, 46, 0.28));
-}
-
-.reward-effect-overlay.is-mechaBoot .reward-effect-backdrop {
-  animation-duration: 6s;
-  background:
-    radial-gradient(circle at 50% 44%, rgba(34, 211, 238, 0.16), transparent 42%),
-    linear-gradient(180deg, rgba(1, 4, 12, 0.84), rgba(8, 47, 73, 0.3));
-}
-
-.reward-effect-overlay.is-orbitalStrike .reward-effect-backdrop {
-  animation-duration: 5.2s;
-  background:
-    radial-gradient(circle at 50% 58%, rgba(248, 113, 113, 0.2), transparent 38%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.72), rgba(69, 10, 10, 0.26));
-}
-
-.reward-effect-overlay.is-galaxyMap .reward-effect-backdrop {
-  animation-duration: 5.6s;
-  background:
-    radial-gradient(circle at 50% 40%, rgba(129, 140, 248, 0.18), transparent 44%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.78), rgba(30, 27, 75, 0.3));
-}
-
-.reward-effect-overlay.is-solarFlare .reward-effect-backdrop {
-  animation-duration: 5.6s;
-  background:
-    radial-gradient(circle at 8% 92%, rgba(251, 146, 60, 0.3), transparent 44%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.7), rgba(67, 20, 7, 0.28));
-}
-
-.reward-effect-overlay.is-nanoSwarm .reward-effect-backdrop {
-  animation-duration: 5.8s;
-  background:
-    radial-gradient(circle at center, rgba(163, 230, 53, 0.14), transparent 44%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.76), rgba(26, 46, 5, 0.3));
-}
-
-.reward-effect-overlay.is-holoDisassemble .reward-effect-backdrop {
-  animation-duration: 5.6s;
-  background:
-    radial-gradient(circle at center, rgba(125, 211, 252, 0.18), transparent 40%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.72), rgba(12, 74, 110, 0.26));
-}
-
-.reward-effect-overlay.is-rocketLaunch .reward-effect-backdrop {
-  animation-duration: 6.2s;
-  background:
-    radial-gradient(circle at 50% 86%, rgba(249, 115, 22, 0.24), transparent 40%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.74), rgba(28, 25, 23, 0.34));
-}
-
-.reward-effect-overlay.is-bioScan .reward-effect-backdrop {
-  animation-duration: 5.4s;
-  background:
-    radial-gradient(circle at center, rgba(52, 211, 153, 0.16), transparent 44%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.76), rgba(2, 44, 34, 0.3));
-}
-
-.reward-effect-overlay.is-empBlast .reward-effect-backdrop {
-  animation-duration: 5s;
-  background:
-    radial-gradient(circle at center, rgba(251, 191, 36, 0.2), transparent 36%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.78), rgba(41, 37, 36, 0.36));
-}
-
-.reward-effect-overlay.is-satelliteSweep .reward-effect-backdrop {
-  animation-duration: 5.6s;
-  background:
-    radial-gradient(circle at 50% 96%, rgba(56, 189, 248, 0.24), transparent 40%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.8), rgba(8, 47, 73, 0.26));
-}
-
-.reward-effect-overlay.is-energyShield .reward-effect-backdrop {
-  animation-duration: 5.4s;
-  background:
-    radial-gradient(circle at center, rgba(74, 222, 128, 0.16), transparent 42%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.74), rgba(5, 46, 22, 0.3));
-}
-
-.reward-effect-overlay.is-deepSonar .reward-effect-backdrop {
-  animation-duration: 5.4s;
-  background:
-    radial-gradient(circle at 50% 60%, rgba(34, 211, 238, 0.14), transparent 44%),
-    linear-gradient(180deg, rgba(1, 8, 18, 0.88), rgba(3, 30, 48, 0.44));
-}
-
-.reward-effect-overlay.is-skyUplink .reward-effect-backdrop {
-  animation-duration: 5.2s;
-  background:
-    radial-gradient(circle at 50% 22%, rgba(96, 165, 250, 0.22), transparent 36%),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.72), rgba(30, 58, 138, 0.24));
-}
-
-@keyframes reward-backdrop {
+/* ── 关键帧 ── */
+@keyframes fx-backdrop {
   0%,
   100% {
     opacity: 0;
@@ -693,7 +666,7 @@ const activeComponent = computed(() => (props.effect ? effectComponentMap[props.
   }
 }
 
-@keyframes reward-bloom {
+@keyframes fx-bloom {
   0%,
   100% {
     opacity: 0;
@@ -708,7 +681,7 @@ const activeComponent = computed(() => (props.effect ? effectComponentMap[props.
   }
 }
 
-@keyframes reward-shockwave {
+@keyframes fx-shockwave {
   0% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(0.22);
@@ -722,7 +695,21 @@ const activeComponent = computed(() => (props.effect ? effectComponentMap[props.
   }
 }
 
-@keyframes reward-grain {
+@keyframes fx-inject {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--beam-rotate)) scaleX(1.04);
+  }
+  22% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--beam-rotate)) scaleX(0.02);
+  }
+}
+
+@keyframes fx-grain {
   0%,
   100% {
     opacity: 0;
@@ -730,38 +717,156 @@ const activeComponent = computed(() => (props.effect ? effectComponentMap[props.
   }
   22%,
   78% {
-    opacity: 0.16;
+    opacity: var(--fx-grain-o);
     transform: scale(1.02);
   }
 }
 
-@keyframes reward-scanlines {
-  0%,
-  100% {
+@keyframes fx-scanlines {
+  0% {
     opacity: 0;
     background-position: 0 0, -120px 0;
   }
   18%,
   82% {
-    opacity: 0.34;
+    opacity: var(--fx-scanline-o);
   }
   100% {
+    opacity: 0;
     background-position: 0 42px, 220px 0;
   }
 }
 
-@keyframes reward-vignette {
+@keyframes fx-chroma {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+  8% {
+    opacity: 0.85;
+    transform: translateX(-2px);
+  }
+  12% {
+    opacity: 0.3;
+    transform: translateX(2px);
+  }
+  16%,
+  50% {
+    opacity: 0.22;
+    transform: translateX(0);
+  }
+  56% {
+    opacity: 0.8;
+    transform: translateX(2px);
+  }
+  60% {
+    opacity: 0.28;
+    transform: translateX(-1px);
+  }
+  64%,
+  84% {
+    opacity: 0.2;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fx-vignette {
   0%,
   100% {
     opacity: 0;
   }
   14%,
   86% {
-    opacity: 1;
+    opacity: var(--fx-vignette-o);
   }
 }
 
-@keyframes reward-flash {
+@keyframes fx-restore {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+  18% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.06);
+  }
+}
+
+@keyframes fx-cinebar {
+  0% {
+    transform: scaleY(0);
+  }
+  9%,
+  82% {
+    transform: scaleY(1);
+  }
+  100% {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes fx-hud-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  10%,
+  84% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes fx-apex-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--fx-secondary) 34%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 14px 1px color-mix(in srgb, var(--fx-secondary) 44%, transparent);
+  }
+}
+
+@keyframes fx-status-run {
+  0%,
+  6% {
+    opacity: 0;
+  }
+  12%,
+  80% {
+    opacity: 0.9;
+  }
+  84%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fx-status-done {
+  0%,
+  30% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  44%,
+  88% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fx-flash {
   0% {
     opacity: 0;
     transform: scale(0.6);
@@ -775,14 +880,186 @@ const activeComponent = computed(() => (props.effect ? effectComponentMap[props.
   }
 }
 
+/* ── 相机预设 ── */
+@keyframes fx-cam-still {
+  0% {
+    transform: scale(1.015);
+  }
+  14%,
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes fx-cam-drift {
+  0% {
+    transform: scale(1) translateY(0);
+  }
+  55% {
+    transform: scale(1.045) translateY(-0.4%);
+  }
+  100% {
+    transform: scale(1.06) translateY(-0.7%);
+  }
+}
+
+@keyframes fx-cam-dolly {
+  0% {
+    transform: scale(1.09);
+  }
+  18% {
+    transform: scale(1);
+  }
+  74% {
+    transform: scale(1.025);
+  }
+  100% {
+    transform: scale(1.07);
+  }
+}
+
+@keyframes fx-cam-sweep {
+  0% {
+    transform: scale(1.08) translateX(-1.6%);
+  }
+  22% {
+    transform: scale(1.03) translateX(-0.6%);
+  }
+  76% {
+    transform: scale(1.03) translateX(0.8%);
+  }
+  100% {
+    transform: scale(1.09) translateX(1.8%);
+  }
+}
+
+@keyframes fx-cam-ascend {
+  0% {
+    transform: scale(1.06) translateY(1.8%);
+  }
+  20% {
+    transform: scale(1.01) translateY(0.6%);
+  }
+  72% {
+    transform: scale(1.03) translateY(-1%);
+  }
+  100% {
+    transform: scale(1.1) translateY(-2.6%);
+  }
+}
+
+@keyframes fx-cam-warp {
+  0% {
+    transform: scale(1.14);
+    filter: blur(0);
+  }
+  24% {
+    transform: scale(0.96);
+    filter: blur(1.5px);
+  }
+  46% {
+    transform: scale(1.08);
+    filter: blur(0);
+  }
+  66% {
+    transform: scale(0.98);
+    filter: blur(2.5px);
+  }
+  84% {
+    transform: scale(1.04);
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(1.16);
+    filter: blur(3px);
+  }
+}
+
+@keyframes fx-cam-punch {
+  0% {
+    transform: scale(1.04);
+  }
+  12% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.005);
+  }
+  38% {
+    transform: scale(1.11);
+  }
+  46% {
+    transform: scale(1.035);
+  }
+  58% {
+    transform: scale(1.085);
+  }
+  72% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes fx-cam-collapse {
+  0% {
+    transform: scale(1);
+  }
+  42% {
+    transform: scale(1.09);
+  }
+  58% {
+    transform: scale(1.2);
+  }
+  64% {
+    transform: scale(0.94);
+  }
+  74% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1.12);
+  }
+}
+
+@keyframes fx-shake {
+  0%,
+  13%,
+  31%,
+  51%,
+  77%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  16% {
+    transform: translate3d(var(--fx-shake-amp), calc(var(--fx-shake-amp) * -0.7), 0);
+  }
+  19% {
+    transform: translate3d(calc(var(--fx-shake-amp) * -0.8), var(--fx-shake-amp), 0);
+  }
+  23% {
+    transform: translate3d(calc(var(--fx-shake-amp) * 0.6), calc(var(--fx-shake-amp) * 0.5), 0);
+  }
+  27% {
+    transform: translate3d(calc(var(--fx-shake-amp) * -0.4), calc(var(--fx-shake-amp) * -0.3), 0);
+  }
+  55% {
+    transform: translate3d(calc(var(--fx-shake-amp) * -0.9), calc(var(--fx-shake-amp) * 0.6), 0);
+  }
+  59% {
+    transform: translate3d(var(--fx-shake-amp), calc(var(--fx-shake-amp) * -0.5), 0);
+  }
+  64% {
+    transform: translate3d(calc(var(--fx-shake-amp) * -0.5), calc(var(--fx-shake-amp) * -0.6), 0);
+  }
+  69% {
+    transform: translate3d(calc(var(--fx-shake-amp) * 0.3), calc(var(--fx-shake-amp) * 0.4), 0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .reward-effect-backdrop,
-  .reward-effect-bloom,
-  .reward-effect-shockwave,
-  .reward-effect-grain,
-  .reward-effect-scanlines,
-  .reward-effect-vignette,
-  .reward-effect-flash,
+  .reward-effect-overlay,
   .reward-effect-overlay *,
   .reward-effect-overlay *::before,
   .reward-effect-overlay *::after {

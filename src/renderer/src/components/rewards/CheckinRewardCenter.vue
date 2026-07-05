@@ -1,56 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue';
-import {
-  Activity,
-  Atom,
-  Bike,
-  Bot,
-  Boxes,
-  BrainCircuit,
-  Building2,
-  Cake,
-  CircleDashed,
-  CircuitBoard,
-  Clock3,
-  CloudRain,
-  CloudUpload,
-  Code2,
-  Coins,
-  Component,
-  Cpu,
-  Crosshair,
-  Crown,
-  DatabaseZap,
-  Dna,
-  Eclipse,
-  Expand,
-  Eye,
-  Gauge,
-  Gem,
-  Gift,
-  Globe,
-  Layers,
-  Orbit,
-  PartyPopper,
-  Plane,
-  Radar,
-  Radiation,
-  Radio,
-  Rocket,
-  Satellite,
-  ScanLine,
-  Shield,
-  Slice,
-  Sparkles,
-  Star,
-  Sun,
-  Telescope,
-  Waves,
-  Zap,
-} from 'lucide-vue-next';
+import { Coins, Gift } from 'lucide-vue-next';
 import { ElMessage } from 'element-plus';
 import RewardEffectOverlay from '@/components/rewards/RewardEffectOverlay.vue';
-import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import {
+  EFFECT_DURATIONS,
+  EFFECT_OPTION_MAP,
+  groupEffectsByTier,
+} from '@/components/rewards/rewardEffects';
 import type { RewardEffectKey } from '@/components/rewards/rewardEffects';
 
 type CheckinWallet = {
@@ -62,59 +19,17 @@ type CheckinWallet = {
 const CHECKIN_STORAGE_KEY = 'gitinsight:checkin-wallet';
 const DAILY_CHECKIN_REWARD_MIN = 1888;
 const DAILY_CHECKIN_REWARD_MAX = 8888;
-const effectOptions = [
-  { key: 'fireworks', label: '臻彩烟花', cost: 4, icon: PartyPopper, tone: '#f59e0b' },
-  { key: 'birthday', label: '生日舞台', cost: 5, icon: Cake, tone: '#ec4899' },
-  { key: 'sparkle', label: '鎏金流光', cost: 4, icon: Sparkles, tone: '#fbbf24' },
-  { key: 'aurora', label: '极光天幕', cost: 6, icon: Gem, tone: '#22c55e' },
-  { key: 'warp', label: '星际跃迁', cost: 7, icon: Rocket, tone: '#60a5fa' },
-  { key: 'matrix', label: '代码矩阵', cost: 5, icon: ScanLine, tone: '#34d399' },
-  { key: 'crown', label: '荣耀加冕', cost: 8, icon: Crown, tone: '#eab308' },
-  { key: 'neonDrive', label: '霓虹疾驰', cost: 9, icon: Zap, tone: '#f472b6', tier: '特级' },
-  { key: 'cockpit', label: '驾驶舱 HUD', cost: 10, icon: Gauge, tone: '#22d3ee', tier: '特级' },
-  { key: 'holoCore', label: '全息核心', cost: 11, icon: Cpu, tone: '#a78bfa', tier: '特级' },
-  { key: 'laserGrid', label: '激光网格', cost: 9, icon: CircuitBoard, tone: '#2dd4bf', tier: '特级' },
-  { key: 'quantumGate', label: '量子虫洞', cost: 12, icon: Orbit, tone: '#818cf8', tier: '特级' },
-  { key: 'cyberDataFlow', label: '赛博霓虹数据流', cost: 10, icon: CircuitBoard, tone: '#22d3ee', tier: '特级' },
-  { key: 'velocityTrail', label: '骑行速度光轨', cost: 9, icon: Bike, tone: '#38bdf8', tier: '特级' },
-  { key: 'cityScan', label: '城市扫描线', cost: 8, icon: Building2, tone: '#2dd4bf', tier: '特级' },
-  { key: 'floatingHud', label: '驾驶舱 HUD 浮层', cost: 10, icon: Radar, tone: '#67e8f9', tier: '特级' },
-  { key: 'neuralThink', label: '神经网络思考', cost: 11, icon: BrainCircuit, tone: '#a78bfa', tier: '特级' },
-  { key: 'timeFold', label: '时间折叠过渡', cost: 10, icon: Clock3, tone: '#93c5fd', tier: '特级' },
-  { key: 'rainGlass', label: '雨夜玻璃 UI', cost: 9, icon: CloudRain, tone: '#38bdf8', tier: '特级' },
-  { key: 'codeMaterialize', label: '代码实体化', cost: 10, icon: Code2, tone: '#22c55e', tier: '特级' },
-  { key: 'energyRing', label: '能量加载环', cost: 8, icon: CircleDashed, tone: '#60a5fa', tier: '特级' },
-  { key: 'droneFlyover', label: '无人机飞行视角', cost: 11, icon: Plane, tone: '#14b8a6', tier: '特级' },
-  { key: 'quantumFlicker', label: '量子闪烁', cost: 12, icon: Atom, tone: '#c4b5fd', tier: '特级' },
-  { key: 'breathingUi', label: '呼吸 UI', cost: 8, icon: Activity, tone: '#22c55e', tier: '特级' },
-  { key: 'dataStorm', label: '数据风暴', cost: 11, icon: DatabaseZap, tone: '#2dd4bf', tier: '特级' },
-  { key: 'glassRefraction', label: '玻璃折射层', cost: 10, icon: Layers, tone: '#7dd3fc', tier: '特级' },
-  { key: 'spaceJump', label: '空间跃迁', cost: 12, icon: Expand, tone: '#818cf8', tier: '特级' },
-  { key: 'blackHole', label: '黑洞吞噬', cost: 14, icon: Eclipse, tone: '#fb923c', tier: '典藏' },
-  { key: 'supernova', label: '超新星爆发', cost: 13, icon: Star, tone: '#f59e0b', tier: '典藏' },
-  { key: 'gravityWave', label: '引力波合并', cost: 14, icon: Waves, tone: '#93c5fd', tier: '典藏' },
-  { key: 'riftTear', label: '时空裂隙', cost: 14, icon: Slice, tone: '#c084fc', tier: '典藏' },
-  { key: 'aiAwaken', label: 'AI 觉醒之眼', cost: 13, icon: Eye, tone: '#f472b6', tier: '典藏' },
-  { key: 'dysonRing', label: '戴森星环', cost: 13, icon: Globe, tone: '#facc15', tier: '典藏' },
-  { key: 'collider', label: '粒子对撞机', cost: 12, icon: Atom, tone: '#2dd4bf', tier: '特级' },
-  { key: 'mechaBoot', label: '机甲启动', cost: 12, icon: Bot, tone: '#22d3ee', tier: '特级' },
-  { key: 'orbitalStrike', label: '天基动能打击', cost: 12, icon: Crosshair, tone: '#f87171', tier: '特级' },
-  { key: 'galaxyMap', label: '全息星图', cost: 12, icon: Telescope, tone: '#818cf8', tier: '特级' },
-  { key: 'solarFlare', label: '日冕风暴', cost: 12, icon: Sun, tone: '#fb923c', tier: '特级' },
-  { key: 'nanoSwarm', label: '纳米蜂群', cost: 12, icon: Component, tone: '#a3e635', tier: '特级' },
-  { key: 'holoDisassemble', label: '全息拆解', cost: 12, icon: Boxes, tone: '#7dd3fc', tier: '特级' },
-  { key: 'rocketLaunch', label: '曙光发射', cost: 12, icon: Rocket, tone: '#f97316', tier: '特级' },
-  { key: 'bioScan', label: '生体扫描', cost: 11, icon: Dna, tone: '#34d399', tier: '特级' },
-  { key: 'empBlast', label: '电磁脉冲', cost: 11, icon: Radiation, tone: '#fbbf24', tier: '特级' },
-  { key: 'satelliteSweep', label: '卫星过境', cost: 11, icon: Satellite, tone: '#38bdf8', tier: '特级' },
-  { key: 'energyShield', label: '相位护盾', cost: 11, icon: Shield, tone: '#4ade80', tier: '特级' },
-  { key: 'deepSonar', label: '深海声呐', cost: 10, icon: Radio, tone: '#22d3ee', tier: '特级' },
-  { key: 'skyUplink', label: '云端上载', cost: 10, icon: CloudUpload, tone: '#60a5fa', tier: '特级' },
-] as const;
+/** 能量注入充能动画时长：与舞台 entry 开幕并行，不阻塞特效启动 */
+const CHARGE_MS = 720;
+
+const effectTierGroups = groupEffectsByTier();
+
 const wallet = ref<CheckinWallet>(loadWallet());
 const activeEffect = ref<RewardEffectKey | null>(null);
 const effectSeed = ref(0);
+const chargingKey = ref<RewardEffectKey | null>(null);
 let effectTimer: number | null = null;
+let chargeTimer: number | null = null;
 
 const todayKey = computed(() => getLocalDateKey(new Date()));
 const checkedInToday = computed(() => wallet.value.lastCheckinDate === todayKey.value);
@@ -188,6 +103,18 @@ function startEffect(effect: RewardEffectKey) {
   }, EFFECT_DURATIONS[effect]);
 }
 
+/** 消耗甲币 = 能量注入：卡片充能微动效与舞台开幕并行播放 */
+function chargeCard(effect: RewardEffectKey) {
+  if (chargeTimer) {
+    window.clearTimeout(chargeTimer);
+  }
+  chargingKey.value = effect;
+  chargeTimer = window.setTimeout(() => {
+    chargingKey.value = null;
+    chargeTimer = null;
+  }, CHARGE_MS);
+}
+
 function runDailyCheckin() {
   if (checkedInToday.value) {
     ElMessage.info('今天已经签到过了');
@@ -208,7 +135,7 @@ function runDailyCheckin() {
 }
 
 function playEffect(effect: RewardEffectKey) {
-  const option = effectOptions.find((item) => item.key === effect);
+  const option = EFFECT_OPTION_MAP[effect];
   if (!option) return;
 
   if (wallet.value.coins < option.cost) {
@@ -221,13 +148,17 @@ function playEffect(effect: RewardEffectKey) {
     coins: wallet.value.coins - option.cost,
   };
   persistWallet();
+  chargeCard(effect);
   startEffect(effect);
-  ElMessage.success(`已使用 ${option.cost} 甲币播放${option.label}`);
+  ElMessage.success(`已注入 ${option.cost} 甲币，「${option.label}」协议启动`);
 }
 
 onBeforeUnmount(() => {
   if (effectTimer) {
     window.clearTimeout(effectTimer);
+  }
+  if (chargeTimer) {
+    window.clearTimeout(chargeTimer);
   }
 });
 </script>
@@ -236,7 +167,7 @@ onBeforeUnmount(() => {
   <el-popover placement="bottom-end" trigger="click" :width="410" popper-class="coin-popover">
     <template #reference>
       <el-button class="topbar-coin-btn" :icon="Coins" aria-label="甲币签到">
-        <span>{{ wallet.coins }}</span>
+        <span :key="wallet.coins" class="coin-amount">{{ wallet.coins }}</span>
         <small>甲币</small>
       </el-button>
     </template>
@@ -244,8 +175,8 @@ onBeforeUnmount(() => {
     <div class="coin-panel">
       <div class="coin-panel-head">
         <div>
-          <strong>{{ wallet.coins }} 甲币</strong>
-          <span>{{ walletStatusText }}</span>
+          <strong :key="wallet.coins" class="coin-amount">{{ wallet.coins }} 甲币</strong>
+          <span>{{ walletStatusText }} · NEXUS 视觉协议库</span>
         </div>
         <el-tag class="coin-streak-tag" type="warning" effect="light" round>
           连续 {{ wallet.streak }} 天
@@ -263,26 +194,40 @@ onBeforeUnmount(() => {
       </el-button>
 
       <div class="effect-shop">
-        <button
-          v-for="effect in effectOptions"
-          :key="effect.key"
-          class="effect-shop-item"
-          type="button"
-          :disabled="wallet.coins < effect.cost"
-          :style="{ '--effect-tone': effect.tone }"
-          @click="playEffect(effect.key)"
-        >
-          <span class="effect-shop-icon">
-            <component :is="effect.icon" :size="18" />
-          </span>
-          <span class="effect-shop-copy">
-            <strong>
-              {{ effect.label }}
-              <em v-if="'tier' in effect">{{ effect.tier }}</em>
-            </strong>
-            <small>{{ effect.cost }} 甲币</small>
-          </span>
-        </button>
+        <template v-for="group in effectTierGroups" :key="group.meta.key">
+          <div class="effect-tier-head" :class="`tier-${group.meta.key}`">
+            <strong>{{ group.meta.label }}</strong>
+            <span>{{ group.meta.codename }}</span>
+            <small>{{ group.meta.costRange[0] }}-{{ group.meta.costRange[1] }} 甲币 · {{ group.options.length }} 项</small>
+          </div>
+          <button
+            v-for="effect in group.options"
+            :key="effect.key"
+            class="effect-shop-item"
+            :class="[
+              `tier-${effect.tier}`,
+              { 'is-apex': effect.apex, 'is-charging': chargingKey === effect.key },
+            ]"
+            type="button"
+            :disabled="wallet.coins < effect.cost"
+            :style="{ '--effect-tone': effect.tone }"
+            :title="`${effect.codename} — ${effect.narrative}`"
+            @click="playEffect(effect.key)"
+          >
+            <i v-if="effect.tier === 'singularity'" class="effect-card-halo" aria-hidden="true" />
+            <span class="effect-shop-icon">
+              <component :is="effect.icon" :size="18" />
+            </span>
+            <span class="effect-shop-copy">
+              <strong>
+                {{ effect.label }}
+                <em v-if="effect.apex">APEX</em>
+              </strong>
+              <small class="effect-shop-codename">{{ effect.codename }}</small>
+              <small>{{ effect.cost }} 甲币</small>
+            </span>
+          </button>
+        </template>
       </div>
     </div>
   </el-popover>
@@ -322,6 +267,11 @@ onBeforeUnmount(() => {
   color: var(--tone-amber);
   font-size: 11px;
   font-weight: 700;
+}
+
+/* 甲币数额变动时的能量脉冲 */
+.coin-amount {
+  animation: coin-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .coin-popover.el-popper {
@@ -390,19 +340,67 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 9px;
-  max-height: 360px;
+  max-height: 380px;
   overflow-y: auto;
   padding-right: 2px;
   scrollbar-gutter: stable;
   mask-image: linear-gradient(180deg, transparent 0, #000 10px calc(100% - 18px), transparent 100%);
 }
 
+/* ── 分级区头 ── */
+.effect-tier-head {
+  --tier-tone: var(--tone-amber);
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 5px 2px 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--tier-tone) 32%, transparent);
+}
+
+.effect-tier-head:first-child {
+  margin-top: 0;
+}
+
+.effect-tier-head strong {
+  color: color-mix(in srgb, var(--tier-tone) 72%, var(--c-text));
+  font-size: 13px;
+}
+
+.effect-tier-head span {
+  color: color-mix(in srgb, var(--tier-tone) 62%, var(--c-text-faint));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+}
+
+.effect-tier-head small {
+  margin-left: auto;
+  color: var(--c-text-faint);
+  font-size: 10px;
+}
+
+.effect-tier-head.tier-singularity {
+  --tier-tone: #a855f7;
+}
+
+.effect-tier-head.tier-tactical {
+  --tier-tone: #0ea5e9;
+}
+
+.effect-tier-head.tier-signal {
+  --tier-tone: #f59e0b;
+}
+
+/* ── 特效卡片（信标级基线） ── */
 .effect-shop-item {
   --effect-tone: var(--tone-amber);
   position: relative;
   isolation: isolate;
   min-width: 0;
-  min-height: 68px;
+  min-height: 72px;
   border: 1px solid var(--c-border);
   border-radius: 8px;
   background:
@@ -468,18 +466,86 @@ onBeforeUnmount(() => {
   opacity: 1;
 }
 
-.effect-shop-item:has(em) {
+/* ── 战术级：强调色描边 + 扫描氛围 ── */
+.effect-shop-item.tier-tactical {
+  border-color: color-mix(in srgb, var(--effect-tone) 34%, var(--c-border));
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--effect-tone) 20%, transparent), transparent 46%),
-    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--effect-tone) 24%, transparent), transparent 42%),
+    linear-gradient(135deg, color-mix(in srgb, var(--effect-tone) 14%, transparent), transparent 46%),
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--effect-tone) 22%, transparent), transparent 42%),
     var(--c-surface-muted);
 }
 
-.effect-shop-item:has(em) .effect-shop-icon {
+.effect-shop-item.tier-tactical .effect-shop-icon {
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--effect-tone) 38%, transparent),
-    0 10px 22px color-mix(in srgb, var(--effect-tone) 22%, transparent),
-    0 0 24px color-mix(in srgb, var(--effect-tone) 18%, transparent);
+    inset 0 0 0 1px color-mix(in srgb, var(--effect-tone) 34%, transparent),
+    0 8px 18px color-mix(in srgb, var(--effect-tone) 20%, transparent);
+}
+
+/* ── 奇点级：深空底 + 旋转能量描边 + 辉光图标 ── */
+.effect-shop-item.tier-singularity {
+  border-color: color-mix(in srgb, var(--effect-tone) 46%, var(--c-border));
+  background:
+    radial-gradient(circle at 82% 12%, color-mix(in srgb, var(--effect-tone) 30%, transparent), transparent 40%),
+    radial-gradient(circle at 14% 86%, color-mix(in srgb, var(--effect-tone) 14%, transparent), transparent 36%),
+    linear-gradient(160deg, rgba(10, 14, 30, 0.92), rgba(15, 23, 42, 0.86));
+  color: #e2e8f0;
+}
+
+.effect-shop-item.tier-singularity .effect-shop-copy strong {
+  color: #f1f5f9;
+}
+
+.effect-shop-item.tier-singularity .effect-shop-copy small {
+  color: rgba(226, 232, 240, 0.62);
+}
+
+.effect-shop-item.tier-singularity .effect-shop-icon {
+  background: color-mix(in srgb, var(--effect-tone) 22%, rgba(2, 6, 23, 0.7));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--effect-tone) 44%, transparent),
+    0 10px 22px color-mix(in srgb, var(--effect-tone) 26%, transparent),
+    0 0 26px color-mix(in srgb, var(--effect-tone) 22%, transparent);
+}
+
+.effect-card-halo {
+  position: absolute;
+  inset: -1px;
+  z-index: -2;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 12%,
+    color-mix(in srgb, var(--effect-tone) 66%, #fff) 22%,
+    transparent 34% 58%,
+    color-mix(in srgb, var(--effect-tone) 44%, transparent) 70%,
+    transparent 82%
+  );
+  opacity: 0.5;
+  animation: effect-halo-spin 3.4s linear infinite;
+}
+
+.effect-shop-item.tier-singularity:hover .effect-card-halo,
+.effect-shop-item.tier-singularity:focus-visible .effect-card-halo {
+  opacity: 0.9;
+}
+
+.effect-shop-item.is-apex {
+  box-shadow: 0 0 22px color-mix(in srgb, var(--effect-tone) 18%, transparent);
+}
+
+/* ── 能量注入：点击消耗甲币的充能反馈 ── */
+.effect-shop-item.is-charging {
+  border-color: color-mix(in srgb, var(--effect-tone) 78%, #fff);
+  transform: translateY(-1px) scale(1.015);
+}
+
+.effect-shop-item.is-charging::after {
+  opacity: 1;
+  animation: effect-charge-sweep 0.72s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.effect-shop-item.is-charging .effect-shop-icon {
+  animation: effect-charge-icon 0.72s ease;
 }
 
 .effect-shop-item:disabled {
@@ -534,7 +600,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
 }
 
 .effect-shop-copy strong {
@@ -550,22 +616,34 @@ onBeforeUnmount(() => {
 .effect-shop-copy em {
   display: inline-flex;
   align-items: center;
-  height: 17px;
+  height: 15px;
   margin-left: 4px;
-  border: 1px solid color-mix(in srgb, var(--effect-tone) 42%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--effect-tone) 13%, transparent);
-  color: var(--effect-tone);
-  font-size: 10px;
+  border: 1px solid color-mix(in srgb, var(--effect-tone) 52%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--effect-tone) 16%, transparent);
+  color: color-mix(in srgb, var(--effect-tone) 82%, #fff);
+  font-size: 8.5px;
   font-style: normal;
   font-weight: 800;
-  padding: 0 5px;
+  letter-spacing: 0.22em;
+  padding: 0 4px 0 6px;
   vertical-align: 1px;
+}
+
+.effect-shop-codename {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: color-mix(in srgb, var(--effect-tone) 58%, var(--c-text-faint));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .effect-shop-copy small {
   color: var(--c-text-faint);
-  font-size: 11px;
+  font-size: 10.5px;
   line-height: 1.2;
 }
 
@@ -587,9 +665,56 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--effect-tone) 16%, var(--c-surface-inset));
 }
 
+:root[data-theme='dark'] .effect-shop-item.tier-singularity {
+  background:
+    radial-gradient(circle at 82% 12%, color-mix(in srgb, var(--effect-tone) 26%, transparent), transparent 40%),
+    radial-gradient(circle at 14% 86%, color-mix(in srgb, var(--effect-tone) 12%, transparent), transparent 36%),
+    linear-gradient(160deg, rgba(5, 8, 20, 0.96), rgba(10, 16, 32, 0.9));
+}
+
 @keyframes effect-icon-orbit {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes effect-halo-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes effect-charge-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes effect-charge-icon {
+  0% {
+    transform: scale(1);
+  }
+  32% {
+    transform: scale(1.18);
+    box-shadow: 0 0 26px color-mix(in srgb, var(--effect-tone) 56%, transparent);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes coin-pop {
+  0% {
+    transform: scale(1);
+  }
+  36% {
+    transform: scale(1.14);
+  }
+  100% {
+    transform: scale(1);
   }
 }
 
