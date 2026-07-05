@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, watch } from 'vue';
 import type { Component } from 'vue';
 import AiAwakenEffect from '@/components/rewards/effects/AiAwakenEffect.vue';
 import AuroraEffect from '@/components/rewards/effects/AuroraEffect.vue';
@@ -64,6 +64,10 @@ const props = defineProps<{
   seed: number;
 }>();
 
+const emit = defineEmits<{
+  close: [];
+}>();
+
 const effectComponentMap: Record<RewardEffectKey, Component> = {
   fireworks: FireworksEffect,
   birthday: BirthdayEffect,
@@ -119,6 +123,11 @@ const option = computed(() => (props.effect ? EFFECT_OPTION_MAP[props.effect] : 
 const tierMeta = computed(() => (option.value ? EFFECT_TIERS[option.value.tier] : null));
 
 const SHAKE_AMPLITUDES = ['0px', '2.5px', '4.5px'] as const;
+const PHASE_LABELS = {
+  entry: '接入',
+  loop: '演出',
+  exit: '回收',
+} as const;
 
 const stageClasses = computed(() => {
   if (!option.value) return [];
@@ -147,6 +156,46 @@ const stageVars = computed(() => {
 });
 
 const seedLabel = computed(() => String(props.seed % 10000).padStart(4, '0'));
+const durationLabel = computed(() => {
+  if (!option.value) return '0.0s';
+  const { phases } = option.value;
+  return `${((phases.entry + phases.loop + phases.exit) / 1000).toFixed(1)}s`;
+});
+const overlayLabel = computed(() => (option.value ? `${option.value.label}开屏动画` : '奖励开屏动画'));
+const phaseSegments = computed(() => {
+  if (!option.value) return [];
+  return (Object.entries(option.value.phases) as Array<[keyof typeof PHASE_LABELS, number]>).map(([key, ms]) => ({
+    key,
+    ms,
+    label: PHASE_LABELS[key],
+  }));
+});
+
+function requestClose() {
+  emit('close');
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && props.effect) {
+    requestClose();
+  }
+}
+
+watch(
+  () => props.effect,
+  (effect) => {
+    if (effect) {
+      window.addEventListener('keydown', handleKeydown);
+      return;
+    }
+    window.removeEventListener('keydown', handleKeydown);
+  },
+  { immediate: true }
+);
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown);
+});
 </script>
 
 <template>
@@ -157,9 +206,15 @@ const seedLabel = computed(() => String(props.seed % 10000).padStart(4, '0'));
       class="reward-effect-overlay"
       :class="stageClasses"
       :style="stageVars"
-      aria-hidden="true"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="overlayLabel"
     >
       <div class="fx-backdrop" :style="{ background: option.backdrop }" />
+      <div class="fx-ambient-grid" />
+      <div class="fx-aperture">
+        <span v-for="ring in 3" :key="ring" :style="{ animationDelay: `${(ring - 1) * 180}ms` }" />
+      </div>
 
       <div class="fx-camera">
         <div class="fx-shake-rig">
@@ -206,8 +261,31 @@ const seedLabel = computed(() => String(props.seed % 10000).padStart(4, '0'));
           <span class="fx-hud-status-run">ENERGY −{{ option.cost }} ⬢ · SEED {{ seedLabel }} · RUNNING</span>
           <span class="fx-hud-status-done">PROTOCOL COMPLETE · SYSTEM RESTORED</span>
         </div>
+        <div class="fx-progress">
+          <div class="fx-progress-meta">
+            <span>{{ option.label }}</span>
+            <strong>{{ durationLabel }}</strong>
+          </div>
+          <div class="fx-progress-track">
+            <span class="fx-progress-fill" />
+          </div>
+          <div class="fx-phase-rail">
+            <span
+              v-for="phase in phaseSegments"
+              :key="phase.key"
+              class="fx-phase"
+              :style="{ flex: `${phase.ms} 1 0%` }"
+            >
+              {{ phase.label }}
+            </span>
+          </div>
+        </div>
       </div>
 
+      <button class="fx-skip" type="button" aria-label="跳过开屏动画" @click="requestClose">
+        <span>跳过</span>
+        <kbd>Esc</kbd>
+      </button>
       <div class="fx-flash" />
     </div>
   </Teleport>
@@ -235,6 +313,8 @@ const seedLabel = computed(() => String(props.seed % 10000).padStart(4, '0'));
 }
 
 .fx-backdrop,
+.fx-ambient-grid,
+.fx-aperture,
 .fx-camera,
 .fx-shake-rig,
 .fx-bloom,
@@ -253,6 +333,40 @@ const seedLabel = computed(() => String(props.seed % 10000).padStart(4, '0'));
   z-index: -4;
   opacity: 0;
   animation: fx-backdrop var(--fx-ms) ease both;
+}
+
+.fx-ambient-grid {
+  z-index: -3;
+  opacity: 0;
+  background:
+    linear-gradient(color-mix(in srgb, var(--fx-accent) 16%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--fx-secondary) 12%, transparent) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(circle at 50% 50%, #000 0 48%, transparent 74%);
+  transform: perspective(900px) rotateX(58deg) translateY(16vh) scale(1.22);
+  transform-origin: 50% 70%;
+  animation: fx-ambient-grid var(--fx-ms) ease both;
+}
+
+.fx-aperture {
+  z-index: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.fx-aperture span {
+  grid-area: 1 / 1;
+  width: min(62vmin, 620px);
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, var(--fx-accent) 38%, transparent);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 36px color-mix(in srgb, var(--fx-accent) 12%, transparent),
+    0 0 48px color-mix(in srgb, var(--fx-secondary) 10%, transparent);
+  opacity: 0;
+  transform: scale(0.72);
+  animation: fx-aperture var(--fx-ms) cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .fx-tier-singularity .fx-backdrop {
@@ -631,6 +745,123 @@ const seedLabel = computed(() => String(props.seed % 10000).padStart(4, '0'));
   animation: fx-status-done var(--fx-exit-ms) ease var(--fx-exit-delay) both;
 }
 
+.fx-progress {
+  position: absolute;
+  left: 4.6%;
+  right: 4.6%;
+  bottom: 4.2%;
+  display: grid;
+  gap: 7px;
+  opacity: 0;
+  animation: fx-progress-in var(--fx-ms) ease both;
+}
+
+.fx-tier-singularity .fx-progress {
+  bottom: calc(7vh + 1.8%);
+}
+
+.fx-progress-meta,
+.fx-phase-rail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: color-mix(in srgb, var(--fx-accent) 70%, #fff);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-shadow: 0 0 14px color-mix(in srgb, var(--fx-accent) 34%, transparent);
+}
+
+.fx-progress-meta strong {
+  color: #fff;
+  font-size: 10px;
+}
+
+.fx-progress-track {
+  position: relative;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fx-accent) 18%, rgba(255, 255, 255, 0.16));
+}
+
+.fx-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--fx-accent), color-mix(in srgb, var(--fx-secondary) 72%, #fff));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--fx-accent) 48%, transparent);
+  transform-origin: left center;
+  animation: fx-progress-fill var(--fx-ms) linear both;
+}
+
+.fx-phase-rail {
+  align-items: stretch;
+  gap: 4px;
+  opacity: 0.78;
+}
+
+.fx-phase {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fx-skip {
+  position: absolute;
+  right: 3.2%;
+  top: 3.2%;
+  z-index: 10;
+  min-width: 86px;
+  height: 32px;
+  border: 1px solid color-mix(in srgb, var(--fx-accent) 38%, rgba(255, 255, 255, 0.3));
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.34);
+  color: rgba(255, 255, 255, 0.84);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: auto;
+  backdrop-filter: blur(10px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 28px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  animation: fx-skip-in var(--fx-ms) ease both;
+  transition: border-color 0.16s ease, color 0.16s ease, transform 0.16s ease, background 0.16s ease;
+}
+
+.fx-tier-singularity .fx-skip {
+  top: calc(7vh + 1.2%);
+}
+
+.fx-skip:hover,
+.fx-skip:focus-visible {
+  border-color: color-mix(in srgb, var(--fx-accent) 72%, #fff);
+  background: color-mix(in srgb, var(--fx-accent) 18%, rgba(2, 6, 23, 0.5));
+  color: #fff;
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.fx-skip kbd {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.68);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 5px;
+}
+
 /* ── 起幕白闪 ── */
 .fx-flash {
   z-index: 9;
@@ -678,6 +909,39 @@ const seedLabel = computed(() => String(props.seed % 10000).padStart(4, '0'));
   }
   54% {
     transform: scale(1.14) rotate(10deg);
+  }
+}
+
+@keyframes fx-ambient-grid {
+  0% {
+    opacity: 0;
+    background-position: 0 0, 0 0;
+  }
+  16%,
+  82% {
+    opacity: 0.22;
+  }
+  100% {
+    opacity: 0;
+    background-position: 0 72px, 72px 0;
+  }
+}
+
+@keyframes fx-aperture {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.72) rotate(0deg);
+  }
+  15% {
+    opacity: 0.7;
+  }
+  58% {
+    opacity: 0.34;
+    transform: scale(1.08) rotate(18deg);
+  }
+  82% {
+    opacity: 0.24;
   }
 }
 
@@ -863,6 +1127,44 @@ const seedLabel = computed(() => String(props.seed % 10000).padStart(4, '0'));
   }
   100% {
     opacity: 0;
+  }
+}
+
+@keyframes fx-progress-in {
+  0%,
+  8%,
+  100% {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  14%,
+  86% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fx-progress-fill {
+  0% {
+    transform: scaleX(0);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes fx-skip-in {
+  0%,
+  6%,
+  92%,
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  12%,
+  86% {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -1065,6 +1367,44 @@ const seedLabel = computed(() => String(props.seed % 10000).padStart(4, '0'));
   .reward-effect-overlay *::after {
     animation-duration: 1ms !important;
     animation-delay: 0ms !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .fx-hud-protocol {
+    left: 5.4%;
+    right: 5.4%;
+  }
+
+  .fx-hud-protocol strong {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    font-size: 16px;
+  }
+
+  .fx-hud-protocol span,
+  .fx-hud-status,
+  .fx-progress-meta,
+  .fx-phase-rail {
+    letter-spacing: 0.12em;
+  }
+
+  .fx-hud-status {
+    left: 5.4%;
+    right: 5.4%;
+    justify-items: start;
+    bottom: 9.8%;
+  }
+
+  .fx-progress {
+    left: 5.4%;
+    right: 5.4%;
+    bottom: 4.8%;
+  }
+
+  .fx-skip {
+    right: 5.4%;
+    top: 4.8%;
   }
 }
 </style>

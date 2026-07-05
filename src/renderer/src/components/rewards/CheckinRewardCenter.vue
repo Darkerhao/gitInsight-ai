@@ -29,6 +29,7 @@ const activeEffect = ref<RewardEffectKey | null>(null);
 const effectSeed = ref(0);
 const chargingKey = ref<RewardEffectKey | null>(null);
 let effectTimer: number | null = null;
+let effectFrame: number | null = null;
 let chargeTimer: number | null = null;
 
 const todayKey = computed(() => getLocalDateKey(new Date()));
@@ -85,22 +86,30 @@ function persistWallet() {
   }
 }
 
-function startEffect(effect: RewardEffectKey) {
+function stopEffect() {
   if (effectTimer) {
     window.clearTimeout(effectTimer);
     effectTimer = null;
   }
 
+  if (effectFrame) {
+    window.cancelAnimationFrame(effectFrame);
+    effectFrame = null;
+  }
+
   activeEffect.value = null;
+}
+
+function startEffect(effect: RewardEffectKey) {
+  stopEffect();
+
   effectSeed.value += 1;
-  window.requestAnimationFrame(() => {
+  effectFrame = window.requestAnimationFrame(() => {
     activeEffect.value = effect;
+    effectFrame = null;
   });
 
-  effectTimer = window.setTimeout(() => {
-    activeEffect.value = null;
-    effectTimer = null;
-  }, EFFECT_DURATIONS[effect]);
+  effectTimer = window.setTimeout(stopEffect, EFFECT_DURATIONS[effect]);
 }
 
 /** 消耗甲币 = 能量注入：卡片充能微动效与舞台开幕并行播放 */
@@ -154,9 +163,7 @@ function playEffect(effect: RewardEffectKey) {
 }
 
 onBeforeUnmount(() => {
-  if (effectTimer) {
-    window.clearTimeout(effectTimer);
-  }
+  stopEffect();
   if (chargeTimer) {
     window.clearTimeout(chargeTimer);
   }
@@ -232,7 +239,7 @@ onBeforeUnmount(() => {
     </div>
   </el-popover>
 
-  <RewardEffectOverlay :effect="activeEffect" :seed="effectSeed" />
+  <RewardEffectOverlay :effect="activeEffect" :seed="effectSeed" @close="stopEffect" />
 </template>
 
 <style>
