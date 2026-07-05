@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { FolderSearch, LogIn, RefreshCw, TestTube2 } from 'lucide-vue-next';
 import { useAssistant } from '@/composables/useAssistant';
 import SectionTitle from '@/components/common/SectionTitle.vue';
@@ -19,16 +20,58 @@ const {
   applyFullDayReportRange,
 } = assistant;
 
+const selectedProjectName = computed(
+  () => projectOptions.value.find((item) => item.id === config.feishuForm.projectOptionId)?.name || config.feishuForm.projectName || '未选择项目',
+);
+
+const basicSummaryItems = computed(() => [
+  {
+    label: '工作目录',
+    value: config.workspaceDir || '未选择',
+    tone: config.workspaceDir ? 'blue' : 'muted',
+  },
+  {
+    label: '汇报人',
+    value: config.reporterName || '未配置',
+    tone: config.reporterName ? 'green' : 'muted',
+  },
+  {
+    label: '所属项目',
+    value: selectedProjectName.value,
+    tone: config.feishuForm.projectOptionId || config.feishuForm.projectName ? 'amber' : 'muted',
+  },
+]);
+
+const basicActions = [
+  { key: 'login', label: '登录飞书', icon: LogIn, loading: feishuLoading, type: 'default' },
+  { key: 'refresh', label: '刷新项目', icon: RefreshCw, loading: projectLoading, type: 'default' },
+  { key: 'test', label: '测试提交', icon: TestTube2, loading: feishuLoading, type: 'primary' },
+] as const;
+
 function handleReportDateChange(value: string | null) {
   if (value) {
     applyFullDayReportRange(value);
   }
 }
+
+function runBasicAction(key: (typeof basicActions)[number]['key']) {
+  if (key === 'login') return loginFeishu();
+  if (key === 'refresh') return loadFeishuProjects();
+  return testSubmitFeishu();
+}
 </script>
 
 <template>
   <div class="config-block">
-    <SectionTitle title="基础配置" />
+    <SectionTitle title="基础配置" subtitle="配置日报归属、日期与默认同步参数" />
+
+    <div class="config-summary-strip">
+      <div v-for="item in basicSummaryItems" :key="item.label" class="config-summary-item" :class="`tone-${item.tone}`">
+        <span>{{ item.label }}</span>
+        <strong>{{ item.value }}</strong>
+      </div>
+    </div>
+
     <div class="field-grid">
       <div class="field field-span-2">
         <label>项目路径</label>
@@ -75,9 +118,17 @@ function handleReportDateChange(value: string | null) {
     </div>
 
     <div class="config-block-actions">
-      <el-button :icon="LogIn" :loading="feishuLoading" @click="loginFeishu">登录飞书</el-button>
-      <el-button :icon="RefreshCw" :loading="projectLoading" @click="loadFeishuProjects">刷新项目</el-button>
-      <el-button :icon="TestTube2" type="primary" :loading="feishuLoading" @click="testSubmitFeishu">测试提交</el-button>
+      <el-button
+        v-for="action in basicActions"
+        :key="action.key"
+        :icon="action.icon"
+        :type="action.type"
+        :loading="action.loading.value"
+        :plain="action.type === 'primary'"
+        @click="runBasicAction(action.key)"
+      >
+        {{ action.label }}
+      </el-button>
     </div>
   </div>
 </template>

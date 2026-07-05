@@ -8,17 +8,17 @@ import SyncLogFeed from '@/components/aside/SyncLogFeed.vue';
 </script>
 
 <template>
-  <div class="view-stack">
+  <div class="view-stack report-config-view">
     <PageHeader title="日报配置" subtitle="配置日报生成规则、AI 接入与同步设置" />
 
-    <div class="main-grid">
-      <div class="main-center">
-        <section class="surface-card config-surface">
+    <div class="main-grid config-layout">
+      <main class="main-center">
+        <section class="config-surface" aria-label="日报配置表单">
           <BasicConfigCard />
           <AdvancedConfigPanels />
           <AutoSyncCard />
         </section>
-      </div>
+      </main>
 
       <aside class="main-aside">
         <TodayStatusCards />

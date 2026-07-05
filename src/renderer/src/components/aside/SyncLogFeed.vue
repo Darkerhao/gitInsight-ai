@@ -7,18 +7,15 @@ const assistant = useAssistant();
 const { syncLogs, formatDateTime } = assistant;
 
 const latestLogs = computed(() => syncLogs.value.slice(0, 5));
+const statusMeta = {
+  success: { icon: CircleCheck, title: '日报同步成功', tone: 'success' },
+  failed: { icon: CircleX, title: '日报同步失败', tone: 'failed' },
+  skipped: { icon: Clock, title: '日报同步已跳过', tone: 'skipped' },
+  running: { icon: Clock, title: '日报同步执行中', tone: 'running' },
+} as const;
 
-function iconOf(status: string) {
-  if (status === 'success') return CircleCheck;
-  if (status === 'failed') return CircleX;
-  return Clock;
-}
-
-function titleOf(status: string) {
-  if (status === 'success') return '日报同步成功';
-  if (status === 'failed') return '日报同步失败';
-  if (status === 'skipped') return '日报同步已跳过';
-  return '日报同步记录';
+function metaOf(status: string) {
+  return statusMeta[status as keyof typeof statusMeta] ?? { icon: Clock, title: '日报同步记录', tone: 'running' };
 }
 </script>
 
@@ -30,9 +27,9 @@ function titleOf(status: string) {
 
     <div v-if="latestLogs.length" class="sync-log-list">
       <div v-for="item in latestLogs" :key="item.id" class="sync-log-item">
-        <component :is="iconOf(item.status)" :size="18" class="sync-log-icon" :class="`tone-${item.status}`" />
+        <component :is="metaOf(item.status).icon" :size="18" class="sync-log-icon" :class="`tone-${metaOf(item.status).tone}`" />
         <div class="sync-log-body">
-          <strong>{{ titleOf(item.status) }}</strong>
+          <strong>{{ metaOf(item.status).title }}</strong>
           <span>{{ item.message }}</span>
         </div>
         <span class="sync-log-time">{{ formatDateTime(item.ranAt) }}</span>

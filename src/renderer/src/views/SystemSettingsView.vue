@@ -228,16 +228,21 @@ const operationCards = [
               class="operation-card"
               :class="`is-${item.tone}`"
               plain
+              :aria-label="item.title"
               @click="item.action"
             >
-              <component :is="item.icon" :size="18" />
+              <span class="operation-card-icon">
+                <component :is="item.icon" :size="18" />
+              </span>
               <div class="operation-card-copy">
-                <strong>{{ item.title }}</strong>
+                <div class="operation-card-title">
+                  <strong>{{ item.title }}</strong>
+                  <el-tag class="operation-card-tag" :type="item.tone === 'warning' ? 'warning' : 'primary'" effect="light" round>
+                    {{ item.tag }}
+                  </el-tag>
+                </div>
                 <span>{{ item.desc }}</span>
               </div>
-              <el-tag class="operation-card-tag" :type="item.tone === 'warning' ? 'warning' : 'primary'" effect="light" round>
-                {{ item.tag }}
-              </el-tag>
             </el-button>
           </div>
         </div>

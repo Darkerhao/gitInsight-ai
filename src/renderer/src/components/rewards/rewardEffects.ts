@@ -25,7 +25,27 @@ export type RewardEffectKey =
   | 'breathingUi'
   | 'dataStorm'
   | 'glassRefraction'
-  | 'spaceJump';
+  | 'spaceJump'
+  | 'blackHole'
+  | 'supernova'
+  | 'gravityWave'
+  | 'riftTear'
+  | 'aiAwaken'
+  | 'dysonRing'
+  | 'collider'
+  | 'mechaBoot'
+  | 'orbitalStrike'
+  | 'galaxyMap'
+  | 'solarFlare'
+  | 'nanoSwarm'
+  | 'holoDisassemble'
+  | 'rocketLaunch'
+  | 'bioScan'
+  | 'empBlast'
+  | 'satelliteSweep'
+  | 'energyShield'
+  | 'deepSonar'
+  | 'skyUplink';
 
 export const EFFECT_DURATIONS: Record<RewardEffectKey, number> = {
   fireworks: 4200,
@@ -55,4 +75,24 @@ export const EFFECT_DURATIONS: Record<RewardEffectKey, number> = {
   dataStorm: 5000,
   glassRefraction: 5200,
   spaceJump: 5000,
+  blackHole: 6000,
+  supernova: 5800,
+  gravityWave: 6200,
+  riftTear: 6000,
+  aiAwaken: 6000,
+  dysonRing: 5800,
+  collider: 5600,
+  mechaBoot: 6000,
+  orbitalStrike: 5200,
+  galaxyMap: 5600,
+  solarFlare: 5600,
+  nanoSwarm: 5800,
+  holoDisassemble: 5600,
+  rocketLaunch: 6200,
+  bioScan: 5400,
+  empBlast: 5000,
+  satelliteSweep: 5600,
+  energyShield: 5400,
+  deepSonar: 5400,
+  skyUplink: 5200,
 };

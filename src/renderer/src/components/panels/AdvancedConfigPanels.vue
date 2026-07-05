@@ -31,7 +31,7 @@ const fieldMappingRows = [
 
 <template>
   <div class="config-block">
-    <SectionTitle title="AI 接入配置" subtitle="配置 AI 模型与飞书连接信息" />
+    <SectionTitle title="AI 接入与飞书连接" subtitle="维护模型、授权凭据和表单字段映射" />
     <el-collapse v-model="advancedConfigPanels" class="advanced-collapse">
       <el-collapse-item title="AI 接入配置" name="ai">
         <div class="field-grid">

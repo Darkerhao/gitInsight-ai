@@ -4,6 +4,8 @@ import {
   Activity,
   Atom,
   Bike,
+  Bot,
+  Boxes,
   BrainCircuit,
   Building2,
   Cake,
@@ -11,23 +13,39 @@ import {
   CircuitBoard,
   Clock3,
   CloudRain,
+  CloudUpload,
   Code2,
   Coins,
+  Component,
   Cpu,
+  Crosshair,
   Crown,
   DatabaseZap,
+  Dna,
+  Eclipse,
   Expand,
+  Eye,
   Gauge,
   Gem,
   Gift,
+  Globe,
   Layers,
   Orbit,
   PartyPopper,
   Plane,
   Radar,
+  Radiation,
+  Radio,
   Rocket,
+  Satellite,
   ScanLine,
+  Shield,
+  Slice,
   Sparkles,
+  Star,
+  Sun,
+  Telescope,
+  Waves,
   Zap,
 } from 'lucide-vue-next';
 import { ElMessage } from 'element-plus';
@@ -42,8 +60,8 @@ type CheckinWallet = {
 };
 
 const CHECKIN_STORAGE_KEY = 'gitinsight:checkin-wallet';
-const DAILY_CHECKIN_REWARD_MIN = 188;
-const DAILY_CHECKIN_REWARD_MAX = 1888;
+const DAILY_CHECKIN_REWARD_MIN = 1888;
+const DAILY_CHECKIN_REWARD_MAX = 8888;
 const effectOptions = [
   { key: 'fireworks', label: '臻彩烟花', cost: 4, icon: PartyPopper, tone: '#f59e0b' },
   { key: 'birthday', label: '生日舞台', cost: 5, icon: Cake, tone: '#ec4899' },
@@ -72,6 +90,26 @@ const effectOptions = [
   { key: 'dataStorm', label: '数据风暴', cost: 11, icon: DatabaseZap, tone: '#2dd4bf', tier: '特级' },
   { key: 'glassRefraction', label: '玻璃折射层', cost: 10, icon: Layers, tone: '#7dd3fc', tier: '特级' },
   { key: 'spaceJump', label: '空间跃迁', cost: 12, icon: Expand, tone: '#818cf8', tier: '特级' },
+  { key: 'blackHole', label: '黑洞吞噬', cost: 14, icon: Eclipse, tone: '#fb923c', tier: '典藏' },
+  { key: 'supernova', label: '超新星爆发', cost: 13, icon: Star, tone: '#f59e0b', tier: '典藏' },
+  { key: 'gravityWave', label: '引力波合并', cost: 14, icon: Waves, tone: '#93c5fd', tier: '典藏' },
+  { key: 'riftTear', label: '时空裂隙', cost: 14, icon: Slice, tone: '#c084fc', tier: '典藏' },
+  { key: 'aiAwaken', label: 'AI 觉醒之眼', cost: 13, icon: Eye, tone: '#f472b6', tier: '典藏' },
+  { key: 'dysonRing', label: '戴森星环', cost: 13, icon: Globe, tone: '#facc15', tier: '典藏' },
+  { key: 'collider', label: '粒子对撞机', cost: 12, icon: Atom, tone: '#2dd4bf', tier: '特级' },
+  { key: 'mechaBoot', label: '机甲启动', cost: 12, icon: Bot, tone: '#22d3ee', tier: '特级' },
+  { key: 'orbitalStrike', label: '天基动能打击', cost: 12, icon: Crosshair, tone: '#f87171', tier: '特级' },
+  { key: 'galaxyMap', label: '全息星图', cost: 12, icon: Telescope, tone: '#818cf8', tier: '特级' },
+  { key: 'solarFlare', label: '日冕风暴', cost: 12, icon: Sun, tone: '#fb923c', tier: '特级' },
+  { key: 'nanoSwarm', label: '纳米蜂群', cost: 12, icon: Component, tone: '#a3e635', tier: '特级' },
+  { key: 'holoDisassemble', label: '全息拆解', cost: 12, icon: Boxes, tone: '#7dd3fc', tier: '特级' },
+  { key: 'rocketLaunch', label: '曙光发射', cost: 12, icon: Rocket, tone: '#f97316', tier: '特级' },
+  { key: 'bioScan', label: '生体扫描', cost: 11, icon: Dna, tone: '#34d399', tier: '特级' },
+  { key: 'empBlast', label: '电磁脉冲', cost: 11, icon: Radiation, tone: '#fbbf24', tier: '特级' },
+  { key: 'satelliteSweep', label: '卫星过境', cost: 11, icon: Satellite, tone: '#38bdf8', tier: '特级' },
+  { key: 'energyShield', label: '相位护盾', cost: 11, icon: Shield, tone: '#4ade80', tier: '特级' },
+  { key: 'deepSonar', label: '深海声呐', cost: 10, icon: Radio, tone: '#22d3ee', tier: '特级' },
+  { key: 'skyUplink', label: '云端上载', cost: 10, icon: CloudUpload, tone: '#60a5fa', tier: '特级' },
 ] as const;
 const wallet = ref<CheckinWallet>(loadWallet());
 const activeEffect = ref<RewardEffectKey | null>(null);

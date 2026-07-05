@@ -1,30 +1,50 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { Component } from 'vue';
+import AiAwakenEffect from '@/components/rewards/effects/AiAwakenEffect.vue';
 import AuroraEffect from '@/components/rewards/effects/AuroraEffect.vue';
+import BioScanEffect from '@/components/rewards/effects/BioScanEffect.vue';
 import BirthdayEffect from '@/components/rewards/effects/BirthdayEffect.vue';
+import BlackHoleEffect from '@/components/rewards/effects/BlackHoleEffect.vue';
 import BreathingUiEffect from '@/components/rewards/effects/BreathingUiEffect.vue';
 import CockpitHudEffect from '@/components/rewards/effects/CockpitHudEffect.vue';
 import CityScanEffect from '@/components/rewards/effects/CityScanEffect.vue';
 import CodeMaterializeEffect from '@/components/rewards/effects/CodeMaterializeEffect.vue';
+import ColliderEffect from '@/components/rewards/effects/ColliderEffect.vue';
 import CrownEffect from '@/components/rewards/effects/CrownEffect.vue';
 import CyberDataFlowEffect from '@/components/rewards/effects/CyberDataFlowEffect.vue';
 import DataStormEffect from '@/components/rewards/effects/DataStormEffect.vue';
+import DeepSonarEffect from '@/components/rewards/effects/DeepSonarEffect.vue';
 import DroneFlyoverEffect from '@/components/rewards/effects/DroneFlyoverEffect.vue';
+import DysonRingEffect from '@/components/rewards/effects/DysonRingEffect.vue';
+import EmpBlastEffect from '@/components/rewards/effects/EmpBlastEffect.vue';
 import EnergyRingEffect from '@/components/rewards/effects/EnergyRingEffect.vue';
+import EnergyShieldEffect from '@/components/rewards/effects/EnergyShieldEffect.vue';
 import FireworksEffect from '@/components/rewards/effects/FireworksEffect.vue';
 import FloatingHudEffect from '@/components/rewards/effects/FloatingHudEffect.vue';
+import GalaxyMapEffect from '@/components/rewards/effects/GalaxyMapEffect.vue';
 import GlassRefractionEffect from '@/components/rewards/effects/GlassRefractionEffect.vue';
+import GravityWaveEffect from '@/components/rewards/effects/GravityWaveEffect.vue';
 import HoloCoreEffect from '@/components/rewards/effects/HoloCoreEffect.vue';
+import HoloDisassembleEffect from '@/components/rewards/effects/HoloDisassembleEffect.vue';
 import LaserGridEffect from '@/components/rewards/effects/LaserGridEffect.vue';
 import MatrixEffect from '@/components/rewards/effects/MatrixEffect.vue';
+import MechaBootEffect from '@/components/rewards/effects/MechaBootEffect.vue';
+import NanoSwarmEffect from '@/components/rewards/effects/NanoSwarmEffect.vue';
 import NeonDriveEffect from '@/components/rewards/effects/NeonDriveEffect.vue';
 import NeuralThinkEffect from '@/components/rewards/effects/NeuralThinkEffect.vue';
+import OrbitalStrikeEffect from '@/components/rewards/effects/OrbitalStrikeEffect.vue';
 import QuantumGateEffect from '@/components/rewards/effects/QuantumGateEffect.vue';
 import QuantumFlickerEffect from '@/components/rewards/effects/QuantumFlickerEffect.vue';
 import RainGlassEffect from '@/components/rewards/effects/RainGlassEffect.vue';
+import RiftTearEffect from '@/components/rewards/effects/RiftTearEffect.vue';
+import RocketLaunchEffect from '@/components/rewards/effects/RocketLaunchEffect.vue';
+import SatelliteSweepEffect from '@/components/rewards/effects/SatelliteSweepEffect.vue';
+import SkyUplinkEffect from '@/components/rewards/effects/SkyUplinkEffect.vue';
+import SolarFlareEffect from '@/components/rewards/effects/SolarFlareEffect.vue';
 import SpaceJumpEffect from '@/components/rewards/effects/SpaceJumpEffect.vue';
 import SparkleEffect from '@/components/rewards/effects/SparkleEffect.vue';
+import SupernovaEffect from '@/components/rewards/effects/SupernovaEffect.vue';
 import TimeFoldEffect from '@/components/rewards/effects/TimeFoldEffect.vue';
 import VelocityTrailEffect from '@/components/rewards/effects/VelocityTrailEffect.vue';
 import WarpEffect from '@/components/rewards/effects/WarpEffect.vue';
@@ -63,6 +83,26 @@ const effectComponentMap: Record<RewardEffectKey, Component> = {
   dataStorm: DataStormEffect,
   glassRefraction: GlassRefractionEffect,
   spaceJump: SpaceJumpEffect,
+  blackHole: BlackHoleEffect,
+  supernova: SupernovaEffect,
+  gravityWave: GravityWaveEffect,
+  riftTear: RiftTearEffect,
+  aiAwaken: AiAwakenEffect,
+  dysonRing: DysonRingEffect,
+  collider: ColliderEffect,
+  mechaBoot: MechaBootEffect,
+  orbitalStrike: OrbitalStrikeEffect,
+  galaxyMap: GalaxyMapEffect,
+  solarFlare: SolarFlareEffect,
+  nanoSwarm: NanoSwarmEffect,
+  holoDisassemble: HoloDisassembleEffect,
+  rocketLaunch: RocketLaunchEffect,
+  bioScan: BioScanEffect,
+  empBlast: EmpBlastEffect,
+  satelliteSweep: SatelliteSweepEffect,
+  energyShield: EnergyShieldEffect,
+  deepSonar: DeepSonarEffect,
+  skyUplink: SkyUplinkEffect,
 };
 
 const activeComponent = computed(() => (props.effect ? effectComponentMap[props.effect] : null));
@@ -448,6 +488,198 @@ const activeComponent = computed(() => (props.effect ? effectComponentMap[props.
   background:
     radial-gradient(circle at center, rgba(129, 140, 248, 0.3), rgba(15, 23, 42, 0.56) 42%, rgba(15, 23, 42, 0.14)),
     linear-gradient(180deg, rgba(30, 27, 75, 0.58), rgba(2, 6, 23, 0.24));
+}
+
+.reward-effect-overlay.is-blackHole,
+.reward-effect-overlay.is-supernova,
+.reward-effect-overlay.is-solarFlare,
+.reward-effect-overlay.is-rocketLaunch {
+  --reward-accent: #fb923c;
+  --reward-secondary: #93c5fd;
+}
+
+.reward-effect-overlay.is-gravityWave,
+.reward-effect-overlay.is-galaxyMap,
+.reward-effect-overlay.is-skyUplink {
+  --reward-accent: #93c5fd;
+  --reward-secondary: #818cf8;
+}
+
+.reward-effect-overlay.is-riftTear,
+.reward-effect-overlay.is-aiAwaken {
+  --reward-accent: #c084fc;
+  --reward-secondary: #f472b6;
+}
+
+.reward-effect-overlay.is-dysonRing,
+.reward-effect-overlay.is-empBlast {
+  --reward-accent: #facc15;
+  --reward-secondary: #fb923c;
+}
+
+.reward-effect-overlay.is-collider,
+.reward-effect-overlay.is-mechaBoot,
+.reward-effect-overlay.is-satelliteSweep,
+.reward-effect-overlay.is-deepSonar {
+  --reward-accent: #22d3ee;
+  --reward-secondary: #2dd4bf;
+}
+
+.reward-effect-overlay.is-orbitalStrike {
+  --reward-accent: #f87171;
+  --reward-secondary: #67e8f9;
+}
+
+.reward-effect-overlay.is-nanoSwarm,
+.reward-effect-overlay.is-bioScan,
+.reward-effect-overlay.is-energyShield {
+  --reward-accent: #4ade80;
+  --reward-secondary: #a3e635;
+}
+
+.reward-effect-overlay.is-holoDisassemble {
+  --reward-accent: #7dd3fc;
+  --reward-secondary: #a78bfa;
+}
+
+.reward-effect-overlay.is-blackHole .reward-effect-backdrop {
+  animation-duration: 6s;
+  background:
+    radial-gradient(circle at center, rgba(251, 146, 60, 0.16), rgba(2, 6, 23, 0.78) 40%, rgba(2, 6, 23, 0.5)),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.72), rgba(23, 12, 4, 0.4));
+}
+
+.reward-effect-overlay.is-supernova .reward-effect-backdrop {
+  animation-duration: 5.8s;
+  background:
+    radial-gradient(circle at center, rgba(245, 158, 11, 0.24), transparent 38%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.7), rgba(69, 26, 3, 0.26));
+}
+
+.reward-effect-overlay.is-gravityWave .reward-effect-backdrop {
+  animation-duration: 6.2s;
+  background:
+    radial-gradient(circle at center, rgba(147, 197, 253, 0.2), transparent 42%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.74), rgba(30, 58, 138, 0.2));
+}
+
+.reward-effect-overlay.is-riftTear .reward-effect-backdrop {
+  animation-duration: 6s;
+  background:
+    radial-gradient(circle at center, rgba(192, 132, 252, 0.22), transparent 36%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.78), rgba(59, 7, 100, 0.3));
+}
+
+.reward-effect-overlay.is-aiAwaken .reward-effect-backdrop {
+  animation-duration: 6s;
+  background:
+    radial-gradient(circle at center, rgba(244, 114, 182, 0.18), transparent 40%),
+    linear-gradient(180deg, rgba(1, 2, 8, 0.86), rgba(80, 7, 36, 0.24));
+}
+
+.reward-effect-overlay.is-dysonRing .reward-effect-backdrop {
+  animation-duration: 5.8s;
+  background:
+    radial-gradient(circle at center, rgba(250, 204, 21, 0.2), transparent 36%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.72), rgba(66, 32, 6, 0.3));
+}
+
+.reward-effect-overlay.is-collider .reward-effect-backdrop {
+  animation-duration: 5.6s;
+  background:
+    radial-gradient(circle at 50% 24%, rgba(45, 212, 191, 0.22), transparent 36%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.74), rgba(4, 47, 46, 0.28));
+}
+
+.reward-effect-overlay.is-mechaBoot .reward-effect-backdrop {
+  animation-duration: 6s;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(34, 211, 238, 0.16), transparent 42%),
+    linear-gradient(180deg, rgba(1, 4, 12, 0.84), rgba(8, 47, 73, 0.3));
+}
+
+.reward-effect-overlay.is-orbitalStrike .reward-effect-backdrop {
+  animation-duration: 5.2s;
+  background:
+    radial-gradient(circle at 50% 58%, rgba(248, 113, 113, 0.2), transparent 38%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.72), rgba(69, 10, 10, 0.26));
+}
+
+.reward-effect-overlay.is-galaxyMap .reward-effect-backdrop {
+  animation-duration: 5.6s;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(129, 140, 248, 0.18), transparent 44%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.78), rgba(30, 27, 75, 0.3));
+}
+
+.reward-effect-overlay.is-solarFlare .reward-effect-backdrop {
+  animation-duration: 5.6s;
+  background:
+    radial-gradient(circle at 8% 92%, rgba(251, 146, 60, 0.3), transparent 44%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.7), rgba(67, 20, 7, 0.28));
+}
+
+.reward-effect-overlay.is-nanoSwarm .reward-effect-backdrop {
+  animation-duration: 5.8s;
+  background:
+    radial-gradient(circle at center, rgba(163, 230, 53, 0.14), transparent 44%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.76), rgba(26, 46, 5, 0.3));
+}
+
+.reward-effect-overlay.is-holoDisassemble .reward-effect-backdrop {
+  animation-duration: 5.6s;
+  background:
+    radial-gradient(circle at center, rgba(125, 211, 252, 0.18), transparent 40%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.72), rgba(12, 74, 110, 0.26));
+}
+
+.reward-effect-overlay.is-rocketLaunch .reward-effect-backdrop {
+  animation-duration: 6.2s;
+  background:
+    radial-gradient(circle at 50% 86%, rgba(249, 115, 22, 0.24), transparent 40%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.74), rgba(28, 25, 23, 0.34));
+}
+
+.reward-effect-overlay.is-bioScan .reward-effect-backdrop {
+  animation-duration: 5.4s;
+  background:
+    radial-gradient(circle at center, rgba(52, 211, 153, 0.16), transparent 44%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.76), rgba(2, 44, 34, 0.3));
+}
+
+.reward-effect-overlay.is-empBlast .reward-effect-backdrop {
+  animation-duration: 5s;
+  background:
+    radial-gradient(circle at center, rgba(251, 191, 36, 0.2), transparent 36%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.78), rgba(41, 37, 36, 0.36));
+}
+
+.reward-effect-overlay.is-satelliteSweep .reward-effect-backdrop {
+  animation-duration: 5.6s;
+  background:
+    radial-gradient(circle at 50% 96%, rgba(56, 189, 248, 0.24), transparent 40%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.8), rgba(8, 47, 73, 0.26));
+}
+
+.reward-effect-overlay.is-energyShield .reward-effect-backdrop {
+  animation-duration: 5.4s;
+  background:
+    radial-gradient(circle at center, rgba(74, 222, 128, 0.16), transparent 42%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.74), rgba(5, 46, 22, 0.3));
+}
+
+.reward-effect-overlay.is-deepSonar .reward-effect-backdrop {
+  animation-duration: 5.4s;
+  background:
+    radial-gradient(circle at 50% 60%, rgba(34, 211, 238, 0.14), transparent 44%),
+    linear-gradient(180deg, rgba(1, 8, 18, 0.88), rgba(3, 30, 48, 0.44));
+}
+
+.reward-effect-overlay.is-skyUplink .reward-effect-backdrop {
+  animation-duration: 5.2s;
+  background:
+    radial-gradient(circle at 50% 22%, rgba(96, 165, 250, 0.22), transparent 36%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.72), rgba(30, 58, 138, 0.24));
 }
 
 @keyframes reward-backdrop {
