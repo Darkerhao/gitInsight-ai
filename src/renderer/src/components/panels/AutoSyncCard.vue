@@ -52,7 +52,10 @@ const autoSyncStatusItems = computed(() => [
               <strong>{{ config.autoSync.enabled ? '自动同步已启用' : '自动同步已关闭' }}</strong>
               <span>{{ config.autoSync.enabled ? '应用打开期间会按计划提交日报' : '关闭后不会触发定时提交' }}</span>
             </div>
-            <el-switch v-model="config.autoSync.enabled" aria-label="自动同步开关" />
+            <div class="state-switch-wrap" :class="{ active: config.autoSync.enabled }">
+              <el-switch v-model="config.autoSync.enabled" class="state-switch auto-sync-switch" aria-label="自动同步开关" />
+              <span class="state-switch-label">{{ config.autoSync.enabled ? '开启' : '关闭' }}</span>
+            </div>
           </div>
 
           <el-button class="auto-sync-run-btn" :icon="Sparkles" type="primary" plain :loading="autoSyncRunning" @click="runAutoSyncNow">

@@ -152,7 +152,10 @@ const operationCards = [
           <div class="field-grid two-columns">
             <div class="field">
               <label>开屏动画</label>
-              <el-switch :model-value="showWelcomeAnimation" active-text="开启" inactive-text="关闭" @change="toggleWelcomeAnimation" />
+              <div class="state-switch-wrap" :class="{ active: showWelcomeAnimation }">
+                <el-switch :model-value="showWelcomeAnimation" class="state-switch" @change="toggleWelcomeAnimation" />
+                <span class="state-switch-label">{{ showWelcomeAnimation ? '开启' : '关闭' }}</span>
+              </div>
               <span class="field-hint">开启后每次启动应用都会播放欢迎动画</span>
             </div>
           </div>
