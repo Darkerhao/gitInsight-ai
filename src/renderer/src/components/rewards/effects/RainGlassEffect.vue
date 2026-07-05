@@ -1,92 +1,116 @@
 <script setup lang="ts">
 import { CloudRain } from 'lucide-vue-next';
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import ParticleCanvas from '@/components/rewards/engine/ParticleCanvas.vue';
+import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import type { SceneFn } from '@/components/rewards/engine/particleEngine';
 
-type RainDrop = {
-  x: number;
-  y: number;
-  speed: number;
-  length: number;
-  alpha: number;
-};
+const props = defineProps<{ seed?: number }>();
 
-const canvasRef = ref<HTMLCanvasElement | null>(null);
-let drops: RainDrop[] = [];
-let frameId = 0;
-let resizeObserver: ResizeObserver | null = null;
+const scene: SceneFn = (api) => {
+  api.setTrail(0.4);
 
-function seedDrops(width: number, height: number) {
-  drops = Array.from({ length: 86 }, (_, index) => ({
-    x: (index * 137) % Math.max(width, 1),
-    y: (index * 83) % Math.max(height, 1),
-    speed: 2.2 + (index % 7) * 0.42,
-    length: 28 + (index % 6) * 9,
-    alpha: 0.24 + (index % 5) * 0.08,
-  }));
-}
+  // 倾斜的雨幕：密集雨丝 + 落地溅花
+  api.every(9, () => {
+    const speed = api.range(900, 1500);
+    api.spawn({
+      x: api.range(-40, api.width + 60),
+      y: -20,
+      vx: -speed * 0.14,
+      vy: speed,
+      shape: 'streak',
+      stretch: 0.035,
+      size: api.range(1, 1.7),
+      maxLife: (api.height + 60) / speed,
+      color: api.rng() < 0.8 ? 'rgba(186, 230, 253, 0.75)' : 'rgba(255, 255, 255, 0.8)',
+      glow: 0.5,
+      fadeIn: 0.04,
+      fadeOut: 0.06,
+      onDeath: (p, sceneApi) => {
+        if (sceneApi.rng() < 0.3) {
+          sceneApi.burst({
+            x: p.x,
+            y: api.height - 4,
+            count: 4,
+            speed: [30, 140],
+            angle: [Math.PI + 0.3, Math.PI * 2 - 0.3],
+            base: { shape: 'spark', size: 1, maxLife: 0.3, ay: 500, color: 'rgba(186, 230, 253, 0.8)', glow: 0.7 },
+          });
+        }
+      },
+    });
+  }, { until: api.duration - 700 });
 
-function resizeCanvas(canvas: HTMLCanvasElement) {
-  const ratio = window.devicePixelRatio || 1;
-  const { width, height } = canvas.getBoundingClientRect();
-  canvas.width = Math.max(1, Math.floor(width * ratio));
-  canvas.height = Math.max(1, Math.floor(height * ratio));
-  const context = canvas.getContext('2d');
-  context?.setTransform(ratio, 0, 0, ratio, 0, 0);
-  seedDrops(width, height);
-}
+  // 玻璃上的水珠：缓慢蠕动下滑，偶尔加速滑落
+  api.every(160, () => {
+    let slideSpeed = api.range(4, 16);
+    api.spawn({
+      x: api.range(api.width * 0.1, api.width * 0.9),
+      y: api.range(api.height * 0.05, api.height * 0.6),
+      shape: 'dot',
+      size: api.range(1.4, 3),
+      maxLife: api.range(1.6, 3),
+      color: 'rgba(224, 242, 254, 0.85)',
+      glow: 0.7,
+      fadeIn: 0.2,
+      fadeOut: 0.3,
+      update: (p, dt) => {
+        if (api.rng() < 0.004) slideSpeed = api.range(120, 300); // 突然滑落
+        p.y += slideSpeed * dt;
+        p.x += Math.sin(p.life * 3 + p.phase) * 5 * dt;
+      },
+    });
+  }, { until: api.duration - 1000 });
 
-function drawRain() {
-  const canvas = canvasRef.value;
-  const context = canvas?.getContext('2d');
-  if (!canvas || !context) return;
-
-  const { width, height } = canvas.getBoundingClientRect();
-  context.clearRect(0, 0, width, height);
-  context.lineCap = 'round';
-
-  drops.forEach((drop) => {
-    const gradient = context.createLinearGradient(drop.x, drop.y, drop.x - 16, drop.y + drop.length);
-    gradient.addColorStop(0, `rgba(255, 255, 255, ${drop.alpha})`);
-    gradient.addColorStop(1, 'rgba(56, 189, 248, 0)');
-    context.strokeStyle = gradient;
-    context.lineWidth = 1.4;
-    context.beginPath();
-    context.moveTo(drop.x, drop.y);
-    context.lineTo(drop.x - 16, drop.y + drop.length);
-    context.stroke();
-
-    drop.x -= 0.42;
-    drop.y += drop.speed;
-    if (drop.y > height + drop.length) {
-      drop.y = -drop.length;
-      drop.x = (drop.x + width * 0.37 + drop.length * 7) % Math.max(width, 1);
+  // 闪电：亮闪 + 锯齿主干（配合 CSS 的 rain-lightning 泛光）
+  let sceneTime = 0;
+  const bolts: Array<{ points: Array<[number, number]>; born: number; life: number }> = [];
+  api.onFrame((tMs, _dt, ctx) => {
+    sceneTime = tMs / 1000;
+    for (let i = bolts.length - 1; i >= 0; i -= 1) {
+      const bolt = bolts[i];
+      const age = sceneTime - bolt.born;
+      if (age > bolt.life) {
+        bolts.splice(i, 1);
+        continue;
+      }
+      const flicker = api.rng() < 0.2 ? 0.3 : 1;
+      const alpha = (1 - age / bolt.life) * 0.9 * flicker;
+      ctx.strokeStyle = `rgba(240, 249, 255, ${alpha})`;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(bolt.points[0][0], bolt.points[0][1]);
+      for (const [px, py] of bolt.points.slice(1)) ctx.lineTo(px, py);
+      ctx.stroke();
     }
   });
-
-  frameId = window.requestAnimationFrame(drawRain);
-}
-
-onMounted(() => {
-  const canvas = canvasRef.value;
-  if (!canvas) return;
-
-  resizeCanvas(canvas);
-  resizeObserver = new ResizeObserver(() => resizeCanvas(canvas));
-  resizeObserver.observe(canvas);
-  frameId = window.requestAnimationFrame(drawRain);
-});
-
-onBeforeUnmount(() => {
-  if (frameId) {
-    window.cancelAnimationFrame(frameId);
-  }
-  resizeObserver?.disconnect();
-});
+  [1250, 3300].forEach((when) => {
+    api.at(when, () => {
+      let x = api.range(api.width * 0.2, api.width * 0.8);
+      let y = -10;
+      const points: Array<[number, number]> = [[x, y]];
+      while (y < api.height * api.range(0.4, 0.62)) {
+        x += api.range(-60, 60);
+        y += api.range(30, 80);
+        points.push([x, y]);
+      }
+      bolts.push({ points, born: sceneTime, life: 0.34 });
+      api.spawn({ x: points[0][0], y: 60, shape: 'dot', size: 120, endSize: 30, maxLife: 0.3, color: 'rgba(224, 242, 254, 0.5)', glow: 2, fadeIn: 0, fadeOut: 0.8 });
+      const tip = points[points.length - 1];
+      api.burst({
+        x: tip[0],
+        y: tip[1],
+        count: 12,
+        speed: [60, 280],
+        base: { shape: 'spark', size: 1.4, maxLife: 0.5, drag: 0.3, color: '#bae6fd', glow: 1.1, twinkle: 10 },
+      });
+    });
+  });
+};
 </script>
 
 <template>
   <div class="rain-glass-effect">
-    <canvas ref="canvasRef" class="rain-canvas" />
+    <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.rainGlass" :scene="scene" />
     <div class="rain-glass-pane">
       <CloudRain :size="54" />
       <strong>雨夜玻璃 UI</strong>
@@ -125,14 +149,6 @@ onBeforeUnmount(() => {
   opacity: 0;
   mix-blend-mode: screen;
   animation: rain-lightning 5.4s ease both;
-}
-
-.rain-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  filter: drop-shadow(0 0 10px rgba(125, 211, 252, 0.26));
 }
 
 .rain-glass-pane {

@@ -1,13 +1,97 @@
 <script setup lang="ts">
 import { Sparkles } from 'lucide-vue-next';
+import ParticleCanvas from '@/components/rewards/engine/ParticleCanvas.vue';
+import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import type { SceneFn } from '@/components/rewards/engine/particleEngine';
 
-const beams = Array.from({ length: 34 }, (_, index) => ({
-  id: index,
-  left: `${5 + ((index * 29) % 90)}%`,
-  top: `${8 + ((index * 19) % 78)}%`,
-  delay: `${(index % 12) * 90}ms`,
-  scale: `${0.66 + (index % 6) * 0.1}`,
-}));
+const props = defineProps<{ seed?: number }>();
+
+const scene: SceneFn = (api) => {
+  api.setTrail(0.14); // 长拖尾成就"流光"质感
+
+  // 三条金色光河：正弦轨迹横穿屏幕
+  const rivers = [0.3, 0.52, 0.72].map((band) => ({
+    y: api.height * (band + api.range(-0.05, 0.05)),
+    amp: api.range(50, 130),
+    freq: api.range(0.005, 0.009),
+    phase: api.range(0, Math.PI * 2),
+    speed: api.range(430, 720),
+  }));
+
+  api.every(26, () => {
+    const river = api.pick(rivers);
+    const warm = api.range(38, 52);
+    api.spawn({
+      x: -24,
+      y: river.y,
+      vx: river.speed * api.range(0.82, 1.15),
+      shape: 'streak',
+      stretch: 0.075,
+      size: api.range(1.6, 3),
+      maxLife: (api.width + 60) / river.speed,
+      color: `hsl(${Math.round(warm)}, ${api.rng() < 0.3 ? 40 : 96}%, ${Math.round(api.range(62, 82))}%)`,
+      glow: 1.1,
+      fadeIn: 0.06,
+      fadeOut: 0.1,
+      update: (p) => {
+        p.vy = Math.sin(p.x * river.freq + river.phase) * river.amp;
+      },
+    });
+  }, { until: 3100 });
+
+  // 漂浮金尘
+  api.every(70, () => {
+    api.spawn({
+      x: api.range(0, api.width),
+      y: api.range(0, api.height),
+      vx: api.range(-14, 14),
+      vy: api.range(-30, -8),
+      shape: 'dot',
+      size: api.range(0.9, 2),
+      maxLife: api.range(1.2, 2.4),
+      color: '#fcd34d',
+      twinkle: api.range(3, 8),
+      glow: 1,
+      wander: 30,
+    });
+  }, { until: 3200 });
+
+  // 四芒星大闪点
+  api.every(340, () => {
+    api.spawn({
+      x: api.range(api.width * 0.12, api.width * 0.88),
+      y: api.range(api.height * 0.12, api.height * 0.82),
+      shape: 'glyph',
+      glyph: '✦',
+      size: api.range(18, 42),
+      endSize: 6,
+      maxLife: api.range(0.7, 1.1),
+      color: api.rng() < 0.5 ? '#fde68a' : '#fffbeb',
+      spin: api.range(-1.4, 1.4),
+      fadeIn: 0.22,
+      fadeOut: 0.4,
+      glow: 0,
+    });
+  }, { from: 260, until: 3100 });
+
+  // 开场：中心涌出的金色环与光尘爆发
+  api.at(140, () => {
+    const cx = api.width / 2;
+    const cy = api.height / 2;
+    api.spawn({ x: cx, y: cy, shape: 'ring', size: 40, endSize: 260, maxLife: 1, color: '#fbbf24', opacity: 0.9 });
+    api.burst({
+      x: cx,
+      y: cy,
+      count: 70,
+      speed: [60, 340],
+      base: { shape: 'spark', size: 1.8, drag: 0.3, color: '#fcd34d', twinkle: 6, glow: 1.2 },
+      vary: (p, rng) => {
+        p.maxLife = 0.9 + rng() * 1;
+        if (rng() < 0.3) p.color = '#fffbeb';
+      },
+    });
+  });
+};
 </script>
 
 <template>
@@ -15,17 +99,7 @@ const beams = Array.from({ length: 34 }, (_, index) => ({
     <span class="sparkle-sash sash-one" />
     <span class="sparkle-sash sash-two" />
     <span class="sparkle-sash sash-three" />
-    <span
-      v-for="beam in beams"
-      :key="beam.id"
-      class="sparkle-beam"
-      :style="{
-        left: beam.left,
-        top: beam.top,
-        animationDelay: beam.delay,
-        '--sparkle-scale': beam.scale,
-      }"
-    />
+    <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.sparkle" :scene="scene" />
     <div class="sparkle-medallion">
       <Sparkles :size="44" />
     </div>
@@ -67,36 +141,6 @@ const beams = Array.from({ length: 34 }, (_, index) => ({
 .sash-three {
   top: 66%;
   animation-delay: 320ms;
-}
-
-.sparkle-beam {
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  opacity: 0;
-  transform: scale(var(--sparkle-scale));
-  animation: sparkle-pulse 1.35s ease-in-out both;
-}
-
-.sparkle-beam::before,
-.sparkle-beam::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  border-radius: 999px;
-  background: #fbbf24;
-  box-shadow: 0 0 18px rgba(251, 191, 36, 0.82);
-}
-
-.sparkle-beam::before {
-  width: 3px;
-  height: 22px;
-}
-
-.sparkle-beam::after {
-  width: 22px;
-  height: 3px;
 }
 
 .sparkle-medallion {
@@ -150,16 +194,6 @@ const beams = Array.from({ length: 34 }, (_, index) => ({
   100% {
     opacity: 0;
     transform: rotate(-12deg) translateX(28%);
-  }
-}
-
-@keyframes sparkle-pulse {
-  0%,
-  100% {
-    opacity: 0;
-  }
-  42% {
-    opacity: 1;
   }
 }
 

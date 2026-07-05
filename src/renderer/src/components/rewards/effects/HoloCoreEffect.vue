@@ -1,34 +1,104 @@
 <script setup lang="ts">
 import { Cpu } from 'lucide-vue-next';
+import ParticleCanvas from '@/components/rewards/engine/ParticleCanvas.vue';
+import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import type { SceneFn } from '@/components/rewards/engine/particleEngine';
 
-const rings = Array.from({ length: 6 }, (_, index) => ({
-  id: index,
-  size: `${118 + index * 54}px`,
-  delay: `${index * 120}ms`,
-  rotate: `${index % 2 === 0 ? 1 : -1}`,
-}));
-const shards = Array.from({ length: 28 }, (_, index) => ({
-  id: index,
-  angle: `${index * 12.86}deg`,
-  delay: `${(index % 8) * 90}ms`,
-  distance: `${96 + (index % 5) * 18}px`,
-}));
+const props = defineProps<{ seed?: number }>();
+
+const scene: SceneFn = (api) => {
+  api.setTrail(0.16);
+  const cx = api.width / 2;
+  const cy = api.height / 2;
+  const squash = 0.36; // 全息环的透视压扁比
+
+  // 三层全息轨道环：粒子沿倾斜椭圆轨道环绕，各层反向、半径不同
+  const orbits = [
+    { radius: 130, speed: 1.6, tint: '#c4b5fd', yOffset: 0 },
+    { radius: 190, speed: -1.1, tint: '#22d3ee', yOffset: 10 },
+    { radius: 250, speed: 0.8, tint: '#a78bfa', yOffset: 22 },
+  ];
+  for (const orbit of orbits) {
+    api.every(44, () => {
+      let angle = api.range(0, Math.PI * 2);
+      api.spawn({
+        x: cx + Math.cos(angle) * orbit.radius,
+        y: cy + orbit.yOffset + Math.sin(angle) * orbit.radius * squash,
+        shape: 'spark',
+        size: api.range(1.6, 2.8),
+        maxLife: api.range(1, 1.8),
+        color: orbit.tint,
+        glow: 1.1,
+        fadeIn: 0.12,
+        update: (p, dt) => {
+          angle += orbit.speed * dt;
+          p.x = cx + Math.cos(angle) * orbit.radius;
+          p.y = cy + orbit.yOffset + Math.sin(angle) * orbit.radius * squash;
+          // 轨道后侧的粒子更暗，制造前后遮挡的立体感
+          p.opacity = Math.sin(angle) > 0 ? 1 : 0.45;
+        },
+      });
+    }, { until: api.duration - 800 });
+  }
+
+  // 核心能量柱：沿中轴盘旋上升的光粒
+  api.every(30, () => {
+    let angle = api.range(0, Math.PI * 2);
+    const spiralRadius = api.range(16, 44);
+    api.spawn({
+      x: cx + Math.cos(angle) * spiralRadius,
+      y: cy + api.range(60, 140),
+      vy: -api.range(120, 220),
+      shape: 'spark',
+      size: api.range(1.4, 2.4),
+      maxLife: api.range(0.9, 1.6),
+      color: api.rng() < 0.6 ? '#e9d5ff' : '#67e8f9',
+      glow: 1.2,
+      twinkle: 8,
+      fadeIn: 0.1,
+      update: (p, dt) => {
+        angle += 6 * dt;
+        p.x = cx + Math.cos(angle) * spiralRadius;
+      },
+    });
+  }, { from: 200, until: api.duration - 900 });
+
+  // 全息干涉波纹：椭圆环从核心荡开
+  api.every(680, () => {
+    api.spawn({
+      x: cx,
+      y: cy,
+      shape: 'ring',
+      size: 40,
+      endSize: 300,
+      maxLife: 1.2,
+      color: '#a78bfa',
+      opacity: 0.55,
+      fadeOut: 0.7,
+    });
+  }, { from: 400, until: api.duration - 1300 });
+
+  // 上线瞬间：紫色数据爆发
+  api.at(260, () => {
+    api.spawn({ x: cx, y: cy, shape: 'dot', size: 50, endSize: 6, maxLife: 0.5, color: '#ede9fe', glow: 2.2 });
+    api.burst({
+      x: cx,
+      y: cy,
+      count: 80,
+      speed: [80, 460],
+      base: { shape: 'spark', size: 1.8, drag: 0.32, color: '#c4b5fd', twinkle: 8, glow: 1.2 },
+      vary: (p, rng) => {
+        p.maxLife = 0.8 + rng() * 1;
+        if (rng() < 0.3) p.color = '#67e8f9';
+      },
+    });
+  });
+};
 </script>
 
 <template>
   <div class="holo-core-effect">
-    <span
-      v-for="ring in rings"
-      :key="ring.id"
-      class="holo-ring"
-      :style="{ width: ring.size, height: ring.size, animationDelay: ring.delay, '--ring-rotate': ring.rotate }"
-    />
-    <span
-      v-for="shard in shards"
-      :key="shard.id"
-      class="holo-shard"
-      :style="{ '--shard-angle': shard.angle, '--shard-distance': shard.distance, animationDelay: shard.delay }"
-    />
+    <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.holoCore" :scene="scene" />
     <div class="holo-core">
       <Cpu :size="52" />
       <strong>全息核心</strong>
@@ -43,38 +113,6 @@ const shards = Array.from({ length: 28 }, (_, index) => ({
   inset: 0;
   display: grid;
   place-items: center;
-}
-
-.holo-ring {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  border: 1px solid rgba(167, 139, 250, 0.42);
-  border-radius: 50%;
-  box-shadow:
-    inset 0 0 18px rgba(167, 139, 250, 0.12),
-    0 0 32px rgba(167, 139, 250, 0.12);
-  opacity: 0;
-  transform: translate(-50%, -50%) rotateX(64deg) rotateZ(0deg);
-  animation: holo-ring 5.4s ease both;
-}
-
-.holo-ring:nth-child(2n) {
-  border-color: rgba(34, 211, 238, 0.36);
-}
-
-.holo-shard {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 8px;
-  height: 24px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(167, 139, 250, 0.34), transparent);
-  opacity: 0;
-  transform: rotate(var(--shard-angle)) translateY(0);
-  transform-origin: center -4px;
-  animation: holo-shard 1.8s ease both;
 }
 
 .holo-core {
@@ -124,35 +162,6 @@ const shards = Array.from({ length: 28 }, (_, index) => ({
   color: #67e8f9;
   font-weight: 800;
   letter-spacing: 0.1em;
-}
-
-@keyframes holo-ring {
-  0%,
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) rotateX(64deg) rotateZ(0deg) scale(0.82);
-  }
-  18%,
-  82% {
-    opacity: 1;
-  }
-  100% {
-    transform: translate(-50%, -50%) rotateX(64deg) rotateZ(calc(90deg * var(--ring-rotate))) scale(1.06);
-  }
-}
-
-@keyframes holo-shard {
-  0% {
-    opacity: 0;
-    transform: rotate(var(--shard-angle)) translateY(0) scaleY(0.3);
-  }
-  36% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0;
-    transform: rotate(var(--shard-angle)) translateY(calc(var(--shard-distance) * -1)) scaleY(1);
-  }
 }
 
 @keyframes holo-core {

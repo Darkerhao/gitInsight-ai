@@ -1,44 +1,119 @@
 <script setup lang="ts">
 import { Crown } from 'lucide-vue-next';
+import ParticleCanvas from '@/components/rewards/engine/ParticleCanvas.vue';
+import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import type { SceneFn } from '@/components/rewards/engine/particleEngine';
 
-const rays = Array.from({ length: 30 }, (_, index) => ({
-  id: index,
-  angle: `${index * 12}deg`,
-  delay: `${(index % 6) * 58}ms`,
-}));
-const gems = Array.from({ length: 38 }, (_, index) => ({
-  id: index,
-  left: `${5 + ((index * 19) % 90)}%`,
-  top: `${12 + ((index * 23) % 74)}%`,
-  delay: `${(index % 10) * 88}ms`,
-  scale: `${0.7 + (index % 5) * 0.09}`,
-}));
-const halos = Array.from({ length: 4 }, (_, index) => ({
-  id: index,
-  delay: `${index * 190}ms`,
-}));
+const props = defineProps<{ seed?: number }>();
+
+const scene: SceneFn = (api) => {
+  api.setTrail(0.3);
+  const cx = api.width / 2;
+  const cy = api.height / 2;
+
+  // 旋转的金色神辉光束（自定义绘制）
+  const rayCount = 10;
+  const rayPhases = Array.from({ length: rayCount }, () => api.range(0, Math.PI * 2));
+  api.onFrame((tMs, _dt, ctx) => {
+    const t = tMs / 1000;
+    const envelope = Math.min(1, t / 0.9) * Math.min(1, Math.max(0, (4.8 - t) / 0.9));
+    if (envelope <= 0) return;
+    ctx.translate(cx, cy);
+    for (let i = 0; i < rayCount; i += 1) {
+      const angle = (i / rayCount) * Math.PI * 2 + t * 0.22 + rayPhases[i] * 0.08;
+      const flicker = 0.6 + 0.4 * Math.sin(t * 2.4 + rayPhases[i]);
+      const length = Math.max(api.width, api.height) * 0.72;
+      const halfWidth = 0.055 + 0.02 * Math.sin(t * 1.6 + rayPhases[i]);
+      const gradient = ctx.createLinearGradient(0, 0, Math.cos(angle) * length, Math.sin(angle) * length);
+      gradient.addColorStop(0, `rgba(253, 230, 138, ${0.34 * envelope * flicker})`);
+      gradient.addColorStop(1, 'rgba(253, 230, 138, 0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, length, angle - halfWidth, angle + halfWidth);
+      ctx.closePath();
+      ctx.fill();
+    }
+  });
+
+  // 开场加冕爆发：金色火花 + 三重光环
+  api.at(180, () => {
+    api.burst({
+      x: cx,
+      y: cy,
+      count: 130,
+      speed: [60, 460],
+      base: { shape: 'spark', size: 2, drag: 0.3, ay: 110, color: '#fcd34d', twinkle: 6, glow: 1.3 },
+      vary: (p, rng) => {
+        p.maxLife = 1 + rng() * 1.3;
+        if (rng() < 0.3) p.color = '#fffbeb';
+        if (rng() < 0.14) p.color = '#f59e0b';
+      },
+    });
+    [0, 180, 380].forEach((delay, i) => {
+      api.at(180 + delay, () => {
+        api.spawn({ x: cx, y: cy, shape: 'ring', size: 60, endSize: 300 + i * 120, maxLife: 1.1, color: '#fde68a', opacity: 0.85 });
+      });
+    });
+  });
+
+  // 底部升腾的金色余烬
+  api.every(46, () => {
+    api.spawn({
+      x: api.range(0, api.width),
+      y: api.height + 8,
+      vx: api.range(-20, 20),
+      vy: api.range(-170, -60),
+      drag: 0.7,
+      shape: 'spark',
+      size: api.range(1.2, 2.6),
+      maxLife: api.range(1.8, 3),
+      color: api.rng() < 0.25 ? '#fffbeb' : '#fbbf24',
+      twinkle: api.range(3, 7),
+      wander: 46,
+      glow: 1.1,
+    });
+  }, { until: 3900 });
+
+  // 环绕的宝石菱形闪光
+  api.every(300, () => {
+    const angle = api.range(0, Math.PI * 2);
+    const radius = api.range(150, Math.min(api.width, api.height) * 0.44);
+    api.spawn({
+      x: cx + Math.cos(angle) * radius,
+      y: cy + Math.sin(angle) * radius * 0.8,
+      shape: 'glyph',
+      glyph: '◆',
+      size: api.range(10, 22),
+      endSize: 4,
+      maxLife: api.range(0.8, 1.2),
+      color: api.rng() < 0.5 ? '#fde68a' : '#fef3c7',
+      spin: api.range(-2, 2),
+      fadeIn: 0.25,
+      fadeOut: 0.4,
+    });
+  }, { from: 500, until: 3900 });
+
+  // 终章金雨
+  api.at(3300, () => {
+    api.burst({
+      x: cx,
+      y: cy - api.height * 0.2,
+      count: 80,
+      speed: [120, 380],
+      angle: [Math.PI * 0.15, Math.PI * 0.85],
+      base: { shape: 'spark', size: 1.8, ay: 240, drag: 0.5, color: '#fcd34d', twinkle: 8, glow: 1.2 },
+      vary: (p, rng) => {
+        p.maxLife = 1 + rng() * 0.9;
+      },
+    });
+  });
+};
 </script>
 
 <template>
   <div class="crown-effect">
-    <span
-      v-for="ray in rays"
-      :key="ray.id"
-      class="crown-ray"
-      :style="{ '--crown-angle': ray.angle, animationDelay: ray.delay }"
-    />
-    <span
-      v-for="halo in halos"
-      :key="halo.id"
-      class="crown-halo"
-      :style="{ animationDelay: halo.delay }"
-    />
-    <span
-      v-for="gem in gems"
-      :key="gem.id"
-      class="crown-gem"
-      :style="{ left: gem.left, top: gem.top, animationDelay: gem.delay, '--gem-scale': gem.scale }"
-    />
+    <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.crown" :scene="scene" />
     <div class="crown-emblem">
       <Crown :size="58" />
       <strong>荣耀加冕</strong>
@@ -67,48 +142,6 @@ const halos = Array.from({ length: 4 }, (_, index) => ({
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.62);
   animation: crown-aura 4.8s ease both;
-}
-
-.crown-ray {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 5px;
-  height: 48vh;
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(250, 204, 21, 0.78), transparent);
-  opacity: 0;
-  transform: rotate(var(--crown-angle)) translateY(-8vh) scaleY(0.2);
-  transform-origin: center bottom;
-  animation: crown-ray 2.4s ease-out both;
-}
-
-.crown-halo {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 160px;
-  height: 160px;
-  border: 1px solid rgba(254, 240, 138, 0.62);
-  border-radius: 50%;
-  box-shadow:
-    inset 0 0 28px rgba(250, 204, 21, 0.2),
-    0 0 42px rgba(250, 204, 21, 0.28);
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.34);
-  animation: crown-halo 2.2s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.crown-gem {
-  position: absolute;
-  width: 9px;
-  height: 9px;
-  border-radius: 2px;
-  background: #fde68a;
-  box-shadow: 0 0 18px rgba(250, 204, 21, 0.86);
-  opacity: 0;
-  transform: rotate(45deg) scale(var(--gem-scale));
-  animation: crown-gem 1.6s ease-in-out both;
 }
 
 .crown-emblem {
@@ -189,47 +222,6 @@ const halos = Array.from({ length: 4 }, (_, index) => ({
   }
   54% {
     transform: translate(-50%, -50%) scale(1.12);
-  }
-}
-
-@keyframes crown-ray {
-  0% {
-    opacity: 0;
-    transform: rotate(var(--crown-angle)) translateY(-8vh) scaleY(0.18);
-  }
-  18%,
-  72% {
-    opacity: 0.72;
-  }
-  100% {
-    opacity: 0;
-    transform: rotate(var(--crown-angle)) translateY(-24vh) scaleY(1);
-  }
-}
-
-@keyframes crown-halo {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.34);
-  }
-  18% {
-    opacity: 0.92;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(4.2);
-  }
-}
-
-@keyframes crown-gem {
-  0%,
-  100% {
-    opacity: 0;
-    transform: rotate(45deg) scale(0.2);
-  }
-  42% {
-    opacity: 1;
-    transform: rotate(45deg) scale(var(--gem-scale));
   }
 }
 

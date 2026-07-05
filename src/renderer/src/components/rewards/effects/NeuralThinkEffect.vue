@@ -1,41 +1,131 @@
 <script setup lang="ts">
 import { BrainCircuit } from 'lucide-vue-next';
+import ParticleCanvas from '@/components/rewards/engine/ParticleCanvas.vue';
+import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import type { SceneFn } from '@/components/rewards/engine/particleEngine';
 
-const nodes = Array.from({ length: 18 }, (_, index) => ({
-  id: index,
-  x: 10 + ((index * 31) % 80),
-  y: 14 + ((index * 43) % 70),
-  delay: `${(index % 8) * 90}ms`,
-}));
-const links = nodes.map((node, index) => ({
-  id: index,
-  x1: node.x,
-  y1: node.y,
-  x2: nodes[(index * 5 + 3) % nodes.length].x,
-  y2: nodes[(index * 5 + 3) % nodes.length].y,
-  delay: `${(index % 9) * 80}ms`,
-}));
+const props = defineProps<{ seed?: number }>();
+
+const scene: SceneFn = (api) => {
+  api.setTrail(0.24);
+  const duration = api.duration / 1000;
+
+  // 生成神经网络拓扑：随机节点 + 每个节点连向最近的 2-3 个邻居
+  const nodeCount = 22;
+  const nodes = Array.from({ length: nodeCount }, () => ({
+    x: api.range(api.width * 0.08, api.width * 0.92),
+    y: api.range(api.height * 0.1, api.height * 0.88),
+    charge: 0, // 被脉冲击中后的发光余量
+  }));
+  const edges: Array<[number, number]> = [];
+  nodes.forEach((node, i) => {
+    const others = nodes
+      .map((other, j) => ({ j, dist: (other.x - node.x) ** 2 + (other.y - node.y) ** 2 }))
+      .filter(({ j }) => j !== i)
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, 2 + Math.floor(api.rng() * 2));
+    for (const { j } of others) {
+      if (!edges.some(([a, b]) => (a === i && b === j) || (a === j && b === i))) {
+        edges.push([i, j]);
+      }
+    }
+  });
+
+  // 底图：网络连线与节点呼吸辉光
+  api.onFrame((tMs, dt, ctx) => {
+    const t = tMs / 1000;
+    const envelope = Math.min(1, t / 1) * Math.min(1, Math.max(0, (duration - t) / 0.9));
+    if (envelope <= 0) return;
+    ctx.lineWidth = 1;
+    for (const [a, b] of edges) {
+      ctx.strokeStyle = `rgba(167, 139, 250, ${0.16 * envelope})`;
+      ctx.beginPath();
+      ctx.moveTo(nodes[a].x, nodes[a].y);
+      ctx.lineTo(nodes[b].x, nodes[b].y);
+      ctx.stroke();
+    }
+    for (const node of nodes) {
+      node.charge = Math.max(0, node.charge - dt * 1.6);
+      const radius = 3 + node.charge * 5;
+      const alpha = (0.35 + node.charge * 0.65) * envelope;
+      const gradient = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, radius * 4);
+      gradient.addColorStop(0, `rgba(237, 233, 254, ${alpha})`);
+      gradient.addColorStop(0.3, `rgba(167, 139, 250, ${alpha * 0.6})`);
+      gradient.addColorStop(1, 'rgba(167, 139, 250, 0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, radius * 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+
+  // 思考脉冲：光点沿边奔跑，抵达时点亮节点并可能级联
+  function firePulse(edgeIndex: number, reverse: boolean, chained: number) {
+    const [a, b] = edges[edgeIndex];
+    const from = nodes[reverse ? b : a];
+    const to = nodes[reverse ? a : b];
+    const travel = api.range(0.32, 0.6);
+    api.spawn({
+      x: from.x,
+      y: from.y,
+      shape: 'spark',
+      size: 2.6,
+      maxLife: travel,
+      color: chained > 0 ? '#f0abfc' : '#c4b5fd',
+      glow: 1.4,
+      fadeIn: 0.08,
+      fadeOut: 0.1,
+      update: (p) => {
+        const progress = Math.min(1, p.life / travel);
+        const ease = progress * progress * (3 - 2 * progress);
+        p.x = from.x + (to.x - from.x) * ease;
+        p.y = from.y + (to.y - from.y) * ease;
+      },
+      onDeath: () => {
+        to.charge = Math.min(1.4, to.charge + 1);
+        // 级联激活：从到达节点继续沿相邻边传播
+        if (chained < 2 && api.rng() < 0.55) {
+          const nextEdges = edges
+            .map((edge, idx) => ({ edge, idx }))
+            .filter(({ edge }) => edge[0] === (reverse ? a : b) || edge[1] === (reverse ? a : b));
+          if (nextEdges.length > 0) {
+            const next = nextEdges[Math.floor(api.rng() * nextEdges.length)];
+            const startIsA = next.edge[0] === (reverse ? a : b);
+            firePulse(next.idx, !startIsA, chained + 1);
+          }
+        }
+      },
+    });
+  }
+
+  api.every(130, () => {
+    firePulse(Math.floor(api.rng() * edges.length), api.rng() < 0.5, 0);
+  }, { from: 250, until: api.duration - 1000 });
+
+  // 顿悟时刻：全网闪亮 + 中心紫色爆发
+  api.at(api.duration - 1500, () => {
+    for (const node of nodes) node.charge = 1.4;
+    const cx = api.width / 2;
+    const cy = api.height / 2;
+    api.spawn({ x: cx, y: cy, shape: 'ring', size: 30, endSize: 320, maxLife: 1, color: '#c4b5fd', opacity: 0.85 });
+    api.burst({
+      x: cx,
+      y: cy,
+      count: 50,
+      speed: [80, 380],
+      base: { shape: 'spark', size: 1.8, drag: 0.36, color: '#a78bfa', twinkle: 8, glow: 1.2 },
+      vary: (p, rng) => {
+        p.maxLife = 0.7 + rng() * 0.7;
+        if (rng() < 0.3) p.color = '#f0abfc';
+      },
+    });
+  });
+};
 </script>
 
 <template>
   <div class="neural-think-effect">
-    <svg class="neural-network" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <line
-        v-for="link in links"
-        :key="link.id"
-        :x1="link.x1"
-        :y1="link.y1"
-        :x2="link.x2"
-        :y2="link.y2"
-        :style="{ animationDelay: link.delay }"
-      />
-    </svg>
-    <span
-      v-for="node in nodes"
-      :key="node.id"
-      class="neural-node"
-      :style="{ left: `${node.x}%`, top: `${node.y}%`, animationDelay: node.delay }"
-    />
+    <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.neuralThink" :scene="scene" />
     <div class="neural-core">
       <BrainCircuit :size="56" />
       <strong>神经网络思考</strong>
@@ -48,37 +138,6 @@ const links = nodes.map((node, index) => ({
   position: absolute;
   inset: 0;
   overflow: hidden;
-}
-
-.neural-network {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.neural-network line {
-  stroke: rgba(167, 139, 250, 0.46);
-  stroke-width: 0.24;
-  stroke-dasharray: 9 7;
-  opacity: 0;
-  filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.64));
-  animation: neural-link 2.4s ease both;
-}
-
-.neural-node {
-  position: absolute;
-  width: 13px;
-  height: 13px;
-  border: 1px solid rgba(196, 181, 253, 0.72);
-  border-radius: 50%;
-  background: radial-gradient(circle, #f5f3ff, rgba(139, 92, 246, 0.54) 46%, transparent 70%);
-  box-shadow:
-    0 0 0 0 rgba(167, 139, 250, 0.32),
-    0 0 26px rgba(167, 139, 250, 0.66);
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.4);
-  animation: neural-node 2.7s ease both;
 }
 
 .neural-core {
@@ -101,18 +160,6 @@ const links = nodes.map((node, index) => ({
 
 .neural-core strong {
   font-size: 15px;
-}
-
-@keyframes neural-link {
-  0% { opacity: 0; stroke-dashoffset: 42; }
-  28%, 76% { opacity: 1; }
-  100% { opacity: 0; stroke-dashoffset: -42; }
-}
-
-@keyframes neural-node {
-  0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
-  30%, 72% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  48% { box-shadow: 0 0 0 22px rgba(167, 139, 250, 0), 0 0 26px rgba(167, 139, 250, 0.66); }
 }
 
 @keyframes neural-core {

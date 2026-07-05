@@ -1,29 +1,106 @@
 <script setup lang="ts">
 import { Radar } from 'lucide-vue-next';
+import ParticleCanvas from '@/components/rewards/engine/ParticleCanvas.vue';
+import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import type { SceneFn } from '@/components/rewards/engine/particleEngine';
 
-const panels = Array.from({ length: 8 }, (_, index) => ({
-  id: index,
-  left: `${14 + ((index * 23) % 72)}%`,
-  top: `${14 + ((index * 19) % 66)}%`,
-  delay: `${index * 95}ms`,
-  depth: `${index % 2 ? 26 : -22}px`,
-}));
-const ticks = Array.from({ length: 24 }, (_, index) => ({
-  id: index,
-  angle: `${index * 15}deg`,
-}));
+const props = defineProps<{ seed?: number }>();
+
+const scene: SceneFn = (api) => {
+  api.setTrail(0.22);
+  const cx = api.width / 2;
+  const cy = api.height / 2;
+  const orbitRadius = Math.min(200, Math.min(api.width, api.height) * 0.36);
+
+  // 全息尘埃：缓缓上浮的青色微粒
+  api.every(46, () => {
+    api.spawn({
+      x: api.range(0, api.width),
+      y: api.height + 6,
+      vy: -api.range(40, 130),
+      vx: api.range(-14, 14),
+      shape: 'dot',
+      size: api.range(0.9, 2),
+      maxLife: api.range(1.8, 3.2),
+      color: api.rng() < 0.7 ? '#67e8f9' : '#a5f3fc',
+      twinkle: api.range(2, 6),
+      wander: 24,
+      glow: 1,
+    });
+  }, { until: api.duration - 900 });
+
+  // 环绕准星的轨道流光：椭圆轨道双向环流
+  api.every(36, () => {
+    let angle = api.range(0, Math.PI * 2);
+    const dir = api.rng() < 0.5 ? 1 : -1;
+    const radius = orbitRadius * api.range(0.94, 1.1);
+    api.spawn({
+      x: cx + Math.cos(angle) * radius,
+      y: cy + Math.sin(angle) * radius * 0.92,
+      shape: 'spark',
+      size: api.range(1.6, 2.6),
+      maxLife: api.range(0.9, 1.6),
+      color: dir > 0 ? '#22d3ee' : '#a78bfa',
+      glow: 1.1,
+      fadeIn: 0.12,
+      update: (p, dt) => {
+        angle += 1.8 * dir * dt;
+        p.x = cx + Math.cos(angle) * radius;
+        p.y = cy + Math.sin(angle) * radius * 0.92;
+      },
+    });
+  }, { until: api.duration - 800 });
+
+  // 面板间数据链路：两点之间射出的光束
+  api.every(420, () => {
+    const fromX = api.width * api.range(0.16, 0.84);
+    const fromY = api.height * api.range(0.16, 0.8);
+    const toX = api.width * api.range(0.16, 0.84);
+    const toY = api.height * api.range(0.16, 0.8);
+    const travel = 0.4;
+    api.spawn({
+      x: fromX,
+      y: fromY,
+      shape: 'spark',
+      size: 2.6,
+      maxLife: travel,
+      color: '#7dd3fc',
+      glow: 1.3,
+      fadeIn: 0.1,
+      update: (p) => {
+        const progress = Math.min(1, p.life / travel);
+        p.x = fromX + (toX - fromX) * progress;
+        p.y = fromY + (toY - fromY) * progress;
+      },
+      onDeath: (p, sceneApi) => {
+        sceneApi.spawn({ x: p.x, y: p.y, shape: 'ring', size: 4, endSize: 40, maxLife: 0.4, color: '#7dd3fc', opacity: 0.8 });
+      },
+    });
+  }, { from: 600, until: api.duration - 1100 });
+
+  // 开场展开脉冲
+  api.at(200, () => {
+    api.spawn({ x: cx, y: cy, shape: 'ring', size: 20, endSize: orbitRadius * 1.8, maxLife: 1, color: '#67e8f9', opacity: 0.7 });
+  });
+};
 </script>
 
 <template>
   <div class="floating-hud-effect">
+    <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.floatingHud" :scene="scene" />
     <div class="hud-reticle">
-      <span v-for="tick in ticks" :key="tick.id" :style="{ '--tick-angle': tick.angle }" />
+      <span v-for="tick in 24" :key="tick" :style="{ '--tick-angle': `${(tick - 1) * 15}deg` }" />
     </div>
     <span
-      v-for="panel in panels"
-      :key="panel.id"
+      v-for="panel in 8"
+      :key="panel"
       class="hud-panel"
-      :style="{ left: panel.left, top: panel.top, '--panel-depth': panel.depth, animationDelay: panel.delay }"
+      :style="{
+        left: `${14 + (((panel - 1) * 23) % 72)}%`,
+        top: `${14 + (((panel - 1) * 19) % 66)}%`,
+        '--panel-depth': `${panel % 2 ? 26 : -22}px`,
+        animationDelay: `${(panel - 1) * 95}ms`,
+      }"
     >
       <i />
       <b />

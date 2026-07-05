@@ -85,7 +85,7 @@ const activeComponent = computed(() => (props.effect ? effectComponentMap[props.
       <div class="reward-effect-scanlines" />
       <div class="reward-effect-vignette" />
       <div class="reward-effect-flash" />
-      <component :is="activeComponent" class="reward-effect-content" />
+      <component :is="activeComponent" :seed="props.seed" class="reward-effect-content" />
     </div>
   </Teleport>
 </template>

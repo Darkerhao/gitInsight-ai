@@ -1,53 +1,105 @@
 <script setup lang="ts">
 import { PartyPopper } from 'lucide-vue-next';
+import ParticleCanvas from '@/components/rewards/engine/ParticleCanvas.vue';
+import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import type { SceneApi, SceneFn } from '@/components/rewards/engine/particleEngine';
 
-const bursts = Array.from({ length: 9 }, (_, index) => ({
-  id: index,
-  left: `${12 + ((index * 13) % 78)}%`,
-  top: `${16 + ((index * 19) % 48)}%`,
-  delay: `${index * 145}ms`,
-  hue: `${32 + ((index * 47) % 310)}`,
-  scale: `${0.86 + (index % 4) * 0.12}`,
-}));
-const sparks = Array.from({ length: 28 }, (_, index) => ({
-  id: index,
-  angle: `${index * 12.85}deg`,
-  distance: `${74 + (index % 5) * 12}px`,
-}));
-const trails = Array.from({ length: 7 }, (_, index) => ({
-  id: index,
-  left: `${10 + ((index * 15) % 82)}%`,
-  delay: `${index * 170}ms`,
-  hue: `${42 + index * 36}`,
-}));
+const props = defineProps<{ seed?: number }>();
+
+const HUES = [38, 328, 205, 168, 268, 12, 52];
+
+function explode(api: SceneApi, x: number, y: number, hue: number, scale: number) {
+  const color = `hsl(${Math.round(hue)}, 100%, 66%)`;
+  const hot = `hsl(${Math.round(hue)}, 100%, 82%)`;
+
+  // 白热闪光核心 + 冲击环
+  api.spawn({ x, y, shape: 'dot', size: 30 * scale, endSize: 2, maxLife: 0.34, color: '#ffffff', glow: 2.2, fadeOut: 0.9 });
+  api.spawn({ x, y, shape: 'ring', size: 8, endSize: 190 * scale, maxLife: 0.85, color, fadeOut: 0.85, opacity: 0.85 });
+
+  // 主爆裂：带重力与空气阻力的火花球
+  api.burst({
+    x,
+    y,
+    count: Math.round(150 * scale),
+    speed: [30, 430 * scale],
+    base: {
+      shape: 'spark',
+      size: api.range(1.7, 2.5),
+      ay: 210,
+      drag: 0.3,
+      color,
+      twinkle: 7,
+      glow: 1.15,
+      fadeOut: 0.55,
+    },
+    vary: (p, rng) => {
+      p.maxLife = 1.2 + rng() * 1.2;
+      if (rng() < 0.24) p.color = hot;
+      if (rng() < 0.1) p.color = '#fff7e6';
+    },
+  });
+
+  // 慢速余烬：少量长寿命金色余星，坠落时二次噼啪
+  api.burst({
+    x,
+    y,
+    count: Math.round(16 * scale),
+    speed: [40, 190 * scale],
+    base: { shape: 'spark', size: 2.6, ay: 150, drag: 0.42, color: hot, twinkle: 3.5, glow: 1.4, fadeOut: 0.3 },
+    vary: (p, rng) => {
+      p.maxLife = 1.6 + rng() * 0.9;
+      p.onDeath = (dead, sceneApi) => {
+        sceneApi.burst({
+          x: dead.x,
+          y: dead.y,
+          count: 5,
+          speed: [10, 80],
+          base: { shape: 'spark', size: 1.4, maxLife: 0.5, ay: 120, color: '#ffe9a8', glow: 1, twinkle: 10 },
+        });
+      };
+    },
+  });
+}
+
+function launchRocket(api: SceneApi, scale = 1) {
+  const x = api.width * api.range(0.14, 0.86);
+  const targetY = api.height * api.range(0.16, 0.44);
+  const flight = api.range(0.7, 1.05);
+  const hue = api.pick(HUES) + api.range(-12, 12);
+  api.spawn({
+    x,
+    y: api.height + 16,
+    vx: api.range(-36, 36),
+    vy: -(api.height + 16 - targetY) / flight,
+    shape: 'spark',
+    size: 2.4,
+    maxLife: flight,
+    color: `hsl(${Math.round(hue)}, 90%, 78%)`,
+    glow: 1.4,
+    fadeIn: 0,
+    fadeOut: 0.08,
+    onDeath: (p, sceneApi) => explode(sceneApi, p.x, p.y, hue, scale),
+  });
+}
+
+const scene: SceneFn = (api) => {
+  api.setTrail(0.2); // 长拖尾：火箭轨迹与火花尾焰
+
+  api.at(60, () => launchRocket(api, 1.05));
+  api.at(340, () => launchRocket(api, 0.85));
+  api.every(430, () => launchRocket(api, api.range(0.75, 1.1)), { from: 750, until: 2350 });
+  // 终场齐射
+  api.at(2600, () => {
+    launchRocket(api, 1.2);
+    launchRocket(api, 1);
+    launchRocket(api, 0.9);
+  });
+};
 </script>
 
 <template>
   <div class="fireworks-effect">
-    <span
-      v-for="trail in trails"
-      :key="trail.id"
-      class="firework-trail"
-      :style="{ left: trail.left, animationDelay: trail.delay, '--firework-hue': trail.hue }"
-    />
-    <span
-      v-for="burst in bursts"
-      :key="burst.id"
-      class="firework-burst"
-      :style="{
-        left: burst.left,
-        top: burst.top,
-        animationDelay: burst.delay,
-        '--firework-hue': burst.hue,
-        '--burst-scale': burst.scale,
-      }"
-    >
-      <i
-        v-for="spark in sparks"
-        :key="spark.id"
-        :style="{ '--spark-angle': spark.angle, '--spark-distance': spark.distance }"
-      />
-    </span>
+    <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.fireworks" :scene="scene" />
     <div class="effect-signature">
       <PartyPopper :size="28" />
       <strong>臻彩烟花</strong>
@@ -82,63 +134,6 @@ const trails = Array.from({ length: 7 }, (_, index) => ({
   font-size: 16px;
 }
 
-.firework-trail {
-  position: absolute;
-  bottom: -16%;
-  width: 3px;
-  height: 34vh;
-  border-radius: 999px;
-  background: linear-gradient(0deg, transparent, hsl(var(--firework-hue), 96%, 68%));
-  filter: drop-shadow(0 0 14px hsl(var(--firework-hue), 96%, 62%));
-  opacity: 0;
-  transform: translateY(20vh);
-  animation: firework-trail-rise 1.1s ease-out both;
-}
-
-.firework-burst {
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: hsl(var(--firework-hue), 94%, 62%);
-  box-shadow:
-    0 0 24px hsl(var(--firework-hue), 94%, 62%),
-    0 0 62px hsl(var(--firework-hue), 94%, 54%);
-  transform: translate(-50%, -50%) scale(0);
-  animation: firework-core 1.48s ease-out both;
-}
-
-.firework-burst::before,
-.firework-burst::after {
-  content: '';
-  position: absolute;
-  inset: -24px;
-  border: 1px solid hsl(var(--firework-hue), 94%, 68%);
-  border-radius: 50%;
-  opacity: 0;
-  animation: firework-ring 1.48s ease-out both;
-}
-
-.firework-burst::after {
-  inset: -42px;
-  animation-delay: 120ms;
-}
-
-.firework-burst i {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 4px;
-  height: 22px;
-  border-radius: 999px;
-  background: hsl(var(--firework-hue), 94%, 66%);
-  box-shadow: 0 0 14px hsl(var(--firework-hue), 94%, 62%);
-  transform: rotate(var(--spark-angle)) translateY(0) scaleY(0.35);
-  transform-origin: center -2px;
-  animation: firework-spark 1.48s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: inherit;
-}
-
 @keyframes reward-label {
   0% {
     opacity: 0;
@@ -152,63 +147,6 @@ const trails = Array.from({ length: 7 }, (_, index) => ({
   100% {
     opacity: 0;
     transform: translate(-50%, -10px) scale(0.98);
-  }
-}
-
-@keyframes firework-trail-rise {
-  0% {
-    opacity: 0;
-    transform: translateY(20vh) scaleY(0.4);
-  }
-  24% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-80vh) scaleY(1);
-  }
-}
-
-@keyframes firework-core {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0);
-  }
-  12% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(calc(var(--burst-scale) * 1));
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.18);
-  }
-}
-
-@keyframes firework-ring {
-  0% {
-    opacity: 0;
-    transform: scale(0.2);
-  }
-  18% {
-    opacity: 0.78;
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.7);
-  }
-}
-
-@keyframes firework-spark {
-  0% {
-    opacity: 0;
-    transform: rotate(var(--spark-angle)) translateY(0) scaleY(0.25);
-  }
-  16% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: rotate(var(--spark-angle)) translateY(calc(var(--spark-distance) * -1)) scaleY(1);
   }
 }
 </style>

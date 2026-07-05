@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { Code2 } from 'lucide-vue-next';
+import ParticleCanvas from '@/components/rewards/engine/ParticleCanvas.vue';
+import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import type { SceneFn } from '@/components/rewards/engine/particleEngine';
+
+const props = defineProps<{ seed?: number }>();
 
 const codeLines = [
   'const scene = build(tokens)',
@@ -8,28 +13,80 @@ const codeLines = [
   'commit.reward.play()',
   'return structure',
 ];
-const blocks = Array.from({ length: 24 }, (_, index) => ({
-  id: index,
-  x: `${18 + ((index * 17) % 64)}%`,
-  y: `${22 + ((index * 29) % 52)}%`,
-  z: `${(index % 5) * 12}px`,
-  delay: `${index * 58}ms`,
-}));
+
+const GLYPHS = '{}<>()=;/+*01#$fnconstletif'.split('');
+
+const scene: SceneFn = (api) => {
+  api.setTrail(0.16);
+  // 汇聚目标：与右下角 code-model 面板对齐
+  const targetX = api.width * 0.82;
+  const targetY = api.height * 0.72;
+
+  // 字符从四周被"吸附"飞向模型，接近时收缩并闪光——实体化
+  api.every(24, () => {
+    const edge = Math.floor(api.range(0, 4));
+    const x = edge === 0 ? -16 : edge === 1 ? api.width + 16 : api.range(0, api.width);
+    const y = edge === 2 ? -16 : edge === 3 ? api.height + 16 : api.range(0, api.height);
+    const travel = api.range(0.9, 1.6);
+    api.spawn({
+      x,
+      y,
+      vx: api.range(-40, 40),
+      vy: api.range(-40, 40),
+      shape: 'glyph',
+      glyph: api.pick(GLYPHS),
+      size: api.range(12, 20),
+      endSize: 4,
+      maxLife: travel,
+      color: api.rng() < 0.24 ? '#99f6e4' : '#86efac',
+      spin: api.range(-1.2, 1.2),
+      fadeIn: 0.12,
+      fadeOut: 0.12,
+      update: (p, dt) => {
+        const remaining = Math.max(0.08, p.maxLife - p.life);
+        // 指向目标的追踪加速度：越接近死亡越强，保证准时抵达
+        p.vx += ((targetX - p.x) / remaining - p.vx) * Math.min(1, dt * 6);
+        p.vy += ((targetY - p.y) / remaining - p.vy) * Math.min(1, dt * 6);
+      },
+      onDeath: (p, sceneApi) => {
+        if (sceneApi.rng() < 0.3) {
+          sceneApi.spawn({ x: p.x, y: p.y, shape: 'dot', size: 6, endSize: 1, maxLife: 0.3, color: '#bbf7d0', glow: 1.6 });
+        }
+      },
+    });
+  }, { until: api.duration - 1100 });
+
+  // 模型处的能量积聚脉冲
+  api.every(900, () => {
+    api.spawn({ x: targetX, y: targetY, shape: 'ring', size: 10, endSize: 120, maxLife: 0.9, color: '#4ade80', opacity: 0.75 });
+  }, { from: 700, until: api.duration - 1300 });
+
+  // 构建完成：绿色确认爆发
+  api.at(api.duration - 1150, () => {
+    api.spawn({ x: targetX, y: targetY, shape: 'dot', size: 40, endSize: 4, maxLife: 0.5, color: '#dcfce7', glow: 2 });
+    api.burst({
+      x: targetX,
+      y: targetY,
+      count: 60,
+      speed: [80, 360],
+      base: { shape: 'spark', size: 1.8, drag: 0.3, ay: 90, color: '#4ade80', twinkle: 8, glow: 1.2 },
+      vary: (p, rng) => {
+        p.maxLife = 0.7 + rng() * 0.8;
+        if (rng() < 0.3) p.color = '#99f6e4';
+      },
+    });
+  });
+};
 </script>
 
 <template>
   <div class="code-materialize-effect">
+    <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.codeMaterialize" :scene="scene" />
     <div class="code-lines">
       <span v-for="(line, index) in codeLines" :key="line" :style="{ animationDelay: `${index * 130}ms` }">
         {{ line }}
       </span>
     </div>
-    <span
-      v-for="block in blocks"
-      :key="block.id"
-      class="code-block"
-      :style="{ left: block.x, top: block.y, '--block-z': block.z, animationDelay: block.delay }"
-    />
     <div class="code-model">
       <Code2 :size="52" />
       <strong>代码实体化</strong>
@@ -64,23 +121,6 @@ const blocks = Array.from({ length: 24 }, (_, index) => ({
   animation: code-line 3.8s ease both;
 }
 
-.code-block {
-  position: absolute;
-  width: 42px;
-  height: 28px;
-  border: 1px solid rgba(34, 197, 94, 0.38);
-  border-radius: 5px;
-  background:
-    linear-gradient(135deg, rgba(34, 197, 94, 0.38), rgba(20, 184, 166, 0.16)),
-    rgba(2, 6, 23, 0.24);
-  box-shadow:
-    12px 12px 0 rgba(34, 197, 94, 0.08),
-    0 0 28px rgba(34, 197, 94, 0.18);
-  opacity: 0;
-  transform: translate(-50%, -50%) translateZ(var(--block-z)) rotateX(58deg) rotateZ(45deg) scale(0.2);
-  animation: code-block 4.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
 .code-model {
   position: absolute;
   right: 12%;
@@ -107,12 +147,6 @@ const blocks = Array.from({ length: 24 }, (_, index) => ({
   0% { opacity: 0; transform: translateX(-18px); }
   24%, 68% { opacity: 1; transform: translateX(0); }
   100% { opacity: 0; transform: translate(54vw, 28vh) scale(0.28); }
-}
-
-@keyframes code-block {
-  0% { opacity: 0; transform: translate(-50%, -50%) translateZ(0) rotateX(58deg) rotateZ(45deg) scale(0.2); }
-  32%, 76% { opacity: 1; transform: translate(-50%, -50%) translateZ(var(--block-z)) rotateX(58deg) rotateZ(45deg) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -64%) translateZ(var(--block-z)) rotateX(58deg) rotateZ(45deg) scale(0.84); }
 }
 
 @keyframes code-model {

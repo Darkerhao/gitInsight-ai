@@ -1,40 +1,91 @@
 <script setup lang="ts">
 import { Bike } from 'lucide-vue-next';
+import ParticleCanvas from '@/components/rewards/engine/ParticleCanvas.vue';
+import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import type { SceneFn } from '@/components/rewards/engine/particleEngine';
 
-const trails = Array.from({ length: 18 }, (_, index) => ({
-  id: index,
-  top: `${18 + ((index * 11) % 62)}%`,
-  delay: `${index * 48}ms`,
-  width: `${28 + (index % 6) * 8}vw`,
-  hue: `${185 + (index % 5) * 28}`,
-}));
-const shards = Array.from({ length: 24 }, (_, index) => ({
-  id: index,
-  left: `${8 + ((index * 13) % 84)}%`,
-  top: `${18 + ((index * 17) % 62)}%`,
-  delay: `${index * 55}ms`,
-}));
+const props = defineProps<{ seed?: number }>();
+
+const scene: SceneFn = (api) => {
+  api.setTrail(0.1); // 重拖尾：速度光轨的灵魂
+  const bikeX = api.width / 2;
+  const bikeY = api.height / 2;
+
+  // 主光轨：从右侧呼啸而过的彩色拖尾光带
+  api.every(24, () => {
+    const hue = api.range(180, 320);
+    api.spawn({
+      x: api.width + 30,
+      y: api.range(api.height * 0.14, api.height * 0.82),
+      vx: -api.range(900, 1700),
+      vy: api.range(-30, 30),
+      shape: 'streak',
+      stretch: 0.08,
+      size: api.range(2, 4),
+      maxLife: 1.1,
+      color: `hsl(${Math.round(hue)}, 94%, 66%)`,
+      glow: 1.15,
+      fadeIn: 0.05,
+      fadeOut: 0.12,
+    });
+  }, { until: api.duration - 800 });
+
+  // 风切碎屑：细小白色速度线
+  api.every(30, () => {
+    api.spawn({
+      x: api.width + 10,
+      y: api.range(0, api.height),
+      vx: -api.range(1400, 2200),
+      shape: 'streak',
+      stretch: 0.04,
+      size: api.range(0.8, 1.6),
+      maxLife: 0.7,
+      color: 'rgba(255, 255, 255, 0.85)',
+      glow: 0.6,
+      fadeIn: 0.04,
+      fadeOut: 0.2,
+    });
+  }, { until: api.duration - 800 });
+
+  // 车轮尾焰：从骑手身后持续喷出的青色粒子流
+  api.every(22, () => {
+    api.spawn({
+      x: bikeX - 30 + api.range(-10, 10),
+      y: bikeY + 30 + api.range(-8, 8),
+      vx: -api.range(420, 760),
+      vy: api.range(-60, 60),
+      drag: 0.4,
+      shape: 'spark',
+      size: api.range(1.6, 3),
+      maxLife: api.range(0.5, 1),
+      color: api.rng() < 0.6 ? '#22d3ee' : '#a5f3fc',
+      twinkle: 10,
+      glow: 1.2,
+      wander: 90,
+    });
+  }, { from: 300, until: api.duration - 900 });
+
+  // 冲刺爆发：三次加速脉冲，白光一闪 + 密集光轨
+  [900, 2200, 3400].forEach((when) => {
+    api.at(when, () => {
+      api.spawn({ x: bikeX, y: bikeY, shape: 'dot', size: 40, endSize: 4, maxLife: 0.4, color: '#e0f2fe', glow: 2 });
+      api.spawn({ x: bikeX, y: bikeY, shape: 'ring', size: 20, endSize: 220, maxLife: 0.7, color: '#38bdf8', opacity: 0.8 });
+      api.burst({
+        x: bikeX - 20,
+        y: bikeY + 20,
+        count: 30,
+        speed: [500, 1100],
+        angle: [Math.PI - 0.3, Math.PI + 0.3],
+        base: { shape: 'streak', stretch: 0.07, size: 2.2, maxLife: 0.8, color: '#7dd3fc', glow: 1.2, fadeOut: 0.3 },
+      });
+    });
+  });
+};
 </script>
 
 <template>
   <div class="velocity-trail-effect">
-    <span
-      v-for="trail in trails"
-      :key="trail.id"
-      class="velocity-trail"
-      :style="{
-        top: trail.top,
-        width: trail.width,
-        animationDelay: trail.delay,
-        '--trail-hue': trail.hue,
-      }"
-    />
-    <span
-      v-for="shard in shards"
-      :key="shard.id"
-      class="velocity-shard"
-      :style="{ left: shard.left, top: shard.top, animationDelay: shard.delay }"
-    />
+    <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.velocityTrail" :scene="scene" />
     <div class="velocity-road">
       <span v-for="index in 7" :key="index" />
     </div>
@@ -51,30 +102,6 @@ const shards = Array.from({ length: 24 }, (_, index) => ({
   inset: 0;
   overflow: hidden;
   animation: velocity-shake 220ms linear 8;
-}
-
-.velocity-trail {
-  position: absolute;
-  right: 50%;
-  height: 4px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, transparent, hsl(var(--trail-hue), 94%, 66%), rgba(255, 255, 255, 0.92));
-  box-shadow: 0 0 22px hsl(var(--trail-hue), 94%, 62%);
-  opacity: 0;
-  transform: translateX(-18vw) skewX(-18deg) scaleX(0.18);
-  animation: velocity-trail 1.55s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.velocity-shard {
-  position: absolute;
-  width: 7px;
-  height: 2px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.8);
-  box-shadow: 0 0 14px rgba(34, 211, 238, 0.78);
-  opacity: 0;
-  transform: rotate(-18deg);
-  animation: velocity-shard 1.4s ease-out both;
 }
 
 .velocity-road {
@@ -133,18 +160,6 @@ const shards = Array.from({ length: 24 }, (_, index) => ({
 
 .velocity-bike strong {
   font-size: 16px;
-}
-
-@keyframes velocity-trail {
-  0% { opacity: 0; transform: translateX(24vw) skewX(-18deg) scaleX(0.18); }
-  14%, 78% { opacity: 1; }
-  100% { opacity: 0; transform: translateX(-44vw) skewX(-18deg) scaleX(1.15); }
-}
-
-@keyframes velocity-shard {
-  0% { opacity: 0; transform: translateX(28vw) rotate(-18deg) scaleX(0.4); }
-  22%, 68% { opacity: 1; }
-  100% { opacity: 0; transform: translateX(-36vw) rotate(-18deg) scaleX(1.4); }
 }
 
 @keyframes velocity-road {

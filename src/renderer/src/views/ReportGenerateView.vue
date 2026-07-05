@@ -1,11 +1,28 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { CalendarDays, CheckCircle2, CircleAlert, ClipboardCopy, Download, ExternalLink, FileText, Pin, Plus, Save, Search, Send, Trash2 } from 'lucide-vue-next';
+import {
+  CalendarDays,
+  CheckCircle2,
+  CircleAlert,
+  ClipboardCopy,
+  Clock3,
+  Download,
+  ExternalLink,
+  FileText,
+  FolderGit2,
+  ListChecks,
+  Pin,
+  Plus,
+  Save,
+  Search,
+  Send,
+  Trash2,
+} from 'lucide-vue-next';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import { useAssistant } from '@/composables/useAssistant';
-import type { RepoInfo } from '@shared/types';
+import type { DailyReportRecord, RepoInfo } from '@shared/types';
 
 const emit = defineEmits<{
   (e: 'navigate', value: string): void;
@@ -42,12 +59,21 @@ const {
 
 const dateShortcut = ref<'today' | 'yesterday' | 'rolling' | 'custom'>('today');
 const repoKeyword = ref('');
-const workHourPresets = [1, 2, 4, 6, 7, 7.5, 8];
+const workHourPresets = [1, 2, 4, 6, 7, 7.5, 8, 10];
+const hasReport = computed(() => report.value.trim().length > 0);
+const selectedRepoNames = computed(() => selectedRepos.value.map((repo) => repo.name));
+const selectedRepoNamesText = computed(() => selectedRepoNames.value.join('、'));
 
 const selectedRepoSummary = computed(() => {
   if (!selectedRepos.value.length) return '请选择要生成日报的仓库';
   if (selectedRepos.value.length === 1) return selectedRepos.value[0].name;
   return `已选择 ${selectedRepos.value.length} 个仓库`;
+});
+
+const repoContextText = computed(() => {
+  if (!selectedRepos.value.length) return '尚未选择仓库';
+  if (selectedRepos.value.length === 1) return selectedRepos.value[0].path;
+  return selectedRepoNamesText.value;
 });
 
 const filteredRepos = computed(() => {
@@ -123,9 +149,41 @@ const generationChecks = computed(() => [
   },
 ]);
 
+const requiredGenerationChecks = computed(() => generationChecks.value.filter((item) => item.required));
+const completedRequiredCheckCount = computed(() => requiredGenerationChecks.value.filter((item) => item.ok).length);
 const blockedGenerationCheck = computed(() => generationChecks.value.find((item) => item.required && !item.ok));
 const pendingGenerationChecks = computed(() => generationChecks.value.filter((item) => !item.ok));
 const generateButtonLabel = computed(() => (report.value.trim() ? '重新生成日报' : '开始生成日报'));
+const setupReady = computed(() => !blockedGenerationCheck.value);
+const setupStatus = computed<'success' | 'pending'>(() => (setupReady.value ? 'success' : 'pending'));
+const setupStatusLabel = computed(() => (setupReady.value ? '生成条件就绪' : '待完善'));
+const readinessDetail = computed(() => {
+  const blocked = blockedGenerationCheck.value;
+  if (blocked) return `${blocked.label}：${blocked.detail}`;
+  if (pendingGenerationChecks.value.length) return '可生成，建议补齐可选配置以提升日报质量';
+  return '仓库、日期、时间段和汇报人均已就绪';
+});
+const readinessProgressLabel = computed(() => `${completedRequiredCheckCount.value}/${requiredGenerationChecks.value.length} 必填项`);
+const reportTitle = computed(() => {
+  const repoTitle =
+    selectedRepos.value.length > 1 ? `${selectedRepos.value[0].name} 等 ${selectedRepos.value.length} 个仓库` : selectedRepoSummary.value;
+  return `${repoTitle} ${form.date || '未选择日期'} 研发日报`;
+});
+const reportSubtitle = computed(() => (hasReport.value ? reportRangeLabel.value : '生成后的日报会在这里进入可编辑状态'));
+const selectedProjectName = computed(
+  () => projectOptions.value.find((item) => item.id === config.feishuForm.projectOptionId)?.name || '',
+);
+const canPublishReport = computed(() => hasReport.value && Boolean(config.feishuForm.projectOptionId));
+const publishStatusTitle = computed(() => {
+  if (!hasReport.value) return '等待日报正文';
+  if (!config.feishuForm.projectOptionId) return '请选择飞书目标';
+  return '可发布到飞书';
+});
+const publishStatusDetail = computed(() => {
+  if (!hasReport.value) return '先在左侧生成或编辑日报内容';
+  if (!config.feishuForm.projectOptionId) return '选择目标后即可同步到飞书日报表';
+  return `目标：${selectedProjectName.value || '已选择项目'}，工时 ${Number(config.feishuForm.defaultWorkHours).toFixed(1)} 小时`;
+});
 
 function formatDate(date: Date) {
   const year = date.getFullYear();
@@ -211,6 +269,10 @@ async function handleGenerate() {
 }
 
 async function handleSaveCurrentReport() {
+  if (!hasReport.value) {
+    ElMessage.warning('当前没有可保存的日报内容');
+    return;
+  }
   await saveCurrentReport(report.value);
 }
 
@@ -238,7 +300,21 @@ function exportMarkdown() {
 }
 
 async function publishActiveReport() {
+  if (!hasReport.value) {
+    ElMessage.warning('请先生成日报');
+    return;
+  }
+  if (!config.feishuForm.projectOptionId) {
+    ElMessage.warning('请选择飞书发布目标');
+    return;
+  }
   await push(report.value);
+}
+
+function getRecordStatus(item: DailyReportRecord) {
+  if (item.status === 'draft') return { status: 'pending' as const, label: '草稿' };
+  if (item.status === 'success') return { status: 'success' as const, label: '成功' };
+  return { status: 'failed' as const, label: '失败' };
 }
 
 async function handleOpenFeishuSubmissionRecords() {
@@ -267,7 +343,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
 </script>
 
 <template>
-  <div class="view-stack">
+  <div class="view-stack report-generate-view">
     <div v-if="loading" class="generation-loading-overlay" aria-live="polite">
       <div class="generation-loading-shell">
         <div class="generation-loading-copy">
@@ -293,10 +369,37 @@ async function confirmRemoveRepo(item: RepoInfo) {
 
     <div class="content-grid has-right-panel">
       <div class="view-stack">
-        <section class="surface-card step-card">
-          <div class="step-title">
-            <span>1</span>
-            <strong>选择生成范围</strong>
+        <section class="surface-card step-card report-setup-card">
+          <div class="step-title with-action">
+            <div>
+              <span>1</span>
+              <strong>选择生成范围</strong>
+            </div>
+            <StatusBadge :status="setupStatus" :label="setupStatusLabel" />
+          </div>
+
+          <div class="report-context-bar">
+            <div class="report-context-item">
+              <FolderGit2 :size="16" />
+              <span>
+                <strong>{{ selectedRepoSummary }}</strong>
+                <small>{{ repoContextText }}</small>
+              </span>
+            </div>
+            <div class="report-context-item">
+              <Clock3 :size="16" />
+              <span>
+                <strong>提交范围</strong>
+                <small>{{ reportRangeLabel }}</small>
+              </span>
+            </div>
+            <div class="report-context-item">
+              <ListChecks :size="16" />
+              <span>
+                <strong>{{ readinessProgressLabel }}</strong>
+                <small>{{ readinessDetail }}</small>
+              </span>
+            </div>
           </div>
 
           <div class="field-grid">
@@ -419,33 +522,40 @@ async function confirmRemoveRepo(item: RepoInfo) {
           </div>
         </section>
 
-        <section class="surface-card step-card">
+        <section class="surface-card step-card report-editor-card">
           <div class="step-title">
             <span>2</span>
             <strong>生成与编辑</strong>
           </div>
 
-          <div v-if="pendingGenerationChecks.length" class="generation-check-grid">
+          <div class="generation-toolbar">
+            <div class="generation-toolbar-copy">
+              <strong>{{ setupReady ? '准备就绪，可以生成' : '生成条件未完成' }}</strong>
+              <span>{{ readinessDetail }}</span>
+            </div>
+            <el-button class="generate-cta" :icon="FileText" type="primary" size="large" :loading="loading" @click="handleGenerate">
+              {{ generateButtonLabel }}
+            </el-button>
+          </div>
+
+          <div class="generation-check-strip">
             <el-button
-              v-for="item in pendingGenerationChecks"
+              v-for="item in generationChecks"
               :key="item.key"
-              class="generation-check-card"
-              :class="{ warning: item.required, optional: !item.required }"
+              class="generation-check-chip"
+              :class="{ ready: item.ok, warning: item.required && !item.ok, optional: !item.required && !item.ok }"
               :disabled="!item.action"
               plain
               @click="item.action && emit('navigate', item.action)"
             >
-              <CircleAlert :size="18" />
+              <CheckCircle2 v-if="item.ok" :size="16" />
+              <CircleAlert v-else :size="16" />
               <span class="generation-check-copy">
                 <strong>{{ item.label }}</strong>
-                <small>{{ item.detail }}</small>
+                <small>{{ item.ok ? '已就绪' : item.detail }}</small>
               </span>
             </el-button>
           </div>
-
-          <el-button class="generate-cta" :icon="FileText" type="primary" size="large" :loading="loading" @click="handleGenerate">
-            {{ generateButtonLabel }}
-          </el-button>
 
           <div v-if="lastReportResult" class="metric-grid">
             <div v-for="item in metrics" :key="item.label" class="metric-card">
@@ -454,26 +564,36 @@ async function confirmRemoveRepo(item: RepoInfo) {
             </div>
           </div>
 
-          <article class="report-preview">
+          <article class="report-preview" :class="{ 'is-empty': !hasReport }">
             <div class="report-preview-head">
-              <h2>{{ selectedRepos.length ? `${selectedRepos.map((repo) => repo.name).join('、')} ${form.date} 研发日报` : `${form.date} 研发日报` }}</h2>
-              <span>生成时间：{{ generatedAtText }}</span>
+              <div>
+                <h2>{{ reportTitle }}</h2>
+                <span>{{ reportSubtitle }}</span>
+              </div>
+              <small>生成时间：{{ generatedAtText }}</small>
+            </div>
+
+            <div v-if="!hasReport" class="report-empty-panel">
+              <FileText :size="30" />
+              <strong>等待生成日报正文</strong>
+              <span>选择仓库和时间范围后，点击“开始生成日报”，生成结果会在这里进入可编辑状态。</span>
             </div>
 
             <el-input
+              v-else
               v-model="report"
               class="editable-report"
               type="textarea"
-              :rows="18"
+              :autosize="{ minRows: 16, maxRows: 28 }"
               resize="vertical"
               placeholder="生成后的研发日报会显示在这里，可直接修改后保存"
             />
           </article>
 
           <div class="button-row end">
-            <el-button :icon="Save" plain @click="handleSaveCurrentReport">保存修改</el-button>
-            <el-button :icon="ClipboardCopy" plain @click="copyReport">复制内容</el-button>
-            <el-button :icon="Download" type="primary" plain @click="exportMarkdown">导出 Markdown</el-button>
+            <el-button :icon="Save" :disabled="!hasReport" plain @click="handleSaveCurrentReport">保存修改</el-button>
+            <el-button :icon="ClipboardCopy" :disabled="!hasReport" plain @click="copyReport">复制内容</el-button>
+            <el-button :icon="Download" :disabled="!hasReport" type="primary" plain @click="exportMarkdown">导出 Markdown</el-button>
           </div>
           <p v-if="status" class="muted-text">{{ status }}</p>
         </section>
@@ -481,11 +601,22 @@ async function confirmRemoveRepo(item: RepoInfo) {
 
       <aside class="view-stack">
         <section class="surface-card publish-panel">
-          <div class="step-title">
-            <span>3</span>
-            <strong>发布与同步</strong>
+          <div class="step-title with-action">
+            <div>
+              <span>3</span>
+              <strong>发布与同步</strong>
+            </div>
+            <StatusBadge :status="canPublishReport ? 'success' : 'pending'" :label="canPublishReport ? '可发布' : '待准备'" />
           </div>
-          <h3>发布到飞书</h3>
+
+          <div class="publish-summary-card" :class="{ ready: canPublishReport }">
+            <Send :size="18" />
+            <div>
+              <strong>{{ publishStatusTitle }}</strong>
+              <span>{{ publishStatusDetail }}</span>
+            </div>
+          </div>
+
           <div class="publish-hint">
             <span>自动同步、字段映射与定时配置统一在日报配置页维护。</span>
             <el-button link type="primary" @click="emit('navigate', 'config')">去配置</el-button>
@@ -524,7 +655,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
               </el-button>
             </div>
           </div>
-          <el-button :icon="Send" type="primary" :loading="pushing" :disabled="!report.trim()" @click="publishActiveReport">
+          <el-button :icon="Send" type="primary" :loading="pushing" :disabled="!canPublishReport" @click="publishActiveReport">
             发布研发日报到飞书
           </el-button>
           <el-button class="submission-record-btn" :icon="ExternalLink" plain :loading="feishuLoading" @click="handleOpenFeishuSubmissionRecords">
@@ -532,15 +663,18 @@ async function confirmRemoveRepo(item: RepoInfo) {
           </el-button>
         </section>
 
-        <section class="surface-card">
+        <section class="surface-card record-panel">
           <div class="panel-head">
-            <h3>生成记录</h3>
+            <div>
+              <h3>生成记录</h3>
+              <small>最近 5 条</small>
+            </div>
             <el-button link type="primary" @click="emit('navigate', 'history')">查看全部</el-button>
           </div>
           <div class="record-list">
             <div v-if="!generationRecords.length" class="empty-state">暂无生成记录</div>
             <div v-for="item in generationRecords" :key="item.id" class="record-item">
-              <StatusBadge :status="item.status === 'failed' ? 'failed' : 'success'" :label="item.status === 'draft' ? '草稿' : item.status === 'success' ? '成功' : '失败'" />
+              <StatusBadge :status="getRecordStatus(item).status" :label="getRecordStatus(item).label" />
               <div>
                 <strong>{{ item.date }} 日报</strong>
                 <span>{{ item.repoNames.join('、') || '未记录项目' }} · {{ formatDateTime(item.generatedAt) }}</span>

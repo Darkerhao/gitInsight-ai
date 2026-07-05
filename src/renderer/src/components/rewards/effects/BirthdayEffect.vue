@@ -1,45 +1,108 @@
 <script setup lang="ts">
 import { Cake } from 'lucide-vue-next';
+import ParticleCanvas from '@/components/rewards/engine/ParticleCanvas.vue';
+import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import type { SceneApi, SceneFn } from '@/components/rewards/engine/particleEngine';
 
-const colors = ['#3b6cf6', '#16a34a', '#f59e0b', '#ef4444', '#ec4899', '#22c55e', '#8b5cf6'];
-const confettiPieces = Array.from({ length: 72 }, (_, index) => ({
-  id: index,
-  left: `${(index * 17) % 100}%`,
-  delay: `${(index % 18) * 70}ms`,
-  duration: `${2500 + (index % 7) * 170}ms`,
-  color: colors[index % colors.length],
-  rotate: `${(index * 37) % 180}deg`,
-  width: `${7 + (index % 3) * 3}px`,
-}));
-const ribbons = Array.from({ length: 7 }, (_, index) => ({
-  id: index,
-  left: `${8 + index * 14}%`,
-  delay: `${index * 110}ms`,
-  color: colors[(index + 2) % colors.length],
-}));
+const props = defineProps<{ seed?: number }>();
+
+const CONFETTI_COLORS = ['#3b6cf6', '#16a34a', '#f59e0b', '#ef4444', '#ec4899', '#22c55e', '#8b5cf6', '#fbbf24'];
+
+function cannon(api: SceneApi, fromLeft: boolean, power: number) {
+  const x = fromLeft ? -10 : api.width + 10;
+  const y = api.height * 0.92;
+  const baseAngle = fromLeft ? -Math.PI / 3.2 : Math.PI + Math.PI / 3.2;
+  api.burst({
+    x,
+    y,
+    count: Math.round(70 * power),
+    speed: [420, 980 * power],
+    angle: [baseAngle - 0.24, baseAngle + 0.24],
+    base: {
+      shape: 'rect',
+      composite: 'source-over',
+      ay: 420,
+      drag: 0.24,
+      glow: 0,
+      fadeIn: 0,
+      fadeOut: 0.22,
+    },
+    vary: (p, rng) => {
+      p.color = CONFETTI_COLORS[Math.floor(rng() * CONFETTI_COLORS.length)];
+      p.size = 6 + rng() * 7;
+      p.maxLife = 2.4 + rng() * 1.4;
+      p.rotation = rng() * Math.PI;
+      p.spin = (rng() - 0.5) * 14;
+      p.flutter = 1.6 + rng() * 2.6;
+      p.wander = 60;
+    },
+  });
+  // 炮口金色闪光
+  api.spawn({ x, y, shape: 'dot', size: 26, endSize: 4, maxLife: 0.3, color: '#fde68a', glow: 2 });
+}
+
+function starPop(api: SceneApi) {
+  const x = api.width * api.range(0.3, 0.7);
+  const y = api.height * api.range(0.2, 0.45);
+  api.spawn({ x, y, shape: 'ring', size: 4, endSize: 90, maxLife: 0.7, color: '#f9a8d4', opacity: 0.8 });
+  api.burst({
+    x,
+    y,
+    count: 26,
+    speed: [40, 220],
+    base: { shape: 'spark', size: 2, ay: 130, drag: 0.4, color: '#f9a8d4', twinkle: 6, glow: 1.2 },
+    vary: (p, rng) => {
+      p.maxLife = 0.9 + rng() * 0.8;
+      if (rng() < 0.4) p.color = '#fde68a';
+    },
+  });
+}
+
+const scene: SceneFn = (api) => {
+  api.setTrail(0.55); // 轻微拖尾，让纸屑更顺滑
+
+  // 三轮左右交替礼炮
+  api.at(120, () => {
+    cannon(api, true, 1.05);
+    cannon(api, false, 1.05);
+  });
+  api.at(1250, () => cannon(api, true, 0.85));
+  api.at(1500, () => cannon(api, false, 0.85));
+  api.at(2650, () => {
+    cannon(api, true, 0.95);
+    cannon(api, false, 0.95);
+  });
+
+  // 中场粉金星光爆点
+  api.every(520, () => starPop(api), { from: 500, until: 3300 });
+
+  // 顶部持续飘落细碎彩屑
+  api.every(70, () => {
+    api.spawn({
+      x: api.range(0, api.width),
+      y: -12,
+      vx: api.range(-30, 30),
+      vy: api.range(90, 190),
+      ay: 60,
+      shape: 'rect',
+      composite: 'source-over',
+      color: api.pick(CONFETTI_COLORS),
+      size: api.range(4, 8),
+      maxLife: api.range(2.2, 3.4),
+      rotation: api.range(0, Math.PI),
+      spin: api.range(-8, 8),
+      flutter: api.range(1.4, 3.4),
+      wander: 70,
+      glow: 0,
+      fadeOut: 0.16,
+    });
+  }, { until: 3400 });
+};
 </script>
 
 <template>
   <div class="birthday-effect">
-    <span
-      v-for="stream in ribbons"
-      :key="stream.id"
-      class="birthday-ribbon"
-      :style="{ left: stream.left, background: stream.color, animationDelay: stream.delay }"
-    />
-    <span
-      v-for="piece in confettiPieces"
-      :key="piece.id"
-      class="confetti-piece"
-      :style="{
-        left: piece.left,
-        width: piece.width,
-        background: piece.color,
-        animationDelay: piece.delay,
-        animationDuration: piece.duration,
-        '--confetti-rotate': piece.rotate,
-      }"
-    />
+    <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.birthday" :scene="scene" />
     <div class="birthday-card-effect">
       <span class="birthday-card-glow" />
       <Cake :size="52" />
@@ -108,26 +171,6 @@ const ribbons = Array.from({ length: 7 }, (_, index) => ({
   font-size: 14px;
 }
 
-.birthday-ribbon {
-  position: absolute;
-  top: -24%;
-  width: 18px;
-  height: 52vh;
-  border-radius: 999px;
-  opacity: 0;
-  filter: blur(0.3px);
-  animation: birthday-ribbon-drop 3.4s ease-in both;
-}
-
-.confetti-piece {
-  position: absolute;
-  top: -24px;
-  height: 18px;
-  border-radius: 3px;
-  opacity: 0;
-  animation: confetti-fall 2.8s linear both;
-}
-
 :root[data-theme='dark'] .birthday-card-effect {
   border-color: rgba(122, 162, 255, 0.24);
   background: rgba(22, 29, 41, 0.9);
@@ -160,35 +203,6 @@ const ribbons = Array.from({ length: 7 }, (_, index) => ({
   }
   to {
     transform: rotate(260deg);
-  }
-}
-
-@keyframes birthday-ribbon-drop {
-  0% {
-    opacity: 0;
-    transform: translateY(-12vh) rotate(8deg);
-  }
-  18%,
-  72% {
-    opacity: 0.5;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(112vh) rotate(-12deg);
-  }
-}
-
-@keyframes confetti-fall {
-  0% {
-    opacity: 0;
-    transform: translateY(-12vh) rotate(var(--confetti-rotate));
-  }
-  8% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(112vh) rotate(calc(var(--confetti-rotate) + 620deg));
   }
 }
 </style>

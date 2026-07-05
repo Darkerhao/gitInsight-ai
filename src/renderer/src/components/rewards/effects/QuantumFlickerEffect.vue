@@ -1,38 +1,131 @@
 <script setup lang="ts">
 import { Atom } from 'lucide-vue-next';
+import ParticleCanvas from '@/components/rewards/engine/ParticleCanvas.vue';
+import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import type { SceneApi, SceneFn } from '@/components/rewards/engine/particleEngine';
 
-const ghosts = Array.from({ length: 7 }, (_, index) => ({
-  id: index,
-  x: `${(index - 3) * 18}px`,
-  y: `${((index % 3) - 1) * 16}px`,
-  hue: `${220 + index * 18}`,
-  delay: `${index * 60}ms`,
-}));
-const particles = Array.from({ length: 26 }, (_, index) => ({
-  id: index,
-  angle: `${index * 13.85}deg`,
-  distance: `${96 + (index % 6) * 14}px`,
-}));
+const props = defineProps<{ seed?: number }>();
+
+// 量子隧穿：粒子团在随机位置瞬现瞬灭，伴随电弧与位错闪痕
+function teleportPop(api: SceneApi) {
+  const x = api.range(api.width * 0.16, api.width * 0.84);
+  const y = api.range(api.height * 0.16, api.height * 0.8);
+  const hue = api.range(230, 300);
+  const color = `hsl(${Math.round(hue)}, 92%, 74%)`;
+
+  api.spawn({ x, y, shape: 'dot', size: 20, endSize: 2, maxLife: 0.26, color: '#f5f3ff', glow: 2, fadeIn: 0, fadeOut: 0.9 });
+  api.spawn({ x, y, shape: 'ring', size: 4, endSize: 66, maxLife: 0.5, color, opacity: 0.85 });
+  api.burst({
+    x,
+    y,
+    count: 20,
+    speed: [30, 240],
+    base: { shape: 'spark', size: 1.8, drag: 0.24, color, twinkle: 12, glow: 1.1 },
+    vary: (p, rng) => {
+      p.maxLife = 0.4 + rng() * 0.5;
+      if (rng() < 0.3) p.color = '#e0e7ff';
+    },
+  });
+  // 水平位错闪痕（glitch 划线）
+  if (api.rng() < 0.7) {
+    api.spawn({
+      x: x + api.range(-40, 40),
+      y: y + api.range(-30, 30),
+      vx: api.range(600, 1300) * (api.rng() < 0.5 ? -1 : 1),
+      shape: 'streak',
+      stretch: 0.06,
+      size: api.range(1.4, 2.6),
+      maxLife: 0.24,
+      color: '#c4b5fd',
+      glow: 1.2,
+      fadeIn: 0,
+      fadeOut: 0.5,
+    });
+  }
+}
+
+const scene: SceneFn = (api) => {
+  api.setTrail(0.34);
+  const cx = api.width / 2;
+  const cy = api.height / 2;
+
+  // 电弧：中心附近点对之间的抖动折线
+  let sceneTime = 0;
+  const arcs: Array<{ points: Array<[number, number]>; born: number; life: number; hue: number }> = [];
+  api.every(300, () => {
+    const angleA = api.range(0, Math.PI * 2);
+    const angleB = angleA + api.range(0.8, 2.4);
+    const radiusA = api.range(70, 210);
+    const radiusB = api.range(70, 210);
+    const from: [number, number] = [cx + Math.cos(angleA) * radiusA, cy + Math.sin(angleA) * radiusA * 0.7];
+    const to: [number, number] = [cx + Math.cos(angleB) * radiusB, cy + Math.sin(angleB) * radiusB * 0.7];
+    const segments = 7;
+    const points: Array<[number, number]> = [from];
+    for (let i = 1; i < segments; i += 1) {
+      const t = i / segments;
+      points.push([
+        from[0] + (to[0] - from[0]) * t + api.range(-26, 26),
+        from[1] + (to[1] - from[1]) * t + api.range(-26, 26),
+      ]);
+    }
+    points.push(to);
+    arcs.push({ points, born: sceneTime, life: 0.16 + api.rng() * 0.1, hue: api.range(240, 290) });
+  }, { from: 400, until: api.duration - 1100 });
+
+  api.onFrame((tMs, _dt, ctx) => {
+    sceneTime = tMs / 1000;
+    for (let i = arcs.length - 1; i >= 0; i -= 1) {
+      const arc = arcs[i];
+      const age = sceneTime - arc.born;
+      if (age > arc.life) {
+        arcs.splice(i, 1);
+        continue;
+      }
+      const alpha = (1 - age / arc.life) * 0.9;
+      ctx.strokeStyle = `hsla(${arc.hue}, 95%, 78%, ${alpha})`;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(arc.points[0][0], arc.points[0][1]);
+      for (const [px, py] of arc.points.slice(1)) ctx.lineTo(px, py);
+      ctx.stroke();
+    }
+  });
+
+  // 瞬现粒子团：频率先快后慢
+  api.every(200, () => teleportPop(api), { from: 100, until: 1900 });
+  api.every(340, () => teleportPop(api), { from: 1900, until: api.duration - 1000 });
+
+  // 中心原子核心：亮点云环绕
+  api.every(50, () => {
+    const angle = api.range(0, Math.PI * 2);
+    const radius = api.range(36, 90);
+    api.spawn({
+      x: cx + Math.cos(angle) * radius,
+      y: cy + Math.sin(angle) * radius * 0.72,
+      shape: 'dot',
+      size: api.range(1, 2),
+      maxLife: api.range(0.5, 1),
+      color: '#c4b5fd',
+      twinkle: 14,
+      glow: 1,
+    });
+  }, { until: api.duration - 900 });
+};
 </script>
 
 <template>
   <div class="quantum-flicker-effect">
-    <span
-      v-for="particle in particles"
-      :key="particle.id"
-      class="quantum-particle"
-      :style="{ '--particle-angle': particle.angle, '--particle-distance': particle.distance }"
-    />
+    <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.quantumFlicker" :scene="scene" />
     <div class="quantum-stack">
       <span
-        v-for="ghost in ghosts"
-        :key="ghost.id"
+        v-for="ghost in 5"
+        :key="ghost"
         class="quantum-ghost"
         :style="{
-          '--ghost-x': ghost.x,
-          '--ghost-y': ghost.y,
-          '--ghost-hue': ghost.hue,
-          animationDelay: ghost.delay,
+          '--ghost-x': `${(ghost - 3) * 20}px`,
+          '--ghost-y': `${((ghost % 3) - 1) * 16}px`,
+          '--ghost-hue': `${220 + ghost * 22}`,
+          animationDelay: `${ghost * 70}ms`,
         }"
       >
         <Atom :size="42" />
@@ -47,20 +140,6 @@ const particles = Array.from({ length: 26 }, (_, index) => ({
   position: absolute;
   inset: 0;
   overflow: hidden;
-}
-
-.quantum-particle {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #c4b5fd;
-  box-shadow: 0 0 20px rgba(167, 139, 250, 0.88);
-  opacity: 0;
-  transform: rotate(var(--particle-angle)) translateY(0);
-  animation: quantum-particle 2.4s ease both;
 }
 
 .quantum-stack {
@@ -98,12 +177,6 @@ const particles = Array.from({ length: 26 }, (_, index) => ({
   mix-blend-mode: screen;
   transform: translate(var(--ghost-x), var(--ghost-y)) scale(0.92);
   animation: quantum-ghost 4.2s steps(2, end) both;
-}
-
-@keyframes quantum-particle {
-  0% { opacity: 0; transform: rotate(var(--particle-angle)) translateY(calc(var(--particle-distance) * -1)) scale(0.5); }
-  22%, 62% { opacity: 1; }
-  100% { opacity: 0; transform: rotate(var(--particle-angle)) translateY(0) scale(0.2); }
 }
 
 @keyframes quantum-stack {

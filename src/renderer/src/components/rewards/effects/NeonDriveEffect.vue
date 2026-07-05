@@ -1,17 +1,89 @@
 <script setup lang="ts">
 import { Zap } from 'lucide-vue-next';
+import ParticleCanvas from '@/components/rewards/engine/ParticleCanvas.vue';
+import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import type { SceneFn } from '@/components/rewards/engine/particleEngine';
 
-const speedLines = Array.from({ length: 34 }, (_, index) => ({
-  id: index,
-  top: `${8 + ((index * 17) % 82)}%`,
-  delay: `${(index % 11) * 54}ms`,
-  length: `${70 + (index % 5) * 42}px`,
-  side: index % 2 === 0 ? 'left' : 'right',
-}));
-const roadMarks = Array.from({ length: 12 }, (_, index) => ({
-  id: index,
-  delay: `${index * 90}ms`,
-}));
+const props = defineProps<{ seed?: number }>();
+
+const scene: SceneFn = (api) => {
+  api.setTrail(0.16);
+  const vpX = api.width / 2; // 消失点
+  const vpY = api.height * 0.55;
+
+  // 合成波落日：地平线上的呼吸光球
+  api.onFrame((tMs, _dt, ctx) => {
+    const t = tMs / 1000;
+    const envelope = Math.min(1, t / 1) * Math.min(1, Math.max(0, (api.duration / 1000 - t) / 0.9));
+    if (envelope <= 0) return;
+    const radius = 90 + Math.sin(t * 1.4) * 8;
+    const gradient = ctx.createRadialGradient(vpX, vpY - 20, 0, vpX, vpY - 20, radius);
+    gradient.addColorStop(0, `rgba(253, 186, 116, ${0.5 * envelope})`);
+    gradient.addColorStop(0.5, `rgba(244, 114, 182, ${0.3 * envelope})`);
+    gradient.addColorStop(1, 'rgba(244, 114, 182, 0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(vpX, vpY - 20, radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // 高速掠过的霓虹光轨：从消失点向两侧加速飞出
+  api.every(15, () => {
+    const side = api.rng() < 0.5 ? -1 : 1;
+    const angle = side > 0 ? api.range(-0.5, 0.5) : Math.PI + api.range(-0.5, 0.5);
+    const pitch = api.rng() < 0.6 ? api.range(0.05, 0.5) : api.range(-0.3, 0.05);
+    api.spawn({
+      x: vpX + Math.cos(angle) * 20,
+      y: vpY + pitch * 30,
+      vx: Math.cos(angle) * api.range(60, 130),
+      vy: pitch * api.range(120, 260),
+      shape: 'streak',
+      stretch: 0.09,
+      size: api.range(1.6, 3),
+      maxLife: api.range(0.9, 1.5),
+      color: api.rng() < 0.5 ? '#f472b6' : '#22d3ee',
+      glow: 1.1,
+      fadeIn: 0.14,
+      fadeOut: 0.08,
+      update: (p, dt) => {
+        p.vx += (p.x - vpX) * 3.6 * dt;
+        p.vy += (p.y - vpY) * 3.6 * dt;
+      },
+    });
+  }, { until: api.duration - 700 });
+
+  // 路面氮气火花：底部向上蹿起的粉色火花
+  api.every(140, () => {
+    api.spawn({
+      x: vpX + api.range(-api.width * 0.2, api.width * 0.2),
+      y: api.height + 6,
+      vx: api.range(-40, 40),
+      vy: api.range(-300, -160),
+      ay: 260,
+      shape: 'spark',
+      size: api.range(1.4, 2.4),
+      maxLife: api.range(0.8, 1.4),
+      color: api.rng() < 0.5 ? '#f9a8d4' : '#67e8f9',
+      twinkle: 8,
+      glow: 1.2,
+    });
+  }, { from: 400, until: api.duration - 1000 });
+
+  // 氮气爆发：周期性的速度冲击波
+  api.every(1200, () => {
+    api.spawn({
+      x: vpX,
+      y: vpY,
+      shape: 'ring',
+      size: 16,
+      endSize: Math.max(api.width, api.height) * 0.6,
+      maxLife: 0.9,
+      color: '#f472b6',
+      opacity: 0.6,
+      fadeOut: 0.75,
+    });
+  }, { from: 800, until: api.duration - 1400 });
+};
 </script>
 
 <template>
@@ -20,15 +92,9 @@ const roadMarks = Array.from({ length: 12 }, (_, index) => ({
       <span v-for="index in 18" :key="index" :style="{ '--tower': `${34 + (index % 6) * 18}px` }" />
     </div>
     <div class="neon-road">
-      <span v-for="mark in roadMarks" :key="mark.id" class="road-mark" :style="{ animationDelay: mark.delay }" />
+      <span v-for="mark in 12" :key="mark" class="road-mark" :style="{ animationDelay: `${mark * 90}ms` }" />
     </div>
-    <span
-      v-for="line in speedLines"
-      :key="line.id"
-      class="speed-line"
-      :class="line.side"
-      :style="{ top: line.top, width: line.length, animationDelay: line.delay }"
-    />
+    <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.neonDrive" :scene="scene" />
     <div class="neon-dashboard">
       <Zap :size="46" />
       <strong>霓虹疾驰</strong>
@@ -97,24 +163,6 @@ const roadMarks = Array.from({ length: 12 }, (_, index) => ({
   opacity: 0;
   transform: translateX(-50%);
   animation: road-mark 760ms linear infinite;
-}
-
-.speed-line {
-  position: absolute;
-  height: 2px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.92), rgba(244, 114, 182, 0.78));
-  opacity: 0;
-  animation: speed-line 820ms cubic-bezier(0.16, 1, 0.3, 1) infinite;
-}
-
-.speed-line.left {
-  left: -12%;
-}
-
-.speed-line.right {
-  right: -12%;
-  transform: rotate(180deg);
 }
 
 .neon-dashboard {
@@ -188,20 +236,6 @@ const roadMarks = Array.from({ length: 12 }, (_, index) => ({
   100% {
     opacity: 0;
     transform: translate(-50%, 58vh) scaleY(1.5);
-  }
-}
-
-@keyframes speed-line {
-  0% {
-    opacity: 0;
-    transform: translateX(0) scaleX(0.3);
-  }
-  30% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(62vw) scaleX(1);
   }
 }
 

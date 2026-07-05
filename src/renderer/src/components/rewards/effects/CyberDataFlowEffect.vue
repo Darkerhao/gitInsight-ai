@@ -1,45 +1,96 @@
 <script setup lang="ts">
 import { CircuitBoard } from 'lucide-vue-next';
+import ParticleCanvas from '@/components/rewards/engine/ParticleCanvas.vue';
+import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import type { SceneFn } from '@/components/rewards/engine/particleEngine';
 
-const glyphSet = ['01', 'AI', 'OK', 'PR', 'Git', 'Σ', '↯', 'run'];
-const streams = Array.from({ length: 34 }, (_, index) => {
-  const side = ['left', 'right', 'top', 'bottom'][index % 4];
-  return {
-    id: index,
-    side,
-    offset: `${8 + ((index * 17) % 84)}%`,
-    delay: `${(index % 10) * 62}ms`,
-    glyphs: Array.from({ length: 5 }, (_, glyphIndex) => glyphSet[(index + glyphIndex) % glyphSet.length]),
-  };
-});
-const rails = Array.from({ length: 10 }, (_, index) => ({
-  id: index,
-  delay: `${index * 90}ms`,
-  rotate: `${index % 2 ? 90 : 0}deg`,
-  x: `${16 + ((index * 19) % 68)}%`,
-  y: `${18 + ((index * 23) % 60)}%`,
-}));
+const props = defineProps<{ seed?: number }>();
+
+const PACKET_COLORS = ['#22d3ee', '#f472b6', '#7dd3fc', '#e879f9'];
+const FLOW_GLYPHS = ['01', 'AI', 'OK', 'PR', 'Σ', '↯'];
+
+const scene: SceneFn = (api) => {
+  api.setTrail(0.11); // 霓虹长尾：数据包身后拖出电路光轨
+
+  // 电路数据包：轴向直行 + 随机 90° 转向，走出印刷电路的曼哈顿路径
+  api.every(46, () => {
+    const speed = api.range(260, 520);
+    const startOnVertical = api.rng() < 0.5;
+    let dirX = startOnVertical ? 0 : (api.rng() < 0.5 ? 1 : -1);
+    let dirY = startOnVertical ? (api.rng() < 0.5 ? 1 : -1) : 0;
+    let untilTurn = api.range(0.2, 0.6);
+    api.spawn({
+      x: api.range(api.width * 0.06, api.width * 0.94),
+      y: api.range(api.height * 0.06, api.height * 0.94),
+      vx: dirX * speed,
+      vy: dirY * speed,
+      shape: 'spark',
+      size: api.range(1.8, 3),
+      maxLife: api.range(1.2, 2),
+      color: api.pick(PACKET_COLORS),
+      glow: 1.15,
+      fadeIn: 0.08,
+      fadeOut: 0.18,
+      update: (p, dt) => {
+        untilTurn -= dt;
+        if (untilTurn <= 0) {
+          untilTurn = 0.2 + api.rng() * 0.5;
+          // 转向瞬间在拐点留下一个亮结点
+          api.spawn({ x: p.x, y: p.y, shape: 'dot', size: 3.4, endSize: 1, maxLife: 0.4, color: p.color, glow: 1.4 });
+          if (dirX !== 0) {
+            dirY = api.rng() < 0.5 ? 1 : -1;
+            dirX = 0;
+          } else {
+            dirX = api.rng() < 0.5 ? 1 : -1;
+            dirY = 0;
+          }
+          p.vx = dirX * speed;
+          p.vy = dirY * speed;
+        }
+      },
+    });
+  }, { until: api.duration - 900 });
+
+  // 字符流：横向高速掠过的霓虹数据串
+  api.every(210, () => {
+    const fromLeft = api.rng() < 0.5;
+    api.spawn({
+      x: fromLeft ? -30 : api.width + 30,
+      y: api.range(api.height * 0.08, api.height * 0.92),
+      vx: (fromLeft ? 1 : -1) * api.range(520, 900),
+      shape: 'glyph',
+      glyph: api.pick(FLOW_GLYPHS),
+      size: api.range(12, 17),
+      maxLife: 1.4,
+      color: api.rng() < 0.5 ? '#a5f3fc' : '#fbcfe8',
+      glow: 0,
+      fadeIn: 0.06,
+      fadeOut: 0.1,
+    });
+  }, { until: api.duration - 1000 });
+
+  // 核心供能脉冲：从画面中心荡开的青粉双色环
+  const cx = api.width / 2;
+  const cy = api.height / 2;
+  api.every(760, (index) => {
+    api.spawn({
+      x: cx,
+      y: cy,
+      shape: 'ring',
+      size: 40,
+      endSize: Math.min(api.width, api.height) * 0.55,
+      maxLife: 1.2,
+      color: index % 2 === 0 ? '#22d3ee' : '#f472b6',
+      opacity: 0.65,
+      fadeOut: 0.7,
+    });
+  }, { from: 400, until: api.duration - 1400 });
+};
 </script>
 
 <template>
   <div class="cyber-data-flow-effect">
-    <span
-      v-for="stream in streams"
-      :key="stream.id"
-      class="cyber-stream"
-      :class="`from-${stream.side}`"
-      :style="{ '--stream-offset': stream.offset, animationDelay: stream.delay }"
-    >
-      <i v-for="(glyph, glyphIndex) in stream.glyphs" :key="`${stream.id}-${glyphIndex}`">{{ glyph }}</i>
-    </span>
-
-    <span
-      v-for="rail in rails"
-      :key="rail.id"
-      class="cyber-rail"
-      :style="{ left: rail.x, top: rail.y, '--rail-rotate': rail.rotate, animationDelay: rail.delay }"
-    />
-
+    <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.cyberDataFlow" :scene="scene" />
     <div class="cyber-frame">
       <div class="cyber-frame-grid">
         <span v-for="index in 12" :key="index" />
@@ -59,86 +110,18 @@ const rails = Array.from({ length: 10 }, (_, index) => ({
   overflow: hidden;
 }
 
-.cyber-data-flow-effect::before,
-.cyber-data-flow-effect::after {
+.cyber-data-flow-effect::before {
   content: '';
   position: absolute;
   inset: 0;
   opacity: 0;
   pointer-events: none;
-}
-
-.cyber-data-flow-effect::before {
   background:
     linear-gradient(115deg, transparent 0 42%, rgba(125, 249, 255, 0.22) 48%, transparent 55%),
     radial-gradient(circle at 50% 50%, rgba(244, 114, 182, 0.18), transparent 38%);
   mix-blend-mode: screen;
   transform: translateX(-30%);
   animation: cyber-screen-sweep 2.4s ease-out both;
-}
-
-.cyber-data-flow-effect::after {
-  background:
-    repeating-linear-gradient(0deg, transparent 0 10px, rgba(34, 211, 238, 0.08) 11px 12px),
-    linear-gradient(90deg, transparent, rgba(236, 72, 153, 0.12), transparent);
-  mix-blend-mode: color-dodge;
-  animation: cyber-glitch-field 4.8s steps(3, end) both;
-}
-
-.cyber-stream {
-  position: absolute;
-  display: inline-flex;
-  gap: 7px;
-  color: rgba(125, 249, 255, 0.86);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0;
-  opacity: 0;
-  text-shadow: 0 0 14px rgba(34, 211, 238, 0.72);
-  filter: drop-shadow(0 0 10px rgba(236, 72, 153, 0.36));
-  mix-blend-mode: screen;
-}
-
-.cyber-stream i {
-  font-style: normal;
-}
-
-.cyber-stream.from-left {
-  left: -22vw;
-  top: var(--stream-offset);
-  animation: cyber-flow-left 2.2s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.cyber-stream.from-right {
-  right: -22vw;
-  top: var(--stream-offset);
-  animation: cyber-flow-right 2.2s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.cyber-stream.from-top {
-  left: var(--stream-offset);
-  top: -16vh;
-  flex-direction: column;
-  animation: cyber-flow-top 2.2s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.cyber-stream.from-bottom {
-  left: var(--stream-offset);
-  bottom: -16vh;
-  flex-direction: column;
-  animation: cyber-flow-bottom 2.2s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.cyber-rail {
-  position: absolute;
-  width: 18vw;
-  height: 2px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.9), rgba(244, 114, 182, 0.72), transparent);
-  opacity: 0;
-  transform: translate(-50%, -50%) rotate(var(--rail-rotate)) scaleX(0.12);
-  animation: cyber-rail 2.8s ease both;
 }
 
 .cyber-frame {
@@ -254,44 +237,6 @@ const rails = Array.from({ length: 10 }, (_, index) => ({
   0% { opacity: 0; transform: translateX(-30%); }
   18% { opacity: 1; }
   100% { opacity: 0; transform: translateX(30%); }
-}
-
-@keyframes cyber-glitch-field {
-  0%, 100% { opacity: 0; transform: translate(0, 0); }
-  24%, 72% { opacity: 0.72; }
-  36% { transform: translate(2px, -1px); }
-  48% { transform: translate(-2px, 1px); }
-  60% { transform: translate(1px, 2px); }
-}
-
-@keyframes cyber-flow-left {
-  0% { opacity: 0; transform: translateX(0) scale(0.88); }
-  16%, 70% { opacity: 1; }
-  100% { opacity: 0; transform: translateX(62vw) scale(0.48); }
-}
-
-@keyframes cyber-flow-right {
-  0% { opacity: 0; transform: translateX(0) scale(0.88); }
-  16%, 70% { opacity: 1; }
-  100% { opacity: 0; transform: translateX(-62vw) scale(0.48); }
-}
-
-@keyframes cyber-flow-top {
-  0% { opacity: 0; transform: translateY(0) scale(0.88); }
-  16%, 70% { opacity: 1; }
-  100% { opacity: 0; transform: translateY(48vh) scale(0.48); }
-}
-
-@keyframes cyber-flow-bottom {
-  0% { opacity: 0; transform: translateY(0) scale(0.88); }
-  16%, 70% { opacity: 1; }
-  100% { opacity: 0; transform: translateY(-48vh) scale(0.48); }
-}
-
-@keyframes cyber-rail {
-  0% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--rail-rotate)) scaleX(0.12); }
-  24%, 70% { opacity: 1; }
-  100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--rail-rotate)) scaleX(1); }
 }
 
 @keyframes cyber-frame {

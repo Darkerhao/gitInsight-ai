@@ -1,40 +1,101 @@
 <script setup lang="ts">
 import { Orbit } from 'lucide-vue-next';
+import ParticleCanvas from '@/components/rewards/engine/ParticleCanvas.vue';
+import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import type { SceneFn } from '@/components/rewards/engine/particleEngine';
 
-const rings = Array.from({ length: 9 }, (_, index) => ({
-  id: index,
-  size: `${92 + index * 48}px`,
-  delay: `${index * 105}ms`,
-  rotate: `${index % 2 === 0 ? 1 : -1}`,
-}));
-const particles = Array.from({ length: 56 }, (_, index) => ({
-  id: index,
-  angle: `${index * 6.43}deg`,
-  delay: `${(index % 14) * 54}ms`,
-  radius: `${90 + (index % 7) * 20}px`,
-  hue: `${220 + (index % 5) * 18}`,
-}));
+const props = defineProps<{ seed?: number }>();
+
+const scene: SceneFn = (api) => {
+  api.setTrail(0.18);
+  const cx = api.width / 2;
+  const cy = api.height / 2;
+  const squash = 0.42; // 虫洞口的透视压扁比
+
+  // 吸积盘：粒子沿椭圆轨道螺旋坠入虫洞，越近越快、色相偏移
+  api.every(15, () => {
+    let radius = api.range(170, Math.min(api.width, api.height) * 0.52);
+    let angle = api.range(0, Math.PI * 2);
+    const angularSpeed = api.range(1.4, 2.4);
+    const hue = api.range(210, 330);
+    const particle = api.spawn({
+      x: cx + Math.cos(angle) * radius,
+      y: cy + Math.sin(angle) * radius * squash,
+      shape: 'spark',
+      size: api.range(1.5, 2.8),
+      maxLife: 2.4,
+      color: `hsl(${Math.round(hue)}, 92%, 70%)`,
+      glow: 1.1,
+      fadeIn: 0.1,
+      fadeOut: 0.05,
+      update: (p, dt) => {
+        const pull = 1 + (300 - Math.min(radius, 300)) / 110;
+        angle += angularSpeed * pull * dt;
+        radius -= (34 + (300 - Math.min(radius, 300)) * 1.15) * dt;
+        if (radius < 12) {
+          p.life = p.maxLife; // 坠入奇点
+        }
+        p.x = cx + Math.cos(angle) * radius;
+        p.y = cy + Math.sin(angle) * radius * squash;
+        p.color = `hsl(${Math.round(hue + (300 - radius) * 0.25)}, 92%, ${Math.round(66 + (300 - radius) * 0.05)}%)`;
+      },
+    });
+    if (particle && api.rng() < 0.12) particle.size += 1.4;
+  }, { until: api.duration - 900 });
+
+  // 奇点呼吸光核
+  api.onFrame((tMs, _dt, ctx) => {
+    const t = tMs / 1000;
+    const envelope = Math.min(1, t / 0.8) * Math.min(1, Math.max(0, (api.duration / 1000 - t) / 0.9));
+    if (envelope <= 0) return;
+    const pulse = 1 + 0.16 * Math.sin(t * 3.2);
+    const coreRadius = 46 * pulse;
+    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius * 3);
+    gradient.addColorStop(0, `rgba(255, 255, 255, ${0.85 * envelope})`);
+    gradient.addColorStop(0.14, `rgba(165, 180, 252, ${0.5 * envelope})`);
+    gradient.addColorStop(0.45, `rgba(129, 140, 248, ${0.16 * envelope})`);
+    gradient.addColorStop(1, 'rgba(129, 140, 248, 0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(cx, cy, coreRadius * 3, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // 引力波纹：周期性椭圆环收缩坠入
+  api.every(700, () => {
+    api.spawn({
+      x: cx,
+      y: cy,
+      shape: 'ring',
+      size: Math.min(api.width, api.height) * 0.46,
+      endSize: 14,
+      maxLife: 1.3,
+      color: '#a5b4fc',
+      opacity: 0.7,
+      fadeIn: 0.16,
+      fadeOut: 0.3,
+    });
+  }, { from: 300, until: api.duration - 1400 });
+
+  // 偶发能量喷流：从奇点垂直喷出
+  api.every(1300, () => {
+    [-1, 1].forEach((dir) => {
+      api.burst({
+        x: cx,
+        y: cy,
+        count: 16,
+        speed: [260, 640],
+        angle: [dir * Math.PI / 2 - 0.16, dir * Math.PI / 2 + 0.16],
+        base: { shape: 'streak', stretch: 0.09, size: 2, maxLife: 0.8, color: '#22d3ee', glow: 1.2, drag: 0.6, fadeOut: 0.4 },
+      });
+    });
+  }, { from: 1100, until: api.duration - 1500 });
+};
 </script>
 
 <template>
   <div class="quantum-gate-effect">
-    <span
-      v-for="ring in rings"
-      :key="ring.id"
-      class="quantum-ring"
-      :style="{ width: ring.size, height: ring.size, animationDelay: ring.delay, '--ring-rotate': ring.rotate }"
-    />
-    <span
-      v-for="particle in particles"
-      :key="particle.id"
-      class="quantum-particle"
-      :style="{
-        '--particle-angle': particle.angle,
-        '--particle-radius': particle.radius,
-        '--particle-hue': particle.hue,
-        animationDelay: particle.delay,
-      }"
-    />
+    <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.quantumGate" :scene="scene" />
     <div class="quantum-core">
       <Orbit :size="56" />
       <strong>量子虫洞</strong>
@@ -49,49 +110,6 @@ const particles = Array.from({ length: 56 }, (_, index) => ({
   display: grid;
   place-items: center;
   overflow: hidden;
-}
-
-.quantum-gate-effect::before {
-  content: '';
-  position: absolute;
-  width: min(440px, 76vw);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle, rgba(255, 255, 255, 0.72) 0 4%, rgba(129, 140, 248, 0.34) 8%, transparent 58%),
-    conic-gradient(from 0deg, rgba(129, 140, 248, 0.04), rgba(34, 211, 238, 0.32), rgba(244, 114, 182, 0.24), rgba(129, 140, 248, 0.04));
-  filter: blur(1px);
-  opacity: 0;
-  animation: quantum-core-light 5.6s ease both;
-}
-
-.quantum-ring {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  border: 1px solid rgba(129, 140, 248, 0.38);
-  border-radius: 50%;
-  box-shadow:
-    inset 0 0 18px rgba(129, 140, 248, 0.16),
-    0 0 28px rgba(34, 211, 238, 0.16);
-  opacity: 0;
-  transform: translate(-50%, -50%) rotateX(72deg) rotateZ(0deg);
-  animation: quantum-ring 5.6s ease both;
-}
-
-.quantum-particle {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: hsl(var(--particle-hue), 92%, 70%);
-  box-shadow: 0 0 18px hsl(var(--particle-hue), 92%, 66%);
-  opacity: 0;
-  transform: rotate(var(--particle-angle)) translateX(var(--particle-radius));
-  transform-origin: center;
-  animation: quantum-particle 2.2s ease-in-out both;
 }
 
 .quantum-core {
@@ -119,50 +137,6 @@ const particles = Array.from({ length: 56 }, (_, index) => ({
 
 .quantum-core strong {
   font-size: 19px;
-}
-
-@keyframes quantum-core-light {
-  0%,
-  100% {
-    opacity: 0;
-    transform: scale(0.62) rotate(0deg);
-  }
-  18%,
-  82% {
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1.12) rotate(180deg);
-  }
-}
-
-@keyframes quantum-ring {
-  0%,
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) rotateX(72deg) rotateZ(0deg) scale(0.82);
-  }
-  18%,
-  82% {
-    opacity: 1;
-  }
-  100% {
-    transform: translate(-50%, -50%) rotateX(72deg) rotateZ(calc(120deg * var(--ring-rotate))) scale(1.08);
-  }
-}
-
-@keyframes quantum-particle {
-  0% {
-    opacity: 0;
-    transform: rotate(var(--particle-angle)) translateX(calc(var(--particle-radius) * 0.36)) scale(0.4);
-  }
-  44% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: rotate(calc(var(--particle-angle) + 126deg)) translateX(var(--particle-radius)) scale(1);
-  }
 }
 
 @keyframes quantum-panel {

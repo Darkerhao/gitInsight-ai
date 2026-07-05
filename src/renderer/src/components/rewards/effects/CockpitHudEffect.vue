@@ -1,29 +1,103 @@
 <script setup lang="ts">
 import { Gauge } from 'lucide-vue-next';
+import ParticleCanvas from '@/components/rewards/engine/ParticleCanvas.vue';
+import { EFFECT_DURATIONS } from '@/components/rewards/rewardEffects';
+import type { SceneFn } from '@/components/rewards/engine/particleEngine';
 
-const tickMarks = Array.from({ length: 48 }, (_, index) => ({
-  id: index,
-  angle: `${index * 7.5}deg`,
-  long: index % 4 === 0,
-}));
+const props = defineProps<{ seed?: number }>();
+
 const panels = [
   { id: 1, label: 'SYS', value: '98%', x: '16%', y: '24%', delay: '80ms' },
   { id: 2, label: 'NAV', value: 'LOCK', x: '72%', y: '22%', delay: '180ms' },
   { id: 3, label: 'AI', value: 'READY', x: '12%', y: '66%', delay: '280ms' },
   { id: 4, label: 'CORE', value: 'SYNC', x: '70%', y: '68%', delay: '360ms' },
 ];
-const scanLines = Array.from({ length: 10 }, (_, index) => ({
-  id: index,
-  top: `${10 + index * 8}%`,
-  delay: `${index * 70}ms`,
-}));
+
+const scene: SceneFn = (api) => {
+  api.setTrail(0.12); // 雷达扫掠靠画布残留形成扇形余辉
+  const cx = api.width / 2;
+  const cy = api.height / 2;
+  const radarRadius = Math.min(180, Math.min(api.width, api.height) * 0.34);
+  const duration = api.duration / 1000;
+
+  // 雷达扫掠线：只画最亮的前沿，余辉自然拖出扇面
+  api.onFrame((tMs, _dt, ctx) => {
+    const t = tMs / 1000;
+    const envelope = Math.min(1, t / 0.8) * Math.min(1, Math.max(0, (duration - t) / 0.8));
+    if (envelope <= 0) return;
+    const angle = t * 1.9;
+    const gradient = ctx.createLinearGradient(cx, cy, cx + Math.cos(angle) * radarRadius, cy + Math.sin(angle) * radarRadius);
+    gradient.addColorStop(0, `rgba(34, 211, 238, ${0.1 * envelope})`);
+    gradient.addColorStop(1, `rgba(125, 249, 255, ${0.85 * envelope})`);
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(angle) * radarRadius, cy + Math.sin(angle) * radarRadius);
+    ctx.stroke();
+  });
+
+  // 目标锁定：光环收缩锁死 + 十字闪光
+  api.every(640, () => {
+    const angle = api.range(0, Math.PI * 2);
+    const radius = api.range(radarRadius * 0.3, radarRadius * 0.92);
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    api.spawn({ x, y, shape: 'ring', size: 44, endSize: 8, maxLife: 0.55, color: '#67e8f9', opacity: 0.95, fadeIn: 0.06, fadeOut: 0.2 });
+    api.spawn({ x, y, shape: 'dot', size: 3.4, maxLife: 1.1, color: '#a5f3fc', glow: 1.4, twinkle: 6, fadeIn: 0.3 });
+    api.spawn({
+      x,
+      y,
+      shape: 'glyph',
+      glyph: '+',
+      size: 20,
+      endSize: 12,
+      maxLife: 0.9,
+      color: '#e0f2fe',
+      fadeIn: 0.3,
+      fadeOut: 0.4,
+    });
+  }, { from: 500, until: api.duration - 1100 });
+
+  // 边缘数据流：屏幕两侧竖向掠过的遥测光条
+  api.every(90, () => {
+    const onLeft = api.rng() < 0.5;
+    api.spawn({
+      x: api.width * (onLeft ? api.range(0.04, 0.09) : api.range(0.91, 0.96)),
+      y: api.height + 10,
+      vy: -api.range(300, 620),
+      shape: 'streak',
+      stretch: 0.06,
+      size: api.range(1.2, 2),
+      maxLife: api.range(0.8, 1.6),
+      color: api.rng() < 0.7 ? '#22d3ee' : '#a5f3fc',
+      glow: 0.9,
+      fadeIn: 0.1,
+      fadeOut: 0.2,
+    });
+  }, { until: api.duration - 800 });
+
+  // HUD 星点噪声：舱外掠过的微光
+  api.every(50, () => {
+    api.spawn({
+      x: api.range(0, api.width),
+      y: api.range(0, api.height),
+      shape: 'dot',
+      size: api.range(0.7, 1.4),
+      maxLife: api.range(0.4, 1),
+      color: '#67e8f9',
+      twinkle: 12,
+      glow: 0.8,
+    });
+  }, { until: api.duration - 700 });
+};
 </script>
 
 <template>
   <div class="cockpit-effect">
-    <span v-for="line in scanLines" :key="line.id" class="hud-scan-line" :style="{ top: line.top, animationDelay: line.delay }" />
+    <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.cockpit" :scene="scene" />
     <div class="hud-reticle">
-      <span v-for="tick in tickMarks" :key="tick.id" :class="{ long: tick.long }" :style="{ '--tick-angle': tick.angle }" />
+      <span v-for="tick in 48" :key="tick" :class="{ long: tick % 4 === 1 }" :style="{ '--tick-angle': `${(tick - 1) * 7.5}deg` }" />
       <i class="hud-cross x" />
       <i class="hud-cross y" />
     </div>
@@ -61,16 +135,6 @@ const scanLines = Array.from({ length: 10 }, (_, index) => ({
     0 0 42px rgba(34, 211, 238, 0.12);
   opacity: 0;
   animation: frame-in 5.2s ease both;
-}
-
-.hud-scan-line {
-  position: absolute;
-  left: 8%;
-  right: 8%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.48), transparent);
-  opacity: 0;
-  animation: scan-line 1.8s ease-in-out infinite;
 }
 
 .hud-reticle {
@@ -178,18 +242,6 @@ const scanLines = Array.from({ length: 10 }, (_, index) => ({
   84% {
     opacity: 1;
     transform: scale(1);
-  }
-}
-
-@keyframes scan-line {
-  0%,
-  100% {
-    opacity: 0;
-    transform: translateX(-16px);
-  }
-  46% {
-    opacity: 1;
-    transform: translateX(16px);
   }
 }
 
