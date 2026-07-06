@@ -137,13 +137,16 @@ function resetFilters() {
   timeRange.value = null;
 }
 
-function focusFirstLog() {
-  const firstLog = filteredLogs.value[0] ?? null;
-  selectedLog.value = firstLog;
-  detailVisible.value = Boolean(firstLog);
-  if (firstLog) {
-    ElMessage.success('已定位首条匹配日志');
-  } else {
+function openLogDetail(row: HistoryLog) {
+  selectedLog.value = row;
+  detailVisible.value = true;
+}
+
+function handleSearch() {
+  currentPage.value = 1;
+  selectedLog.value = null;
+  detailVisible.value = false;
+  if (!filteredLogs.value.length) {
     ElMessage.warning('没有匹配日志');
   }
 }
@@ -216,7 +219,7 @@ function formatDateTime(value: string) {
   <div class="view-stack">
     <PageHeader title="历史日志" subtitle="查看所有日报生成、同步及错误记录" />
 
-    <div :class="['content-grid', detailVisible && activeLog ? 'history-layout' : '']">
+    <div class="content-grid">
       <div class="view-stack">
         <section class="surface-card filter-panel">
           <div class="field-grid">
@@ -253,13 +256,13 @@ function formatDateTime(value: string) {
           <div class="filter-actions">
             <el-input v-model="keyword" :prefix-icon="Search" placeholder="请输入操作内容、文件名或其他关键词" />
             <el-button @click="resetFilters">重置</el-button>
-            <el-button type="primary" @click="focusFirstLog">查询</el-button>
+            <el-button type="primary" @click="handleSearch">查询</el-button>
           </div>
         </section>
 
         <section class="surface-card log-table-card">
           <div class="table-summary">共 {{ filteredLogs.length }} 条日志</div>
-          <el-table :data="pagedLogs" class="log-table" @row-click="(row: HistoryLog) => { selectedLog = row; detailVisible = true }">
+          <el-table :data="pagedLogs" class="log-table" @row-click="openLogDetail">
             <el-table-column label="时间" min-width="170">
               <template #default="{ row }">{{ formatDateTime(row.time) }}</template>
             </el-table-column>
@@ -286,48 +289,56 @@ function formatDateTime(value: string) {
           </div>
         </section>
       </div>
-
-      <Transition name="slide-detail">
-        <aside class="surface-card detail-panel" v-if="detailVisible && activeLog">
-          <div class="panel-head">
-            <h3>日志详情</h3>
-            <el-button :icon="X" link @click="detailVisible = false" />
-          </div>
-          <div class="detail-actions">
-            <el-button :icon="RotateCcw" plain :disabled="!activeLog.reportRecord" @click="loadActiveReport">继续编辑</el-button>
-            <el-button :icon="Send" plain :disabled="!activeLog.reportRecord" @click="republishActiveReport">重新发布</el-button>
-            <el-button :icon="ClipboardCopy" plain @click="copyActiveLog">复制</el-button>
-            <el-button :icon="Download" type="primary" plain @click="exportActiveLog">导出</el-button>
-          </div>
-          <StatusBadge :status="activeLog.status" :label="activeLog.status === 'success' ? '成功' : activeLog.status === 'failed' ? '失败' : '信息'" />
-          <dl class="detail-list">
-            <dt>日志类型</dt>
-            <dd>{{ activeLog.type }}</dd>
-            <dt>操作内容</dt>
-            <dd>{{ activeLog.action }}</dd>
-            <dt>项目</dt>
-            <dd>{{ activeLog.project }}</dd>
-            <dt>执行时间</dt>
-            <dd>{{ formatDateTime(activeLog.time) }}</dd>
-            <template v-if="activeLog.reportRecord?.timeRange">
-              <dt>日报时间段</dt>
-              <dd>{{ activeLog.reportRecord.timeRange.label }}</dd>
-            </template>
-            <dt>执行时长</dt>
-            <dd>{{ activeLog.duration }}</dd>
-            <dt>操作人</dt>
-            <dd>{{ activeLog.operator }}</dd>
-            <dt>触发方式</dt>
-            <dd>{{ activeLog.trigger }}</dd>
-            <dt>生成文件</dt>
-            <dd>{{ activeLog.file || '-' }}</dd>
-          </dl>
-          <div class="process-list">
-            <h4>详情内容</h4>
-            <pre class="log-detail-text">{{ activeLog.detail || '-' }}</pre>
-          </div>
-        </aside>
-      </Transition>
     </div>
+
+    <el-drawer
+      v-model="detailVisible"
+      append-to-body
+      body-class="history-detail-drawer-body"
+      class="history-detail-drawer"
+      direction="rtl"
+      size="min(430px, 92vw)"
+      :with-header="false"
+    >
+      <aside class="detail-panel" v-if="activeLog">
+        <div class="panel-head">
+          <h3>日志详情</h3>
+          <el-button :icon="X" link @click="detailVisible = false" />
+        </div>
+        <div class="detail-actions">
+          <el-button :icon="RotateCcw" plain :disabled="!activeLog.reportRecord" @click="loadActiveReport">继续编辑</el-button>
+          <el-button :icon="Send" plain :disabled="!activeLog.reportRecord" @click="republishActiveReport">重新发布</el-button>
+          <el-button :icon="ClipboardCopy" plain @click="copyActiveLog">复制</el-button>
+          <el-button :icon="Download" type="primary" plain @click="exportActiveLog">导出</el-button>
+        </div>
+        <StatusBadge :status="activeLog.status" :label="activeLog.status === 'success' ? '成功' : activeLog.status === 'failed' ? '失败' : '信息'" />
+        <dl class="detail-list">
+          <dt>日志类型</dt>
+          <dd>{{ activeLog.type }}</dd>
+          <dt>操作内容</dt>
+          <dd>{{ activeLog.action }}</dd>
+          <dt>项目</dt>
+          <dd>{{ activeLog.project }}</dd>
+          <dt>执行时间</dt>
+          <dd>{{ formatDateTime(activeLog.time) }}</dd>
+          <template v-if="activeLog.reportRecord?.timeRange">
+            <dt>日报时间段</dt>
+            <dd>{{ activeLog.reportRecord.timeRange.label }}</dd>
+          </template>
+          <dt>执行时长</dt>
+          <dd>{{ activeLog.duration }}</dd>
+          <dt>操作人</dt>
+          <dd>{{ activeLog.operator }}</dd>
+          <dt>触发方式</dt>
+          <dd>{{ activeLog.trigger }}</dd>
+          <dt>生成文件</dt>
+          <dd>{{ activeLog.file || '-' }}</dd>
+        </dl>
+        <div class="process-list">
+          <h4>详情内容</h4>
+          <pre class="log-detail-text">{{ activeLog.detail || '-' }}</pre>
+        </div>
+      </aside>
+    </el-drawer>
   </div>
 </template>

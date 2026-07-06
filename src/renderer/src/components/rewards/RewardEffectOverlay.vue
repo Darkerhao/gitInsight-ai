@@ -28,6 +28,7 @@ import GravityWaveEffect from '@/components/rewards/effects/GravityWaveEffect.vu
 import HoloCoreEffect from '@/components/rewards/effects/HoloCoreEffect.vue';
 import HoloDisassembleEffect from '@/components/rewards/effects/HoloDisassembleEffect.vue';
 import LaserGridEffect from '@/components/rewards/effects/LaserGridEffect.vue';
+import LittleBoyEffect from '@/components/rewards/effects/LittleBoyEffect.vue';
 import MatrixEffect from '@/components/rewards/effects/MatrixEffect.vue';
 import MechaBootEffect from '@/components/rewards/effects/MechaBootEffect.vue';
 import NanoSwarmEffect from '@/components/rewards/effects/NanoSwarmEffect.vue';
@@ -112,6 +113,7 @@ const effectComponentMap: Record<RewardEffectKey, Component> = {
   rocketLaunch: RocketLaunchEffect,
   bioScan: BioScanEffect,
   empBlast: EmpBlastEffect,
+  littleBoy: LittleBoyEffect,
   satelliteSweep: SatelliteSweepEffect,
   energyShield: EnergyShieldEffect,
   deepSonar: DeepSonarEffect,

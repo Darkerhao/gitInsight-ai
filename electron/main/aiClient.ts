@@ -1,5 +1,85 @@
 import type { AppConfig, ReportTimeRange } from '../../src/shared/types.js';
 
+type AiFetch = (url: string, init?: RequestInit) => Promise<Response>;
+
+let cachedElectronNetFetch: AiFetch | null | undefined;
+
+async function getElectronNetFetch(): Promise<AiFetch | null> {
+  if (cachedElectronNetFetch !== undefined) return cachedElectronNetFetch;
+
+  cachedElectronNetFetch = null;
+  if (!process.versions.electron) return cachedElectronNetFetch;
+
+  try {
+    const electron = await import('electron');
+    if (typeof electron.net?.fetch === 'function') {
+      cachedElectronNetFetch = electron.net.fetch.bind(electron.net) as AiFetch;
+    }
+  } catch {
+    cachedElectronNetFetch = null;
+  }
+
+  return cachedElectronNetFetch;
+}
+
+function collectErrorDetails(error: unknown): string[] {
+  if (!error || typeof error !== 'object') return [];
+
+  const value = error as { code?: unknown; reason?: unknown; message?: unknown; cause?: unknown };
+  const details = [value.code, value.reason, value.message]
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map((item) => item.trim());
+
+  return [...details, ...collectErrorDetails(value.cause)];
+}
+
+function getHostForMessage(url: string) {
+  try {
+    return new URL(url).host || url;
+  } catch {
+    return url;
+  }
+}
+
+function buildNetworkErrorMessage(url: string, error: unknown, fallbackError?: unknown) {
+  const detail = [...collectErrorDetails(error), ...collectErrorDetails(fallbackError)]
+    .filter((item, index, all) => all.indexOf(item) === index)
+    .join('；');
+  const hasTlsError = /TLS|SSL|CERT|handshake|EPROTO|ERR_SSL/i.test(detail);
+  const host = getHostForMessage(url);
+
+  return [
+    `AI接口网络请求失败：无法连接 ${host}`,
+    detail ? `底层错误：${detail}` : '',
+    hasTlsError
+      ? '这通常表示中转站的 TLS/证书策略与当前运行环境不兼容，已尝试使用 Electron Chromium 网络栈和 Node fetch。请确认该地址能在本机浏览器正常访问，或更换支持 OpenAI Chat Completions 的 HTTPS 中转地址。'
+      : '请检查接口地址、网络代理、系统证书和服务商状态。',
+  ]
+    .filter(Boolean)
+    .join('。');
+}
+
+async function fetchAi(url: string, init?: RequestInit) {
+  const electronNetFetch = await getElectronNetFetch();
+  if (electronNetFetch) {
+    try {
+      return await electronNetFetch(url, init);
+    } catch (electronError) {
+      try {
+        return await fetch(url, init);
+      } catch (nodeError) {
+        throw new Error(buildNetworkErrorMessage(url, electronError, nodeError));
+      }
+    }
+  }
+
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    throw new Error(buildNetworkErrorMessage(url, error));
+  }
+}
+
 export function normalizeAiBaseUrl(aiBaseUrl: string) {
   return aiBaseUrl.trim().replace(/\/+$/, '');
 }
@@ -42,7 +122,7 @@ export function isUnsupportedModelError(status: number, detail: string) {
 
 export async function fetchAvailableModels(config: AppConfig) {
   try {
-    const response = await fetch(getModelsUrl(config.aiBaseUrl), {
+    const response = await fetchAi(getModelsUrl(config.aiBaseUrl), {
       headers: { Authorization: `Bearer ${config.aiApiKey}` },
     });
     if (!response.ok) return [];
@@ -118,7 +198,7 @@ ${rawInput.diff}
 
   const chatCompletionsUrl = getChatCompletionsUrl(config.aiBaseUrl);
 
-  const response = await fetch(chatCompletionsUrl, {
+  const response = await fetchAi(chatCompletionsUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

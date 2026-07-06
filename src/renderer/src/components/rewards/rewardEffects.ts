@@ -100,6 +100,7 @@ export type RewardEffectKey =
   | 'rocketLaunch'
   | 'bioScan'
   | 'empBlast'
+  | 'littleBoy'
   | 'satelliteSweep'
   | 'energyShield'
   | 'deepSonar'
@@ -1044,6 +1045,30 @@ export const EFFECT_OPTIONS: readonly RewardEffectOption[] = [
       loop: '1.6s 炽白光柱自屏顶贯落（宽度脉冲 + 青色电离缘），落点白闪后半圆火花溅射 + 三道冲击环 + 烟尘缓升',
       exit: '地表裂纹发红渐熄，警示解除',
       camera: '光柱贯落瞬间猛烈急推 + 重震屏',
+    },
+  },
+  {
+    key: 'littleBoy',
+    label: '小男孩',
+    codename: 'LITTLE BOY',
+    narrative: '白闪压过天际，蘑菇云升腾，冲击波掠过城市剪影。',
+    cost: 14,
+    tier: 'singularity',
+    apex: true,
+    icon: Radiation,
+    tone: '#f97316',
+    accent: '#fb923c',
+    secondary: '#fef3c7',
+    backdrop:
+      'radial-gradient(circle at 50% 70%, rgba(255, 247, 237, 0.36), transparent 34%), radial-gradient(circle at 50% 42%, rgba(248, 113, 113, 0.18), transparent 42%), linear-gradient(180deg, rgba(12, 10, 9, 0.86), rgba(69, 10, 10, 0.36))',
+    camera: 'punch',
+    shake: 2,
+    phases: { entry: 850, loop: 4700, exit: 1050 },
+    motion: {
+      entry: '地平线先被白闪吞没，城市剪影短暂过曝，冲击波开始成环扩散',
+      loop: '火球在爆心膨胀后抬升成蘑菇云，尘柱持续上卷，冲击波压过楼群并触发连锁倒塌',
+      exit: '烟尘和余烬缓慢漂移，辐射警示 HUD 退场，画面从灼白回收到暗红余辉',
+      camera: '爆闪瞬间急推和重震，随后跟随蘑菇云抬升做缓慢回稳',
     },
   },
   {
