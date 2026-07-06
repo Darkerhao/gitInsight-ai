@@ -73,7 +73,7 @@ function normalizeModuleSegment(name: string) {
 
 
 function isGenericModuleName(name: string) {
-  return ['xxx', '相关模块', '当前模块', '当前项目', '一级模块', '页面或场景', '具体功能'].includes(name)
+  return ['xxx', '相关模块', '当前模块', '当前项目', '模块/功能', '一级模块', '页面或场景', '具体功能'].includes(name)
     || name.includes('一级模块')
     || name.includes('页面或场景')
     || name.includes('具体功能');
@@ -91,14 +91,24 @@ function formatModulePath(segments: string[]) {
 
 
 function normalizeModuleName(name: string) {
-  const cleaned = name.replace(/[【】"'“”`]/g, '').trim();
+  const cleaned = name.replace(/[【】"'“”`]/g, '').replace(/^模块\/功能[：:]/, '').trim();
   const segments = cleaned.split(/\s*(?:\/|>|→|->|｜|\|)\s*/);
   return formatModulePath(segments) || normalizeModuleSegment(cleaned);
 }
 
 
+function stripModuleLabel(content: string) {
+  return content.replace(/^【(?:模块\/功能[：:])?[^】]+】/, '').trim();
+}
+
+
+function readModuleLabel(content: string) {
+  return content.trimStart().match(/^【(?:模块\/功能[：:])?([^】]+)】/)?.[1]?.trim() || '';
+}
+
+
 function getModuleNameFromWorkContent(content: string) {
-  const withoutLabel = content.replace(/^【模块\/功能：[^】]+】/, '').trim();
+  const withoutLabel = stripModuleLabel(content);
   const normalized = withoutLabel.replace(/^(修复|优化|新增|调整|完善|实现|完成|处理|解决|更新|重构|联调|对接|支持|补充|梳理|改造|升级|排查|恢复|统一|移除|增加)/, '');
   const hierarchyByDe = normalized.match(
     /^(.{2,24}?(?:大屏|系统|平台|中心|工作台|看板|管理|模块))的(.{2,24}?(?:页面|场景|列表|详情|表单|弹窗|看板|模块|功能))的(.{2,30}?(?:页面|列表|详情|表单|弹窗|看板|配置|接口|权限|任务|报表|图表|组件|特效|字段|流程|功能))/,
@@ -141,7 +151,7 @@ function inferWorkItemModuleName(content: string, commits: CommitEntry[], repoNa
 
 
 function getConcreteModuleLabel(content: string) {
-  const label = content.trimStart().match(/^【模块\/功能：([^】]+)】/)?.[1]?.trim();
+  const label = readModuleLabel(content);
   const normalizedLabel = normalizeModuleName(label || '');
   return normalizedLabel && !isGenericModuleName(normalizedLabel) ? normalizedLabel : '';
 }
@@ -174,42 +184,41 @@ function ensureReportWorkItemModuleLabels(report: string, commits: CommitEntry[]
       workItemIndex += 1;
       const prefix = itemMatch[1];
       const content = itemMatch[2].trimStart();
-      const contentWithoutLabel = content.replace(/^【模块\/功能：[^】]+】/, '').trimStart();
+      const contentWithoutLabel = stripModuleLabel(content);
       const existingLabel = getConcreteModuleLabel(content);
       const inferredModuleName = inferWorkItemModuleName(contentWithoutLabel, commits, repoNames, currentIndex);
       const moduleName = existingLabel && (existingLabel.includes(' / ') || !inferredModuleName.includes(' / '))
         ? existingLabel
         : inferredModuleName;
-      return `${prefix}【模块/功能：${moduleName}】${contentWithoutLabel}`;
+      return `${prefix}【${moduleName}】${contentWithoutLabel}`;
     })
     .join('\n');
 }
 
 
 export function fallbackReport(repoNames: string[], date: string, reporterName: string, commits: CommitEntry[], timeRange: ReportTimeRange) {
-  const workItems = commits.slice(0, 5).map((commit) => {
+  const workItems = commits.slice(0, 3).map((commit) => {
     const moduleName = getCommitModuleName(commit, repoNames);
     const topic = stripConventionalCommitPrefix(commit.message) || moduleName;
-    const modules = commit.files.slice(0, 2).join('、') || repoNames[0] || '当前项目';
-    return `【模块/功能：${moduleName}】围绕${topic}完成 ${modules} 相关优化与修复，持续提升业务稳定性与交互可用性。`;
+    return `【${moduleName}】完成${topic}相关优化，提升对应页面或功能的数据展示与交互稳定性。`;
   });
+  const moduleNames = [...new Set(commits.map((commit) => getCommitModuleName(commit, repoNames)))].slice(0, 3).join('、');
   const resultItems = commits.length
     ? [
-        `完成 ${Math.min(commits.length, 5)} 项当日研发变更梳理，并整理为结构化日报内容。`,
-        `覆盖 ${repoNames.join('、') || '当前项目'} 的主要改动线索，便于后续同步与复盘。`,
+        `${moduleNames || repoNames.join('、') || '当前项目'}相关展示与交互路径已完成整理，便于后续回归验证。`,
       ]
     : ['完成日报基础信息整理，当前时间段暂无可用研发记录。'];
   const planItems = commits.length
     ? commits.slice(0, 2).map((commit) => {
         const topic = stripConventionalCommitPrefix(commit.message) || getCommitModuleName(commit, repoNames);
-        return `继续推进${topic}相关联调、验证与收尾工作。`;
+        return `回归验证${topic}相关场景，排查同类展示或排序异常。`;
       })
     : ['推进当前模块联调与问题收敛。', '补充后续功能迭代所需的日报素材。'];
 
   return [
     '今日工作内容：',
     '',
-    formatNumbered(workItems.length ? workItems : ['【模块/功能：日报生成 / 生成流程 / 基础联调】完成基础环境搭建与日报生成流程联调。']),
+    formatNumbered(workItems.length ? workItems : ['【日报生成 / 基础联调】完成基础环境搭建与日报生成流程联调。']),
     '',
     '工作成果：',
     '',
@@ -261,7 +270,7 @@ export async function generateReport(params: GenerateReportParams): Promise<Repo
     const report = [
       '今日工作内容：',
       '',
-      `1. 【模块/功能：日报生成 / 提交扫描 / 无匹配记录】${matchedTip}暂不生成推测性日报内容。`,
+      `1. 【日报生成 / 提交扫描】${matchedTip}暂不生成推测性日报内容。`,
       '',
       '工作成果：',
       '',

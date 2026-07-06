@@ -370,7 +370,7 @@ async function handleOpenFeishuSubmissionRecords() {
     return;
   }
 
-  await openFeishuSubmissionRecords();
+  await openFeishuSubmissionRecords(form.date);
 }
 
 async function confirmRemoveRepo(item: RepoInfo) {

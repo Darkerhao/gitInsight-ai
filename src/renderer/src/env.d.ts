@@ -10,6 +10,7 @@ import type {
   FeishuLoginPayload,
   FeishuProjectOption,
   FeishuProjectOptionsPayload,
+  FeishuSubmissionRecordsPayload,
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
   GenerateReportParams,
@@ -27,7 +28,7 @@ declare global {
       scanRepositories: (workspaceDir: string) => Promise<RepoInfo[]>;
       generateReport: (params: GenerateReportParams) => Promise<ReportResult>;
       loginFeishu: (payload: FeishuLoginPayload) => Promise<FeishuAuthSnapshot>;
-      openFeishuSubmissionRecords: (payload: FeishuLoginPayload) => Promise<boolean>;
+      openFeishuSubmissionRecords: (payload: FeishuSubmissionRecordsPayload) => Promise<boolean>;
       listFeishuFields: (payload: FeishuProjectOptionsPayload) => Promise<FeishuFieldOption[]>;
       listFeishuProjects: (payload: FeishuProjectOptionsPayload) => Promise<FeishuProjectOption[]>;
       testSubmitFeishu: (payload: FeishuTestSubmitPayload) => Promise<FeishuSubmitResult>;

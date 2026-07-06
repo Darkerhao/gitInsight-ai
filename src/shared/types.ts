@@ -236,6 +236,10 @@ export interface FeishuLoginPayload {
   config: FeishuFormConfig;
 }
 
+export interface FeishuSubmissionRecordsPayload extends FeishuLoginPayload {
+  targetDate?: string;
+}
+
 export interface FeishuAuthSnapshot {
   endpoint: string;
   shareToken: string;

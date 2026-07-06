@@ -11,6 +11,7 @@ import type {
   FeishuLoginPayload,
   FeishuProjectOption,
   FeishuProjectOptionsPayload,
+  FeishuSubmissionRecordsPayload,
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
   GenerateReportParams,
@@ -29,7 +30,7 @@ contextBridge.exposeInMainWorld('api', {
   scanRepositories: (workspaceDir: string) => ipcRenderer.invoke('repo:scan', workspaceDir) as Promise<RepoInfo[]>,
   generateReport: (params: GenerateReportParams) => ipcRenderer.invoke('report:generate', params) as Promise<ReportResult>,
   loginFeishu: (payload: FeishuLoginPayload) => ipcRenderer.invoke('feishu:login', payload) as Promise<FeishuAuthSnapshot>,
-  openFeishuSubmissionRecords: (payload: FeishuLoginPayload) =>
+  openFeishuSubmissionRecords: (payload: FeishuSubmissionRecordsPayload) =>
     ipcRenderer.invoke('feishu:open-submission-records', payload) as Promise<boolean>,
   listFeishuFields: (payload: FeishuProjectOptionsPayload) =>
     ipcRenderer.invoke('feishu:list-fields', payload) as Promise<FeishuFieldOption[]>,

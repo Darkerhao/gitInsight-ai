@@ -3,6 +3,7 @@ import type {
   AppConfig,
   FeishuLoginPayload,
   FeishuProjectOptionsPayload,
+  FeishuSubmissionRecordsPayload,
   FeishuTestSubmitPayload,
   GenerateReportParams,
   SaveDailyReportPayload,
@@ -35,7 +36,7 @@ export function registerIpcHandlers() {
   ipcMain.handle('error-log:list', async (_event, limit?: number) => listErrorLogs(limit));
   ipcMain.handle('storage:info', async () => getStorageInfo());
   ipcMain.handle('feishu:login', async (_event, payload: FeishuLoginPayload) => openFeishuLogin(payload));
-  ipcMain.handle('feishu:open-submission-records', async (_event, payload: FeishuLoginPayload) => openFeishuSubmissionRecords(payload));
+  ipcMain.handle('feishu:open-submission-records', async (_event, payload: FeishuSubmissionRecordsPayload) => openFeishuSubmissionRecords(payload));
   ipcMain.handle('feishu:list-fields', async (_event, payload: FeishuProjectOptionsPayload) => listFeishuFieldOptions(payload));
   ipcMain.handle('feishu:list-projects', async (_event, payload: FeishuProjectOptionsPayload) => listFeishuProjectOptions(payload));
   ipcMain.handle('feishu:test-submit', async (_event, payload: FeishuTestSubmitPayload) => testSubmitFeishuForm(payload));
