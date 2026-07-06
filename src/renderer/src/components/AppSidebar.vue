@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
-import { Bot, FileCog, FileText, FolderKanban, History, Settings, Sparkles } from 'lucide-vue-next';
+import { Bot, BrainCog, FileCog, FileText, FolderKanban, History, Settings, Sparkles } from 'lucide-vue-next';
 
 const props = defineProps<{
   activeNav: string;
@@ -29,7 +29,10 @@ const navGroups: NavGroup[] = [
     id: 'settings',
     label: '设置',
     icon: Settings,
-    children: [{ key: 'system', label: '系统设置', icon: Settings, enabled: true }],
+    children: [
+      { key: 'ai', label: 'AI 设置', icon: BrainCog, enabled: true },
+      { key: 'system', label: '系统设置', icon: Settings, enabled: true },
+    ],
   },
 ];
 

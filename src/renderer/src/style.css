@@ -3729,6 +3729,71 @@ textarea {
   padding-top: 16px;
 }
 
+.ai-profile-manager {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.ai-profile-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-profile-item.el-button {
+  width: 100%;
+  height: auto;
+  min-height: 70px;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  border-color: var(--c-border);
+  border-radius: var(--radius-block);
+  background: var(--c-surface-muted);
+  padding: 13px 14px;
+  text-align: left;
+}
+
+.ai-profile-item.el-button.active {
+  border-color: rgba(59, 108, 246, 0.38);
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+}
+
+.ai-profile-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ai-profile-copy strong,
+.ai-profile-copy small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-profile-copy strong {
+  color: var(--c-text);
+  font-size: 14px;
+}
+
+.ai-profile-copy small {
+  color: var(--c-text-faint);
+  font-size: 12px;
+}
+
+.ai-profile-editor {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 /* SectionTitle */
 .section-title {
   display: flex;
@@ -4497,6 +4562,10 @@ textarea {
   }
 
   .content-grid.has-right-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ai-profile-manager {
     grid-template-columns: minmax(0, 1fr);
   }
 

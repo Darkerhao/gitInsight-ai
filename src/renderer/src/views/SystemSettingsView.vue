@@ -18,7 +18,7 @@ import { useAssistant } from '@/composables/useAssistant';
 import { DEFAULT_AUTO_SYNC_CONFIG } from '@shared/types';
 
 const assistant = useAssistant();
-const { config, projectOptions, storageInfo, refreshLocalData, saveSettings } = assistant;
+const { config, activeAiProfile, projectOptions, storageInfo, refreshLocalData, saveSettings } = assistant;
 
 const activeTab = ref('basic');
 
@@ -172,11 +172,11 @@ const operationCards = [
             </div>
             <div class="field">
               <label>AI Base URL</label>
-              <el-input v-model="config.aiBaseUrl" />
+              <el-input v-model="activeAiProfile.baseUrl" />
             </div>
             <div class="field">
               <label>AI Model</label>
-              <el-input v-model="config.aiModel" />
+              <el-input v-model="activeAiProfile.model" />
             </div>
             <div class="field">
               <label>默认工时</label>

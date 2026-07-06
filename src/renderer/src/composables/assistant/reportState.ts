@@ -124,6 +124,7 @@ export function createReportState(ctx: ReportStateContext) {
         date: form.date,
         ...reportRange,
         reporterName: config.reporterName,
+        aiProfileId: config.activeAiProfileId,
       });
       lastReportResult.value = result;
       currentReportId.value = result.historyId ?? null;

@@ -1,8 +1,8 @@
 import { computed } from 'vue';
 import type { Ref } from 'vue';
-import { ElMessage } from 'element-plus';
-import { DEFAULT_AUTO_SYNC_CONFIG } from '@shared/types';
-import type { AppConfig } from '@shared/types';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { DEFAULT_AI_PROFILE, DEFAULT_AUTO_SYNC_CONFIG } from '@shared/types';
+import type { AiProfile, AppConfig } from '@shared/types';
 import {
   mergeCurrentOption,
   normalizeAutoSyncTimeWindowMode,
@@ -38,9 +38,73 @@ export function createConfigState(ctx: ConfigStateContext) {
 
   const reporterOptions = computed(() => (config.reporterName ? [config.reporterName] : []));
 
-  const aiBaseUrlOptions = computed(() => mergeCurrentOption(config.aiBaseUrlOptions, config.aiBaseUrl));
+  function createAiProfileId() {
+    return `ai-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
 
-  const aiModelOptions = computed(() => mergeCurrentOption(config.aiModelOptions, config.aiModel));
+  function ensureAiProfiles() {
+    if (!Array.isArray(config.aiProfiles) || !config.aiProfiles.length) {
+      config.aiProfiles = [{ ...DEFAULT_AI_PROFILE }];
+    }
+    if (!config.aiProfiles.some((profile) => profile.id === config.activeAiProfileId)) {
+      config.activeAiProfileId = config.aiProfiles[0]?.id || DEFAULT_AI_PROFILE.id;
+    }
+    return config.aiProfiles;
+  }
+
+  function getActiveAiProfile(): AiProfile {
+    const profiles = ensureAiProfiles();
+    return profiles.find((profile) => profile.id === config.activeAiProfileId) ?? profiles[0] ?? { ...DEFAULT_AI_PROFILE };
+  }
+
+  function getAiProfilePayloads() {
+    const usedIds = new Set<string>();
+    const profiles = ensureAiProfiles()
+      .map((profile, index): AiProfile | null => {
+        const id = toPlainString(profile.id) || (index === 0 ? DEFAULT_AI_PROFILE.id : createAiProfileId());
+        if (usedIds.has(id)) return null;
+        usedIds.add(id);
+        return {
+          id,
+          name: toPlainString(profile.name) || `AI 配置 ${index + 1}`,
+          baseUrl: toPlainString(profile.baseUrl),
+          apiKey: toPlainString(profile.apiKey),
+          model: toPlainString(profile.model),
+          enabled: profile.enabled !== false,
+        };
+      })
+      .filter((profile): profile is AiProfile => Boolean(profile));
+
+    const nextProfiles = profiles.length ? profiles : [{ ...DEFAULT_AI_PROFILE }];
+    config.aiProfiles = nextProfiles;
+    if (!nextProfiles.some((profile) => profile.id === config.activeAiProfileId)) {
+      config.activeAiProfileId = nextProfiles[0]?.id || DEFAULT_AI_PROFILE.id;
+    }
+    syncLegacyAiFieldsFromActiveProfile();
+    return nextProfiles.map((profile) => ({ ...profile }));
+  }
+
+  function syncLegacyAiFieldsFromActiveProfile() {
+    const profile = getActiveAiProfile();
+    config.aiBaseUrl = toPlainString(profile.baseUrl);
+    config.aiApiKey = toPlainString(profile.apiKey);
+    config.aiModel = toPlainString(profile.model);
+  }
+
+  const activeAiProfile = computed(() => getActiveAiProfile());
+
+  const aiProfileOptions = computed(() =>
+    ensureAiProfiles().map((profile) => ({
+      label: profile.name || '未命名配置',
+      value: profile.id,
+      model: profile.model,
+      baseUrl: profile.baseUrl,
+    })),
+  );
+
+  const aiBaseUrlOptions = computed(() => mergeCurrentOption(config.aiBaseUrlOptions, activeAiProfile.value.baseUrl));
+
+  const aiModelOptions = computed(() => mergeCurrentOption(config.aiModelOptions, activeAiProfile.value.model));
 
   function getConfigPayload(): AppConfig {
     const workspaceDirs = getWorkspaceDirs();
@@ -56,6 +120,9 @@ export function createConfigState(ctx: ConfigStateContext) {
     config.ignoredRepoPaths = normalizedIgnoredRepoPaths;
     config.pinnedRepoPaths = normalizedPinnedRepoPaths;
 
+    const aiProfiles = getAiProfilePayloads();
+    const activeProfile = aiProfiles.find((profile) => profile.id === config.activeAiProfileId) ?? aiProfiles[0] ?? DEFAULT_AI_PROFILE;
+
     return {
       workspaceDir: toPlainString(config.workspaceDir),
       workspaceDirs,
@@ -63,11 +130,13 @@ export function createConfigState(ctx: ConfigStateContext) {
       ignoredRepoPaths: normalizedIgnoredRepoPaths,
       pinnedRepoPaths: normalizedPinnedRepoPaths,
       reporterName: toPlainString(config.reporterName),
-      aiBaseUrl: toPlainString(config.aiBaseUrl),
-      aiApiKey: toPlainString(config.aiApiKey),
-      aiModel: toPlainString(config.aiModel),
-      aiBaseUrlOptions: normalizeOptions([...config.aiBaseUrlOptions, config.aiBaseUrl]),
-      aiModelOptions: normalizeOptions([...config.aiModelOptions, config.aiModel]),
+      aiBaseUrl: toPlainString(activeProfile.baseUrl),
+      aiApiKey: toPlainString(activeProfile.apiKey),
+      aiModel: toPlainString(activeProfile.model),
+      aiBaseUrlOptions: normalizeOptions([...config.aiBaseUrlOptions, ...aiProfiles.map((profile) => profile.baseUrl)]),
+      aiModelOptions: normalizeOptions([...config.aiModelOptions, ...aiProfiles.map((profile) => profile.model)]),
+      aiProfiles,
+      activeAiProfileId: toPlainString(config.activeAiProfileId),
       feishuForm: {
         endpoint: toPlainString(config.feishuForm.endpoint),
         shareToken: toPlainString(config.feishuForm.shareToken),
@@ -105,6 +174,9 @@ export function createConfigState(ctx: ConfigStateContext) {
 
 
   function getEditableConfigSignature() {
+    const aiProfiles = getAiProfilePayloads();
+    const activeProfile = aiProfiles.find((profile) => profile.id === config.activeAiProfileId) ?? aiProfiles[0] ?? DEFAULT_AI_PROFILE;
+
     return JSON.stringify({
       workspaceDir: toPlainString(config.workspaceDir),
       workspaceDirs: normalizeWorkspaceDirs([...(config.workspaceDirs ?? []), config.workspaceDir]),
@@ -112,11 +184,13 @@ export function createConfigState(ctx: ConfigStateContext) {
       ignoredRepoPaths: normalizeRepoSelections(config.ignoredRepoPaths ?? []),
       pinnedRepoPaths: normalizeRepoSelections(config.pinnedRepoPaths ?? []),
       reporterName: toPlainString(config.reporterName),
-      aiBaseUrl: toPlainString(config.aiBaseUrl),
-      aiApiKey: toPlainString(config.aiApiKey),
-      aiModel: toPlainString(config.aiModel),
-      aiBaseUrlOptions: normalizeOptions([...config.aiBaseUrlOptions, config.aiBaseUrl]),
-      aiModelOptions: normalizeOptions([...config.aiModelOptions, config.aiModel]),
+      aiBaseUrl: toPlainString(activeProfile.baseUrl),
+      aiApiKey: toPlainString(activeProfile.apiKey),
+      aiModel: toPlainString(activeProfile.model),
+      aiBaseUrlOptions: normalizeOptions([...config.aiBaseUrlOptions, ...aiProfiles.map((profile) => profile.baseUrl)]),
+      aiModelOptions: normalizeOptions([...config.aiModelOptions, ...aiProfiles.map((profile) => profile.model)]),
+      aiProfiles,
+      activeAiProfileId: toPlainString(config.activeAiProfileId),
       feishuForm: {
         ...config.feishuForm,
         defaultWorkHours: normalizeWorkHours(config.feishuForm.defaultWorkHours),
@@ -175,6 +249,60 @@ export function createConfigState(ctx: ConfigStateContext) {
   }
 
 
+  function createAiProfile() {
+    const profiles = ensureAiProfiles();
+    const nextIndex = profiles.length + 1;
+    const profile: AiProfile = {
+      id: createAiProfileId(),
+      name: `AI 配置 ${nextIndex}`,
+      baseUrl: activeAiProfile.value.baseUrl || DEFAULT_AI_PROFILE.baseUrl,
+      apiKey: '',
+      model: activeAiProfile.value.model || DEFAULT_AI_PROFILE.model,
+      enabled: true,
+    };
+    config.aiProfiles = [...profiles, profile];
+    config.activeAiProfileId = profile.id;
+    syncLegacyAiFieldsFromActiveProfile();
+    ElMessage.success('AI 配置已新增');
+  }
+
+
+  function selectAiProfile(id: string) {
+    const profiles = ensureAiProfiles();
+    if (!profiles.some((profile) => profile.id === id)) return;
+    config.activeAiProfileId = id;
+    syncLegacyAiFieldsFromActiveProfile();
+  }
+
+
+  async function removeAiProfile(id: string) {
+    const profiles = ensureAiProfiles();
+    if (profiles.length <= 1) {
+      ElMessage.warning('至少保留一套 AI 配置');
+      return;
+    }
+    const profile = profiles.find((item) => item.id === id);
+    try {
+      await ElMessageBox.confirm(`确定删除「${profile?.name || '未命名配置'}」吗？删除后会同时移除这套配置的 API Key。`, '删除 AI 配置', {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      });
+    } catch {
+      return;
+    }
+    const nextProfiles = profiles.filter((profile) => profile.id !== id);
+    if (nextProfiles.length === profiles.length) return;
+    config.aiProfiles = nextProfiles;
+    if (config.activeAiProfileId === id) {
+      config.activeAiProfileId = nextProfiles[0]?.id || DEFAULT_AI_PROFILE.id;
+    }
+    syncLegacyAiFieldsFromActiveProfile();
+    await persistConfig();
+    ElMessage.success('AI 配置已删除');
+  }
+
+
   function rememberAiBaseUrlOption(value: string) {
     config.aiBaseUrlOptions = normalizeOptions([...config.aiBaseUrlOptions, value]);
   }
@@ -187,7 +315,8 @@ export function createConfigState(ctx: ConfigStateContext) {
 
   async function removeAiBaseUrlOption(value: string) {
     config.aiBaseUrlOptions = config.aiBaseUrlOptions.filter((item) => item !== value);
-    if (config.aiBaseUrl === value) config.aiBaseUrl = '';
+    if (activeAiProfile.value.baseUrl === value) activeAiProfile.value.baseUrl = '';
+    syncLegacyAiFieldsFromActiveProfile();
     await persistConfig();
     ElMessage.success('接口地址选项已删除');
   }
@@ -195,7 +324,8 @@ export function createConfigState(ctx: ConfigStateContext) {
 
   async function removeAiModelOption(value: string) {
     config.aiModelOptions = config.aiModelOptions.filter((item) => item !== value);
-    if (config.aiModel === value) config.aiModel = '';
+    if (activeAiProfile.value.model === value) activeAiProfile.value.model = '';
+    syncLegacyAiFieldsFromActiveProfile();
     await persistConfig();
     ElMessage.success('模型选项已删除');
   }
@@ -206,6 +336,8 @@ export function createConfigState(ctx: ConfigStateContext) {
     reporterOptions,
     aiBaseUrlOptions,
     aiModelOptions,
+    aiProfileOptions,
+    activeAiProfile,
     isConfigDirty,
     getConfigPayload,
     getEditableConfigSignature,
@@ -213,6 +345,9 @@ export function createConfigState(ctx: ConfigStateContext) {
     persistConfig,
     persistConfigBeforeAction,
     saveSettings,
+    createAiProfile,
+    selectAiProfile,
+    removeAiProfile,
     rememberAiBaseUrlOption,
     rememberAiModelOption,
     removeAiBaseUrlOption,

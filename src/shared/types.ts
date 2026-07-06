@@ -79,6 +79,26 @@ export const DEFAULT_AUTO_SYNC_CONFIG: AutoSyncConfig = {
 export const DEFAULT_AI_BASE_URL_OPTIONS = ['https://api.openai.com/v1', 'https://api.deepseek.com'];
 export const DEFAULT_AI_MODEL_OPTIONS = ['gpt-4o-mini', 'deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-flash'];
 
+export interface AiProfile {
+  id: string;
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  enabled: boolean;
+}
+
+export const DEFAULT_AI_PROFILE_ID = 'default';
+
+export const DEFAULT_AI_PROFILE: AiProfile = {
+  id: DEFAULT_AI_PROFILE_ID,
+  name: '默认配置',
+  baseUrl: DEFAULT_AI_BASE_URL_OPTIONS[0],
+  apiKey: '',
+  model: DEFAULT_AI_MODEL_OPTIONS[0],
+  enabled: true,
+};
+
 export interface AppConfig {
   workspaceDir: string;
   workspaceDirs: string[];
@@ -91,6 +111,8 @@ export interface AppConfig {
   aiModel: string;
   aiBaseUrlOptions: string[];
   aiModelOptions: string[];
+  aiProfiles: AiProfile[];
+  activeAiProfileId: string;
   feishuForm: FeishuFormConfig;
   autoSync: AutoSyncConfig;
 }
@@ -101,6 +123,7 @@ export interface GenerateReportParams {
   startDateTime?: string;
   endDateTime?: string;
   reporterName: string;
+  aiProfileId?: string;
 }
 
 export interface ReportTimeRange {

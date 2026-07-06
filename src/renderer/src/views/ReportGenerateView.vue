@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import {
   CalendarDays,
+  BrainCog,
   CheckCircle2,
   CircleAlert,
   ClipboardCopy,
@@ -42,6 +43,8 @@ const {
   sortedRepos,
   selectedRepoPaths,
   selectedRepos,
+  aiProfileOptions,
+  activeAiProfile,
   projectOptions,
   lastReportResult,
   dailyReports,
@@ -54,6 +57,7 @@ const {
   isRepoPinned,
   toggleRepoPin,
   removeRepo,
+  selectAiProfile,
   selectFeishuProject,
   updateProjectWorkHours,
   applyFullDayReportRange,
@@ -158,9 +162,13 @@ const generationChecks = computed(() => [
   {
     key: 'ai',
     label: 'AI 接入',
-    ok: Boolean(config.aiBaseUrl && config.aiModel && config.aiApiKey),
-    detail: config.aiApiKey ? config.aiModel : '未配置时将使用基础模板生成',
-    action: 'config',
+    ok: Boolean(activeAiProfile.value.enabled && activeAiProfile.value.baseUrl && activeAiProfile.value.model && activeAiProfile.value.apiKey),
+    detail: !activeAiProfile.value.enabled
+      ? '当前配置已停用'
+      : activeAiProfile.value.apiKey
+        ? activeAiProfile.value.model
+        : '未配置时将使用基础模板生成',
+    action: 'ai',
     required: false,
   },
 ]);
@@ -298,8 +306,10 @@ async function handleGenerate() {
     if (blocked.action) emit('navigate', blocked.action);
     return;
   }
-  if (!config.aiApiKey) {
-    ElMessage.info('未配置 AI 接入，将使用基础日报模板生成');
+  if (!activeAiProfile.value.enabled) {
+    ElMessage.info('当前 AI 配置已停用，将使用基础日报模板生成');
+  } else if (!activeAiProfile.value.apiKey) {
+    ElMessage.info('当前 AI 配置未填写 API Key，将使用基础日报模板生成');
   }
   await generate();
 }
@@ -432,6 +442,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
     <PageHeader title="日报生成" subtitle="基于 Git 提交记录生成研发日报">
       <template #actions>
         <el-button :icon="FileText" plain @click="emit('navigate', 'history')">生成记录</el-button>
+        <el-button :icon="BrainCog" plain @click="emit('navigate', 'ai')">AI 设置</el-button>
         <el-button :icon="CalendarDays" plain @click="emit('navigate', 'config')">同步配置</el-button>
       </template>
     </PageHeader>
@@ -543,6 +554,18 @@ async function confirmRemoveRepo(item: RepoInfo) {
                   </div>
                 </div>
               </el-popover>
+            </div>
+
+            <div class="field field-span-3">
+              <label>AI 配置</label>
+              <el-select v-model="config.activeAiProfileId" placeholder="选择 AI 配置" @change="selectAiProfile">
+                <el-option v-for="item in aiProfileOptions" :key="item.value" :label="item.label" :value="item.value">
+                  <div class="select-option-row">
+                    <span>{{ item.label }}</span>
+                    <small>{{ item.model || item.baseUrl || '未配置模型' }}</small>
+                  </div>
+                </el-option>
+              </el-select>
             </div>
 
             <div class="field">

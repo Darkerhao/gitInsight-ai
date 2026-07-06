@@ -1,5 +1,12 @@
 import type { AppConfig, ReportTimeRange } from '../../src/shared/types.js';
 
+type AiRuntimeConfig = {
+  aiBaseUrl: string;
+  aiApiKey: string;
+  aiModel: string;
+  aiProfileName?: string;
+};
+
 type AiFetch = (url: string, init?: RequestInit) => Promise<Response>;
 
 let cachedElectronNetFetch: AiFetch | null | undefined;
@@ -85,6 +92,26 @@ export function normalizeAiBaseUrl(aiBaseUrl: string) {
 }
 
 
+export function resolveAiConfig(config: AppConfig, aiProfileId?: string): AiRuntimeConfig {
+  const selectedId = aiProfileId || config.activeAiProfileId;
+  const profile = config.aiProfiles.find((item) => item.id === selectedId) ?? config.aiProfiles[0];
+  if (!profile) {
+    return {
+      aiBaseUrl: config.aiBaseUrl,
+      aiApiKey: config.aiApiKey,
+      aiModel: config.aiModel,
+    };
+  }
+
+  return {
+    aiBaseUrl: profile.baseUrl,
+    aiApiKey: profile.enabled === false ? '' : profile.apiKey,
+    aiModel: profile.model,
+    aiProfileName: profile.name,
+  };
+}
+
+
 export function getChatCompletionsUrl(aiBaseUrl: string) {
   const baseUrl = normalizeAiBaseUrl(aiBaseUrl);
   return baseUrl.endsWith('/chat/completions') ? baseUrl : `${baseUrl}/chat/completions`;
@@ -120,7 +147,7 @@ export function isUnsupportedModelError(status: number, detail: string) {
 }
 
 
-export async function fetchAvailableModels(config: AppConfig) {
+export async function fetchAvailableModels(config: AiRuntimeConfig) {
   try {
     const response = await fetchAi(getModelsUrl(config.aiBaseUrl), {
       headers: { Authorization: `Bearer ${config.aiApiKey}` },
@@ -138,20 +165,20 @@ export async function fetchAvailableModels(config: AppConfig) {
 }
 
 
-export async function buildAiErrorMessage(config: AppConfig, response: Response, detail: string) {
+export async function buildAiErrorMessage(config: AiRuntimeConfig, response: Response, detail: string) {
   const parsedDetail = parseAiError(detail);
   if (isUnsupportedModelError(response.status, detail)) {
     const models = await fetchAvailableModels(config);
     const modelTips = models.length
       ? `；/models 可查询到的模型包括：${models.join('、')}。注意：模型列表不一定代表当前 /chat/completions 接口全部可用`
       : '；同时未能从 /models 获取可用模型列表';
-    return `AI接口调用失败：当前接口不支持模型 ${config.aiModel}${modelTips}。请在基础配置中更换为服务方明确支持 Chat Completions 的模型。原始错误：${parsedDetail || `${response.status} ${response.statusText}`}`;
+    return `AI接口调用失败：当前接口不支持模型 ${config.aiModel}${modelTips}。请在 AI 设置中更换为服务方明确支持 Chat Completions 的模型。原始错误：${parsedDetail || `${response.status} ${response.statusText}`}`;
   }
   return `AI接口调用失败：${response.status} ${response.statusText}${parsedDetail ? `，返回内容：${parsedDetail.slice(0, 500)}` : ''}`;
 }
 
 
-export async function callAiReport(config: AppConfig, rawInput: { gitLogs: string; files: string; diff: string }, timeRange: ReportTimeRange) {
+export async function callAiReport(config: AiRuntimeConfig, rawInput: { gitLogs: string; files: string; diff: string }, timeRange: ReportTimeRange) {
   const prompt = `你是一名资深软件研发工程师。
 
 请根据以下Git提交记录、修改文件和代码变更内容，总结所选时间段内的工作内容。

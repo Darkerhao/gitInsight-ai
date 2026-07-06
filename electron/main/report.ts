@@ -1,6 +1,6 @@
 import { basename } from 'node:path';
 import type { CommitEntry, GenerateReportParams, ReportResult, ReportTimeRange } from '../../src/shared/types.js';
-import { callAiReport } from './aiClient.js';
+import { callAiReport, resolveAiConfig } from './aiClient.js';
 import { loadConfig } from './config.js';
 import { recordGeneratedReport } from './database.js';
 import { nextDateString, normalizeDateTimeValue, parseLocalDateTimeMs, formatDateTimeForDisplay, type NormalizedReportTimeRange } from './dateUtils.js';
@@ -79,6 +79,7 @@ export function fallbackReport(repoNames: string[], date: string, reporterName: 
 
 export async function generateReport(params: GenerateReportParams): Promise<ReportResult> {
   const config = await loadConfig();
+  const aiConfig = resolveAiConfig(config, params.aiProfileId);
   const generatedAt = new Date().toISOString();
   const timeRange = normalizeReportTimeRange(params);
   const repos = params.repoPaths.map((repoPath) => ({ name: basename(repoPath), path: repoPath }));
@@ -128,16 +129,17 @@ export async function generateReport(params: GenerateReportParams): Promise<Repo
   }
 
   let report = '';
-  if (config.aiApiKey) {
+  if (aiConfig.aiApiKey) {
     try {
-      report = await callAiReport(config, rawInput, timeRange);
+      report = await callAiReport(aiConfig, rawInput, timeRange);
     } catch (error) {
       report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange);
       report = `${report}\n\nAI提示：${error instanceof Error ? error.message : '调用失败'}`;
     }
   } else {
     report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange);
-    report = `${report}\n\nAI提示：请先在设置中配置 OpenAI 兼容接口。`;
+    const profileLabel = aiConfig.aiProfileName ? `“${aiConfig.aiProfileName}”` : '当前 AI 配置';
+    report = `${report}\n\nAI提示：请先在 AI 设置中为${profileLabel}配置 OpenAI 兼容接口与 API Key。`;
   }
 
   const result = { report, commits, repos, generatedAt, timeRange, rawInput };

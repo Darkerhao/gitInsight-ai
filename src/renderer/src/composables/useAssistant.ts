@@ -2,6 +2,8 @@ import { reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import {
   DEFAULT_AI_BASE_URL_OPTIONS,
+  DEFAULT_AI_PROFILE,
+  DEFAULT_AI_PROFILE_ID,
   DEFAULT_AI_MODEL_OPTIONS,
   DEFAULT_AUTO_SYNC_CONFIG,
   DEFAULT_FEISHU_FORM_CONFIG,
@@ -74,6 +76,8 @@ function createAssistant() {
     aiModel: 'gpt-4o-mini',
     aiBaseUrlOptions: [...DEFAULT_AI_BASE_URL_OPTIONS],
     aiModelOptions: [...DEFAULT_AI_MODEL_OPTIONS],
+    aiProfiles: [{ ...DEFAULT_AI_PROFILE }],
+    activeAiProfileId: DEFAULT_AI_PROFILE_ID,
     feishuForm: { ...DEFAULT_FEISHU_FORM_CONFIG },
     autoSync: { ...DEFAULT_AUTO_SYNC_CONFIG },
   });
@@ -181,6 +185,10 @@ function createAssistant() {
     config.pinnedRepoPaths = normalizeRepoSelections(config.pinnedRepoPaths ?? []);
     config.aiBaseUrlOptions = normalizeOptions(config.aiBaseUrlOptions.length ? config.aiBaseUrlOptions : [...DEFAULT_AI_BASE_URL_OPTIONS]);
     config.aiModelOptions = normalizeOptions(config.aiModelOptions.length ? config.aiModelOptions : [...DEFAULT_AI_MODEL_OPTIONS]);
+    if (!config.aiProfiles.length) {
+      config.aiProfiles = [{ ...DEFAULT_AI_PROFILE }];
+      config.activeAiProfileId = DEFAULT_AI_PROFILE_ID;
+    }
     config.workspaceDirs = normalizeWorkspaceDirs([...(config.workspaceDirs ?? []), config.workspaceDir]);
 
     if (!form.date) form.date = today;
@@ -267,6 +275,8 @@ function createAssistant() {
     reporterOptions: configState.reporterOptions,
     aiBaseUrlOptions: configState.aiBaseUrlOptions,
     aiModelOptions: configState.aiModelOptions,
+    aiProfileOptions: configState.aiProfileOptions,
+    activeAiProfile: configState.activeAiProfile,
     sortedRepos: repoState.sortedRepos,
     selectedRepos: repoState.selectedRepos,
     autoSyncRunning: autoSyncStateApi.autoSyncRunning,
@@ -279,6 +289,9 @@ function createAssistant() {
     chooseWorkspace: repoState.chooseWorkspace,
     refreshRepos: repoState.refreshRepos,
     saveSettings: configState.saveSettings,
+    createAiProfile: configState.createAiProfile,
+    selectAiProfile: configState.selectAiProfile,
+    removeAiProfile: configState.removeAiProfile,
     rememberAiBaseUrlOption: configState.rememberAiBaseUrlOption,
     rememberAiModelOption: configState.rememberAiModelOption,
     removeAiBaseUrlOption: configState.removeAiBaseUrlOption,
