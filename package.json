@@ -1,6 +1,6 @@
 {
   "name": "gitinsight-ai",
-  "version": "3.6.1",
+  "version": "3.6.2",
   "author": {
     "name": "DarkerHao",
     "email": "1726348482@qq.com"
@@ -42,11 +42,13 @@
     "lucide-vue-next": "^0.548.0",
     "simple-git": "^3.27.0",
     "sql.js": "^1.14.1",
+    "three": "^0.185.1",
     "vue": "^3.5.17",
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
     "@swc/core": "^1.13.5",
+    "@types/three": "^0.185.0",
     "@vitejs/plugin-vue": "^5.2.4",
     "electron": "^37.2.6",
     "electron-builder": "^26.15.3",
