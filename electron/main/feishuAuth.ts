@@ -274,8 +274,21 @@ export function requireFeishuConfigValue(value: string, label: string) {
 }
 
 
+export function parseFeishuEndpointUrl(endpoint: string) {
+  try {
+    const url = new URL(endpoint.trim());
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new Error('invalid protocol');
+    }
+    return url;
+  } catch {
+    throw new Error('飞书表单提交接口地址格式不正确，请填写以 https:// 开头的完整地址');
+  }
+}
+
+
 export function getFeishuRequestContext(endpoint: string, shareToken: string) {
-  const url = new URL(endpoint);
+  const url = parseFeishuEndpointUrl(endpoint);
   return {
     origin: url.origin,
     referer: `${url.origin}/share/base/form/${shareToken}?chunked=false`,
@@ -345,7 +358,7 @@ export function getFeishuLoginTargetUrl(config: FeishuFormConfig) {
     return FEISHU_LOGIN_HOME_URL;
   }
   if (!shareToken) {
-    return new URL(endpoint).origin;
+    return parseFeishuEndpointUrl(endpoint).origin;
   }
   const { referer } = getFeishuRequestContext(endpoint, shareToken);
   return referer;
@@ -395,7 +408,7 @@ export async function readFeishuAuthSnapshot(config: FeishuFormConfig): Promise<
     };
   }
 
-  const origin = new URL(endpoint).origin;
+  const origin = parseFeishuEndpointUrl(endpoint).origin;
   const cookie = await getFeishuCookieHeader(origin, config.cookie);
   return {
     endpoint,

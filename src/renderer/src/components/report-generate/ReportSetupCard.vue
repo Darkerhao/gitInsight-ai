@@ -35,6 +35,7 @@ const props = defineProps<{
   sortedRepos: RepoInfo[];
   aiProfileOptions: AiProfileOption[];
   dateShortcut: DateShortcut;
+  isRepoSelected: (path: string) => boolean;
   isRepoPinned: (path: string) => boolean;
 }>();
 
@@ -130,11 +131,11 @@ function handleAiProfileChange(value: string) {
                 v-for="repo in filteredRepos"
                 :key="repo.path"
                 class="repo-picker-item"
-                :class="{ active: selectedRepoPaths.includes(repo.path), pinned: isRepoPinned(repo.path) }"
+                :class="{ active: isRepoSelected(repo.path), pinned: isRepoPinned(repo.path) }"
               >
                 <el-button class="repo-picker-main" @click="emit('toggle-repo', repo.path)">
                   <span class="repo-picker-check">
-                    <CheckCircle2 v-if="selectedRepoPaths.includes(repo.path)" :size="16" />
+                    <CheckCircle2 v-if="isRepoSelected(repo.path)" :size="16" />
                   </span>
                   <span class="repo-picker-copy">
                     <strong>{{ repo.name }}</strong>

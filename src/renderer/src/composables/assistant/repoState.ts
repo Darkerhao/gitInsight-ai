@@ -67,7 +67,13 @@ export function createRepoState(ctx: RepoStateContext) {
 
   const sortedRepos = computed(() => sortReposForDisplay(repos.value));
 
-  const selectedRepos = computed(() => sortedRepos.value.filter((item) => selectedRepoPaths.value.includes(item.path)));
+  const selectedRepoKeys = computed(() => new Set(normalizeRepoSelections(selectedRepoPaths.value).map(getRepoKey)));
+
+  const selectedRepos = computed(() => sortedRepos.value.filter((item) => selectedRepoKeys.value.has(getRepoKey(item.path))));
+
+  function isRepoSelected(path: string) {
+    return selectedRepoKeys.value.has(getRepoKey(path));
+  }
 
   async function chooseWorkspace() {
     const dir = await window.api.selectDirectory();
@@ -133,11 +139,14 @@ export function createRepoState(ctx: RepoStateContext) {
 
 
   function toggleRepo(path: string) {
-    const hasSelected = selectedRepoPaths.value.includes(path);
+    const repo = repos.value.find((item) => getRepoKey(item.path) === getRepoKey(path));
+    const repoPath = repo?.path ?? path;
+    const repoKey = getRepoKey(repoPath);
+    const hasSelected = selectedRepoKeys.value.has(repoKey);
     if (hasSelected) {
-      selectedRepoPaths.value = selectedRepoPaths.value.filter((item) => item !== path);
+      selectedRepoPaths.value = selectedRepoPaths.value.filter((item) => getRepoKey(item) !== repoKey);
     } else {
-      selectedRepoPaths.value = [...selectedRepoPaths.value, path];
+      selectedRepoPaths.value = normalizeRepoSelections([...selectedRepoPaths.value, repoPath]);
     }
     void saveRepoSelection();
   }
@@ -196,6 +205,7 @@ export function createRepoState(ctx: RepoStateContext) {
     scanWorkspaceDirs,
     sortedRepos,
     selectedRepos,
+    isRepoSelected,
     chooseWorkspace,
     refreshRepos,
     saveRepoSelection,

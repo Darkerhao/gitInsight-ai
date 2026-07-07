@@ -15,6 +15,7 @@ import {
   getFeishuCsrfToken,
   getFeishuRequestContext,
   getFeishuShareToken,
+  parseFeishuEndpointUrl,
   requireFeishuConfigValue,
   resolveFeishuAuth,
 } from './feishuAuth.js';
@@ -45,11 +46,7 @@ export function extractReportSection(report: string, sectionTitle: string) {
 }
 
 
-export function buildFeishuFormData(payload: SyncFeishuDailyPayload) {
-  const formConfig = payload.config;
-  const reporterName = formConfig.reporterName.trim() || payload.reporterName.trim();
-  const workContent = extractReportSection(payload.report, '今日工作内容') || payload.report.trim();
-  const selectedWorkHours = normalizeWorkHours(payload.workHours, formConfig.defaultWorkHours || DEFAULT_FEISHU_FORM_CONFIG.defaultWorkHours);
+function buildFeishuReporterUser(formConfig: FeishuFormConfig, reporterName: string) {
   const reporterUser: { userId: string; name: string; enName: string; notify: boolean; avatarUrl?: string } = {
     userId: requireFeishuConfigValue(formConfig.reporterUserId, '飞书汇报人 userId'),
     name: requireFeishuConfigValue(reporterName, '飞书汇报人名称'),
@@ -61,10 +58,24 @@ export function buildFeishuFormData(payload: SyncFeishuDailyPayload) {
     reporterUser.avatarUrl = formConfig.reporterAvatarUrl.trim();
   }
 
+  return reporterUser;
+}
+
+
+function buildFeishuFormDataFromContent(options: {
+  config: FeishuFormConfig;
+  date: string;
+  reporterName: string;
+  workContent: string;
+  workHours: number;
+}) {
+  const formConfig = options.config;
+  const reporterUser = buildFeishuReporterUser(formConfig, options.reporterName);
+
   return {
     [requireFeishuConfigValue(formConfig.dateFieldId, '日期字段 ID')]: {
       type: 5,
-      value: dateToFeishuDateValue(payload.date),
+      value: dateToFeishuDateValue(options.date),
     },
     [requireFeishuConfigValue(formConfig.userFieldId, '汇报人字段 ID')]: {
       type: 11,
@@ -82,14 +93,14 @@ export function buildFeishuFormData(payload: SyncFeishuDailyPayload) {
           },
           [requireFeishuConfigValue(formConfig.hoursFieldId, '工作时长字段 ID')]: {
             type: 2,
-            value: selectedWorkHours,
+            value: options.workHours,
           },
           [requireFeishuConfigValue(formConfig.contentFieldId, '工作内容字段 ID')]: {
             type: 1,
             value: [
               {
                 type: 'text',
-                text: workContent,
+                text: options.workContent,
               },
             ],
           },
@@ -100,10 +111,25 @@ export function buildFeishuFormData(payload: SyncFeishuDailyPayload) {
 }
 
 
+export function buildFeishuFormData(payload: SyncFeishuDailyPayload) {
+  const formConfig = payload.config;
+  const reporterName = formConfig.reporterName.trim() || payload.reporterName.trim();
+  const workContent = extractReportSection(payload.report, '今日工作内容') || payload.report.trim();
+  const selectedWorkHours = normalizeWorkHours(payload.workHours, formConfig.defaultWorkHours || DEFAULT_FEISHU_FORM_CONFIG.defaultWorkHours);
+  return buildFeishuFormDataFromContent({
+    config: formConfig,
+    date: payload.date,
+    reporterName,
+    workContent,
+    workHours: selectedWorkHours,
+  });
+}
+
+
 export function getFeishuContentMetaUrl(config: FeishuFormConfig) {
   const endpoint = requireFeishuConfigValue(config.endpoint, '飞书表单提交接口地址');
   const shareToken = requireFeishuConfigValue(getFeishuShareToken(config), '飞书表单 shareToken');
-  const url = new URL(endpoint);
+  const url = parseFeishuEndpointUrl(endpoint);
   url.pathname = '/space/api/bitable/external/share/content_meta';
   url.search = '';
   url.searchParams.set('shareToken', shareToken);
@@ -251,53 +277,13 @@ export async function listFeishuProjectOptions(payload: FeishuProjectOptionsPayl
 
 export function buildFeishuTestFormData(config: FeishuFormConfig, date: string) {
   const reporterName = requireFeishuConfigValue(config.reporterName, '飞书汇报人名称');
-  const reporterUser: { userId: string; name: string; enName: string; notify: boolean; avatarUrl?: string } = {
-    userId: requireFeishuConfigValue(config.reporterUserId, '飞书汇报人 userId'),
-    name: reporterName,
-    enName: reporterName,
-    notify: false,
-  };
-
-  if (config.reporterAvatarUrl.trim()) {
-    reporterUser.avatarUrl = config.reporterAvatarUrl.trim();
-  }
-
-  return {
-    [requireFeishuConfigValue(config.dateFieldId, '日期字段 ID')]: {
-      type: 5,
-      value: dateToFeishuDateValue(date),
-    },
-    [requireFeishuConfigValue(config.userFieldId, '汇报人字段 ID')]: {
-      type: 11,
-      value: {
-        users: [reporterUser],
-      },
-    },
-    [requireFeishuConfigValue(config.questionId, '明细表问题 ID')]: {
-      type: 21,
-      value: [
-        {
-          [requireFeishuConfigValue(config.projectFieldId, '所属项目字段 ID')]: {
-            type: 4,
-            value: [requireFeishuConfigValue(config.projectOptionId, '所属项目选项 ID')],
-          },
-          [requireFeishuConfigValue(config.hoursFieldId, '工作时长字段 ID')]: {
-            type: 2,
-            value: config.defaultWorkHours || 8,
-          },
-          [requireFeishuConfigValue(config.contentFieldId, '工作内容字段 ID')]: {
-            type: 1,
-            value: [
-              {
-                type: 'text',
-                text: `[GitInsight 测试记录] 表单连通性验证，请勿作为正式日报统计。提交时间：${new Date().toISOString()}`,
-              },
-            ],
-          },
-        },
-      ],
-    },
-  };
+  return buildFeishuFormDataFromContent({
+    config,
+    date,
+    reporterName,
+    workContent: `[GitInsight 测试记录] 表单连通性验证，请勿作为正式日报统计。提交时间：${new Date().toISOString()}`,
+    workHours: normalizeWorkHours(config.defaultWorkHours, DEFAULT_FEISHU_FORM_CONFIG.defaultWorkHours),
+  });
 }
 
 

@@ -20,6 +20,8 @@ export let autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
 export let autoSyncRunning = false;
 
+export let autoSyncStarting = false;
+
 export function getScheduledDate(date: string, time: string) {
   const [year, month, day] = date.split('-').map(Number);
   const [hour, minute] = normalizeAutoSyncTime(time).split(':').map(Number);
@@ -210,22 +212,38 @@ export async function validateAutoSync(config: AppConfig) {
 
 
 export async function runAutoSync(trigger: 'scheduled' | 'manual'): Promise<AutoSyncRunResult> {
-  const initialConfig = await loadConfig();
   const runDate = new Date();
-  const initialReportWindow = buildAutoSyncReportWindow(initialConfig, runDate);
-  const runKey = buildAutoSyncTaskKey(initialConfig, initialReportWindow.date);
   const ranAt = runDate.toISOString();
   const isScheduled = trigger === 'scheduled';
 
+  if (autoSyncRunning || autoSyncStarting) {
+    const skippedConfig = await loadConfig();
+    return buildAutoSyncRunResult(skippedConfig, 'skipped', '已有自动同步任务正在执行', ranAt);
+  }
+
+  autoSyncStarting = true;
+  let initialConfig: AppConfig;
+  try {
+    initialConfig = await loadConfig();
+  } catch (error) {
+    autoSyncStarting = false;
+    throw error;
+  }
+  const initialReportWindow = buildAutoSyncReportWindow(initialConfig, runDate);
+  const runKey = buildAutoSyncTaskKey(initialConfig, initialReportWindow.date);
+
   if (autoSyncRunning) {
+    autoSyncStarting = false;
     return buildAutoSyncRunResult(initialConfig, 'skipped', '已有自动同步任务正在执行', ranAt);
   }
 
   if (isScheduled && !initialConfig.autoSync.enabled) {
+    autoSyncStarting = false;
     return buildAutoSyncRunResult(initialConfig, 'skipped', '自动同步未启用', ranAt);
   }
 
   if (isScheduled && initialConfig.autoSync.lastSuccessKey === runKey) {
+    autoSyncStarting = false;
     const savedConfig = await updateAutoSyncStatus('skipped', '今日相同配置已成功同步，本次跳过', {
       runKey,
       ranAt,
@@ -235,10 +253,12 @@ export async function runAutoSync(trigger: 'scheduled' | 'manual'): Promise<Auto
   }
 
   autoSyncRunning = true;
-  await updateAutoSyncStatus('running', '自动同步执行中', { runKey, ranAt, scheduled: isScheduled });
+  autoSyncStarting = false;
 
   try {
-    const config = await loadConfig();
+    await updateAutoSyncStatus('running', '自动同步执行中', { runKey, ranAt, scheduled: isScheduled });
+
+    const config = initialConfig;
     await validateAutoSyncConfig(config);
 
     const repoPaths = normalizeRepoPaths(config.selectedRepoPaths);
@@ -279,6 +299,7 @@ export async function runAutoSync(trigger: 'scheduled' | 'manual'): Promise<Auto
     const savedConfig = await updateAutoSyncStatus('failed', message, { runKey, ranAt, scheduled: isScheduled });
     return buildAutoSyncRunResult(savedConfig, 'failed', message, ranAt);
   } finally {
+    autoSyncStarting = false;
     autoSyncRunning = false;
     await refreshAutoSyncSchedule();
   }

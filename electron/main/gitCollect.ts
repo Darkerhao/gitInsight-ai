@@ -55,7 +55,7 @@ export async function collectGitData(repoPath: string, timeRange: NormalizedRepo
     commit.show = show.slice(0, 4000);
   }
 
-  return formatCollectedGitData(commits);
+  return { commits };
 }
 
 

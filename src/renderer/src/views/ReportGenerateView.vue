@@ -54,6 +54,7 @@ const {
   persistConfig,
   refreshLocalData,
   toggleRepo,
+  isRepoSelected,
   isRepoPinned,
   toggleRepoPin,
   applyFullDayReportRange,
@@ -729,7 +730,7 @@ async function handleOpenFeishuSubmissionRecords() {
 }
 
 async function handleToggleRepo(path: string) {
-  if (!selectedRepoPaths.value.includes(path)) {
+  if (!isRepoSelected(path)) {
     toggleRepo(path);
     return;
   }
@@ -796,6 +797,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
           :sorted-repos="sortedRepos"
           :ai-profile-options="aiProfileOptions"
           :date-shortcut="dateShortcut"
+          :is-repo-selected="isRepoSelected"
           :is-repo-pinned="isRepoPinned"
           @choose-workspace="chooseWorkspace"
           @select-ai-profile="selectAiProfile"

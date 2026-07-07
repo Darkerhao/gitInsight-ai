@@ -398,6 +398,7 @@ function createAssistant() {
     createProjectReportDraft,
     loadDailyReportDraft,
     toggleRepo: repoState.toggleRepo,
+    isRepoSelected: repoState.isRepoSelected,
     isRepoPinned: repoState.isRepoPinned,
     toggleRepoPin: repoState.toggleRepoPin,
     removeRepo: repoState.removeRepo,
