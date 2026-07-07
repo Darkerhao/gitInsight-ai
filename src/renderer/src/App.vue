@@ -232,7 +232,9 @@ onBeforeUnmount(() => {
       <AppTopbar :theme-mode="themeMode" @toggle-theme="toggleThemeMode" />
 
       <div class="app-scroll">
-        <component :is="activeView" :active-nav="activeNav" @navigate="handleNavigate" />
+        <Transition name="route-switch" mode="out-in">
+          <component :is="activeView" :key="activeNav" :active-nav="activeNav" @navigate="handleNavigate" />
+        </Transition>
 
         <footer class="app-footer">
           AI日报助手{{ appVersionText }} · 让技术日报生成更简单、更智能

@@ -17,20 +17,16 @@ type CheckinWallet = {
 };
 
 const CHECKIN_STORAGE_KEY = 'gitinsight:checkin-wallet';
-const DAILY_CHECKIN_REWARD_MIN = 1888;
-const DAILY_CHECKIN_REWARD_MAX = 8888;
-/** 能量注入充能动画时长：与舞台 entry 开幕并行，不阻塞特效启动 */
-const CHARGE_MS = 720;
+const DAILY_CHECKIN_REWARD_MIN = 8888;
+const DAILY_CHECKIN_REWARD_MAX = 88888;
 
 const effectTierGroups = groupEffectsByTier();
 
 const wallet = ref<CheckinWallet>(loadWallet());
 const activeEffect = ref<RewardEffectKey | null>(null);
 const effectSeed = ref(0);
-const chargingKey = ref<RewardEffectKey | null>(null);
 let effectTimer: number | null = null;
 let effectFrame: number | null = null;
-let chargeTimer: number | null = null;
 
 const todayKey = computed(() => getLocalDateKey(new Date()));
 const checkedInToday = computed(() => wallet.value.lastCheckinDate === todayKey.value);
@@ -112,18 +108,6 @@ function startEffect(effect: RewardEffectKey) {
   effectTimer = window.setTimeout(stopEffect, EFFECT_DURATIONS[effect]);
 }
 
-/** 消耗甲币 = 能量注入：卡片充能微动效与舞台开幕并行播放 */
-function chargeCard(effect: RewardEffectKey) {
-  if (chargeTimer) {
-    window.clearTimeout(chargeTimer);
-  }
-  chargingKey.value = effect;
-  chargeTimer = window.setTimeout(() => {
-    chargingKey.value = null;
-    chargeTimer = null;
-  }, CHARGE_MS);
-}
-
 function runDailyCheckin() {
   if (checkedInToday.value) {
     ElMessage.info('今天已经签到过了');
@@ -139,7 +123,6 @@ function runDailyCheckin() {
     streak: nextStreak,
   };
   persistWallet();
-  startEffect('sparkle');
   ElMessage.success(`签到成功，获得 ${rewardCoins} 甲币`);
 }
 
@@ -157,16 +140,12 @@ function playEffect(effect: RewardEffectKey) {
     coins: wallet.value.coins - option.cost,
   };
   persistWallet();
-  chargeCard(effect);
   startEffect(effect);
-  ElMessage.success(`已注入 ${option.cost} 甲币，「${option.label}」协议启动`);
+  ElMessage.success(`已使用 ${option.cost} 甲币，已启用「${option.label}」`);
 }
 
 onBeforeUnmount(() => {
   stopEffect();
-  if (chargeTimer) {
-    window.clearTimeout(chargeTimer);
-  }
 });
 </script>
 
@@ -183,7 +162,7 @@ onBeforeUnmount(() => {
       <div class="coin-panel-head">
         <div>
           <strong :key="wallet.coins" class="coin-amount">{{ wallet.coins }} 甲币</strong>
-          <span>{{ walletStatusText }} · NEXUS 视觉协议库</span>
+          <span>{{ walletStatusText }} · 轻量效果库</span>
         </div>
         <el-tag class="coin-streak-tag" type="warning" effect="light" round>
           连续 {{ wallet.streak }} 天
@@ -204,7 +183,6 @@ onBeforeUnmount(() => {
         <template v-for="group in effectTierGroups" :key="group.meta.key">
           <div class="effect-tier-head" :class="`tier-${group.meta.key}`">
             <strong>{{ group.meta.label }}</strong>
-            <span>{{ group.meta.codename }}</span>
             <small>{{ group.meta.costRange[0] }}-{{ group.meta.costRange[1] }} 甲币 · {{ group.options.length }} 项</small>
           </div>
           <button
@@ -213,7 +191,7 @@ onBeforeUnmount(() => {
             class="effect-shop-item"
             :class="[
               `tier-${effect.tier}`,
-              { 'is-apex': effect.apex, 'is-charging': chargingKey === effect.key },
+              { 'is-apex': effect.apex },
             ]"
             type="button"
             :disabled="wallet.coins < effect.cost"
@@ -221,16 +199,14 @@ onBeforeUnmount(() => {
             :title="`${effect.codename} — ${effect.narrative}`"
             @click="playEffect(effect.key)"
           >
-            <i v-if="effect.tier === 'singularity'" class="effect-card-halo" aria-hidden="true" />
             <span class="effect-shop-icon">
               <component :is="effect.icon" :size="18" />
             </span>
             <span class="effect-shop-copy">
               <strong>
                 {{ effect.label }}
-                <em v-if="effect.apex">APEX</em>
+                <em v-if="effect.apex">精选</em>
               </strong>
-              <small class="effect-shop-codename">{{ effect.codename }}</small>
               <small>{{ effect.cost }} 甲币</small>
             </span>
           </button>
@@ -245,23 +221,27 @@ onBeforeUnmount(() => {
 <style>
 .topbar-coin-btn.el-button {
   min-height: 34px;
-  border-color: rgba(217, 138, 9, 0.28);
-  border-radius: 9px;
-  background:
-    linear-gradient(115deg, transparent 0 34%, rgba(255, 255, 255, 0.78) 45%, transparent 56%),
-    linear-gradient(180deg, #fff8e8 0%, #ffffff 100%);
-  background-size: 230% 100%, 100% 100%;
+  border-color: rgba(217, 119, 6, 0.22);
+  border-radius: 10px;
+  background: #fffbf1;
   color: #9a5f08;
   font-weight: 700;
   padding-inline: 12px;
-  transition: background-position 0.38s ease, border-color 0.16s ease, color 0.16s ease;
+  box-shadow: none;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
 }
 
 .topbar-coin-btn.el-button:hover,
 .topbar-coin-btn.el-button:focus-visible {
-  border-color: rgba(217, 138, 9, 0.52);
-  background-position: 100% 0, 0 0;
-  color: #8a5100;
+  border-color: rgba(217, 119, 6, 0.34);
+  background: #fff6de;
+  box-shadow: 0 8px 18px rgba(146, 64, 14, 0.08);
+  color: #854d0e;
+  transform: translateY(-1px);
 }
 
 .topbar-coin-btn.el-button span {
@@ -271,39 +251,29 @@ onBeforeUnmount(() => {
 }
 
 .topbar-coin-btn.el-button small {
-  color: var(--tone-amber);
+  color: #b7791f;
   font-size: 11px;
   font-weight: 700;
 }
 
-/* 甲币数额变动时的能量脉冲 */
-.coin-amount {
-  animation: coin-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
 .coin-popover.el-popper {
-  border: 1px solid var(--c-border);
-  border-radius: 10px;
-  background:
-    radial-gradient(circle at 100% 0, rgba(250, 204, 21, 0.08), transparent 34%),
-    radial-gradient(circle at 0 100%, rgba(59, 130, 246, 0.08), transparent 32%),
-    var(--c-surface);
-  box-shadow:
-    0 24px 58px rgba(17, 24, 39, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.12);
   overflow: hidden;
 }
 
 .coin-popover.el-popper .el-popper__arrow::before {
-  border-color: var(--c-border);
-  background: var(--c-surface);
+  border-color: rgba(226, 232, 240, 0.9);
+  background: #fff;
 }
 
 .coin-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 4px;
+  gap: 14px;
+  padding: 6px;
 }
 
 .coin-panel-head {
@@ -322,7 +292,7 @@ onBeforeUnmount(() => {
 
 .coin-panel-head strong {
   color: var(--c-text);
-  font-size: 19px;
+  font-size: 18px;
   line-height: 1.15;
 }
 
@@ -333,37 +303,53 @@ onBeforeUnmount(() => {
 
 .coin-streak-tag.el-tag {
   flex: 0 0 auto;
+  border-color: rgba(217, 119, 6, 0.16);
+  background: #fff7e6;
+  color: #9a5f08;
   font-weight: 700;
 }
 
 .coin-checkin-btn.el-button {
   width: 100%;
   min-height: 38px;
-  border-radius: 8px;
+  border-color: #8fa8f6;
+  border-radius: 9px;
+  background: #8fa8f6;
   font-weight: 700;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.coin-checkin-btn.el-button:hover:not(.is-disabled),
+.coin-checkin-btn.el-button:focus-visible:not(.is-disabled) {
+  border-color: #7895ef;
+  background: #7895ef;
+  box-shadow: 0 10px 22px rgba(79, 112, 211, 0.16);
+  transform: translateY(-1px);
 }
 
 .effect-shop {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
+  gap: 10px;
   max-height: 380px;
   overflow-y: auto;
   padding-right: 2px;
   scrollbar-gutter: stable;
-  mask-image: linear-gradient(180deg, transparent 0, #000 10px calc(100% - 18px), transparent 100%);
 }
 
-/* ── 分级区头 ── */
 .effect-tier-head {
-  --tier-tone: var(--tone-amber);
+  --tier-tone: #94a3b8;
   grid-column: 1 / -1;
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin-top: 4px;
-  padding: 5px 2px 4px;
-  border-bottom: 1px solid color-mix(in srgb, var(--tier-tone) 32%, transparent);
+  margin-top: 6px;
+  padding: 6px 2px 5px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
 }
 
 .effect-tier-head:first-child {
@@ -371,16 +357,16 @@ onBeforeUnmount(() => {
 }
 
 .effect-tier-head strong {
-  color: color-mix(in srgb, var(--tier-tone) 72%, var(--c-text));
+  color: var(--c-text);
   font-size: 13px;
 }
 
 .effect-tier-head span {
-  color: color-mix(in srgb, var(--tier-tone) 62%, var(--c-text-faint));
+  color: var(--c-text-faint);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.12em;
 }
 
 .effect-tier-head small {
@@ -390,29 +376,26 @@ onBeforeUnmount(() => {
 }
 
 .effect-tier-head.tier-singularity {
-  --tier-tone: #a855f7;
+  --tier-tone: #8b5cf6;
 }
 
 .effect-tier-head.tier-tactical {
-  --tier-tone: #0ea5e9;
+  --tier-tone: #3b82f6;
 }
 
 .effect-tier-head.tier-signal {
-  --tier-tone: #f59e0b;
+  --tier-tone: #d97706;
 }
 
-/* ── 特效卡片（信标级基线） ── */
 .effect-shop-item {
-  --effect-tone: var(--tone-amber);
+  --effect-tone: #64748b;
   position: relative;
   isolation: isolate;
   min-width: 0;
-  min-height: 72px;
-  border: 1px solid var(--c-border);
+  min-height: 70px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
   border-radius: 8px;
-  background:
-    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--effect-tone) 16%, transparent), transparent 38%),
-    var(--c-surface-muted);
+  background: #fbfdff;
   color: var(--c-text);
   cursor: pointer;
   display: grid;
@@ -422,137 +405,59 @@ onBeforeUnmount(() => {
   padding: 10px;
   text-align: left;
   overflow: hidden;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s, background 0.15s;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease,
+    background 0.18s ease;
 }
 
 .effect-shop-item::before {
   content: '';
   position: absolute;
-  inset: -1px;
-  z-index: -1;
-  background:
-    linear-gradient(115deg, transparent 0 36%, rgba(255, 255, 255, 0.42) 46%, transparent 56%),
-    radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--effect-tone) 24%, transparent), transparent 34%);
-  opacity: 0;
-  transform: translateX(-42%);
-  transition: opacity 0.18s ease, transform 0.42s ease;
-}
-
-.effect-shop-item::after {
-  content: '';
-  position: absolute;
   inset: 0;
-  border-radius: inherit;
-  background:
-    linear-gradient(90deg, transparent, color-mix(in srgb, var(--effect-tone) 30%, transparent), transparent),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 38%);
+  z-index: -1;
+  background: color-mix(in srgb, var(--effect-tone) 7%, transparent);
   opacity: 0;
-  pointer-events: none;
   transition: opacity 0.18s ease;
 }
 
 .effect-shop-item:hover,
 .effect-shop-item:focus-visible {
-  border-color: color-mix(in srgb, var(--effect-tone) 56%, var(--c-primary));
-  background:
-    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--effect-tone) 24%, transparent), transparent 42%),
-    var(--c-primary-soft);
-  box-shadow: 0 12px 22px rgba(17, 24, 39, 0.1);
+  border-color: color-mix(in srgb, var(--effect-tone) 34%, #cbd5e1);
+  background: #fff;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
   outline: none;
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 
 .effect-shop-item:hover::before,
 .effect-shop-item:focus-visible::before {
   opacity: 1;
-  transform: translateX(36%);
 }
 
-.effect-shop-item:hover::after,
-.effect-shop-item:focus-visible::after {
-  opacity: 1;
-}
-
-/* ── 战术级：强调色描边 + 扫描氛围 ── */
 .effect-shop-item.tier-tactical {
-  border-color: color-mix(in srgb, var(--effect-tone) 34%, var(--c-border));
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--effect-tone) 14%, transparent), transparent 46%),
-    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--effect-tone) 22%, transparent), transparent 42%),
-    var(--c-surface-muted);
+  border-color: color-mix(in srgb, var(--effect-tone) 20%, #e2e8f0);
+  background: color-mix(in srgb, var(--effect-tone) 4%, #fff);
 }
 
 .effect-shop-item.tier-tactical .effect-shop-icon {
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--effect-tone) 34%, transparent),
-    0 8px 18px color-mix(in srgb, var(--effect-tone) 20%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--effect-tone) 18%, transparent);
 }
 
-/* ── 奇点级：深空底 + 旋转能量描边 + 辉光图标 ── */
 .effect-shop-item.tier-singularity {
-  border-color: color-mix(in srgb, var(--effect-tone) 46%, var(--c-border));
-  background:
-    radial-gradient(circle at 82% 12%, color-mix(in srgb, var(--effect-tone) 30%, transparent), transparent 40%),
-    radial-gradient(circle at 14% 86%, color-mix(in srgb, var(--effect-tone) 14%, transparent), transparent 36%),
-    linear-gradient(160deg, rgba(10, 14, 30, 0.92), rgba(15, 23, 42, 0.86));
-  color: #e2e8f0;
-}
-
-.effect-shop-item.tier-singularity .effect-shop-copy strong {
-  color: #f1f5f9;
-}
-
-.effect-shop-item.tier-singularity .effect-shop-copy small {
-  color: rgba(226, 232, 240, 0.62);
+  border-color: color-mix(in srgb, var(--effect-tone) 22%, #e2e8f0);
+  background: color-mix(in srgb, var(--effect-tone) 5%, #fff);
+  color: var(--c-text);
 }
 
 .effect-shop-item.tier-singularity .effect-shop-icon {
-  background: color-mix(in srgb, var(--effect-tone) 22%, rgba(2, 6, 23, 0.7));
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--effect-tone) 44%, transparent),
-    0 10px 22px color-mix(in srgb, var(--effect-tone) 26%, transparent),
-    0 0 26px color-mix(in srgb, var(--effect-tone) 22%, transparent);
-}
-
-.effect-card-halo {
-  position: absolute;
-  inset: -1px;
-  z-index: -2;
-  border-radius: inherit;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0 12%,
-    color-mix(in srgb, var(--effect-tone) 66%, #fff) 22%,
-    transparent 34% 58%,
-    color-mix(in srgb, var(--effect-tone) 44%, transparent) 70%,
-    transparent 82%
-  );
-  opacity: 0.5;
-  animation: effect-halo-spin 3.4s linear infinite;
-}
-
-.effect-shop-item.tier-singularity:hover .effect-card-halo,
-.effect-shop-item.tier-singularity:focus-visible .effect-card-halo {
-  opacity: 0.9;
+  background: color-mix(in srgb, var(--effect-tone) 10%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--effect-tone) 22%, transparent);
 }
 
 .effect-shop-item.is-apex {
-  box-shadow: 0 0 22px color-mix(in srgb, var(--effect-tone) 18%, transparent);
-}
-
-/* ── 能量注入：点击消耗甲币的充能反馈 ── */
-.effect-shop-item.is-charging {
-  border-color: color-mix(in srgb, var(--effect-tone) 78%, #fff);
-  transform: translateY(-1px) scale(1.015);
-}
-
-.effect-shop-item.is-charging::after {
-  opacity: 1;
-  animation: effect-charge-sweep 0.72s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.effect-shop-item.is-charging .effect-shop-icon {
-  animation: effect-charge-icon 0.72s ease;
+  border-color: color-mix(in srgb, var(--effect-tone) 28%, #e2e8f0);
 }
 
 .effect-shop-item:disabled {
@@ -567,25 +472,16 @@ onBeforeUnmount(() => {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--effect-tone) 14%, #fff);
+  background: color-mix(in srgb, var(--effect-tone) 9%, #fff);
   color: var(--effect-tone);
   display: grid;
   place-items: center;
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--effect-tone) 22%, transparent),
-    0 8px 18px color-mix(in srgb, var(--effect-tone) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--effect-tone) 14%, transparent);
   overflow: hidden;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
-}
-
-.effect-shop-icon::before {
-  content: '';
-  position: absolute;
-  inset: -45%;
-  background: conic-gradient(from 0deg, transparent, color-mix(in srgb, var(--effect-tone) 46%, transparent), transparent 42%);
-  opacity: 0;
-  animation: effect-icon-orbit 1.8s linear infinite;
-  transition: opacity 0.18s ease;
+  transition:
+    background 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .effect-shop-icon svg {
@@ -595,12 +491,9 @@ onBeforeUnmount(() => {
 
 .effect-shop-item:hover .effect-shop-icon,
 .effect-shop-item:focus-visible .effect-shop-icon {
-  transform: translateY(-1px) scale(1.05);
-}
-
-.effect-shop-item:hover .effect-shop-icon::before,
-.effect-shop-item:focus-visible .effect-shop-icon::before {
-  opacity: 1;
+  background: color-mix(in srgb, var(--effect-tone) 14%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--effect-tone) 24%, transparent);
+  transform: translateY(-1px);
 }
 
 .effect-shop-copy {
@@ -625,27 +518,16 @@ onBeforeUnmount(() => {
   align-items: center;
   height: 15px;
   margin-left: 4px;
-  border: 1px solid color-mix(in srgb, var(--effect-tone) 52%, transparent);
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--effect-tone) 16%, transparent);
-  color: color-mix(in srgb, var(--effect-tone) 82%, #fff);
+  border: 1px solid color-mix(in srgb, var(--effect-tone) 22%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--effect-tone) 8%, transparent);
+  color: color-mix(in srgb, var(--effect-tone) 66%, var(--c-text));
   font-size: 8.5px;
   font-style: normal;
   font-weight: 800;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.1em;
   padding: 0 4px 0 6px;
   vertical-align: 1px;
-}
-
-.effect-shop-codename {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  color: color-mix(in srgb, var(--effect-tone) 58%, var(--c-text-faint));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .effect-shop-copy small {
@@ -655,74 +537,55 @@ onBeforeUnmount(() => {
 }
 
 :root[data-theme='dark'] .topbar-coin-btn.el-button {
-  border-color: rgba(251, 191, 36, 0.28);
-  background:
-    linear-gradient(115deg, transparent 0 34%, rgba(255, 255, 255, 0.16) 45%, transparent 56%),
-    rgba(251, 191, 36, 0.12);
-  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.22);
+  background: rgba(251, 191, 36, 0.1);
+  color: #facc15;
 }
 
 :root[data-theme='dark'] .topbar-coin-btn.el-button:hover,
 :root[data-theme='dark'] .topbar-coin-btn.el-button:focus-visible {
-  border-color: rgba(251, 191, 36, 0.48);
+  border-color: rgba(251, 191, 36, 0.34);
+  background: rgba(251, 191, 36, 0.15);
   color: #fde68a;
 }
 
-:root[data-theme='dark'] .effect-shop-icon {
-  background: color-mix(in srgb, var(--effect-tone) 16%, var(--c-surface-inset));
+:root[data-theme='dark'] .coin-popover.el-popper {
+  border-color: rgba(51, 65, 85, 0.96);
+  background: rgba(15, 23, 42, 0.98);
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.32);
 }
 
+:root[data-theme='dark'] .coin-popover.el-popper .el-popper__arrow::before {
+  border-color: rgba(51, 65, 85, 0.96);
+  background: #0f172a;
+}
+
+:root[data-theme='dark'] .coin-streak-tag.el-tag {
+  border-color: rgba(251, 191, 36, 0.22);
+  background: rgba(251, 191, 36, 0.1);
+  color: #fde68a;
+}
+
+:root[data-theme='dark'] .effect-tier-head {
+  border-bottom-color: rgba(51, 65, 85, 0.9);
+}
+
+:root[data-theme='dark'] .effect-shop-item,
+:root[data-theme='dark'] .effect-shop-item.tier-tactical,
 :root[data-theme='dark'] .effect-shop-item.tier-singularity {
-  background:
-    radial-gradient(circle at 82% 12%, color-mix(in srgb, var(--effect-tone) 26%, transparent), transparent 40%),
-    radial-gradient(circle at 14% 86%, color-mix(in srgb, var(--effect-tone) 12%, transparent), transparent 36%),
-    linear-gradient(160deg, rgba(5, 8, 20, 0.96), rgba(10, 16, 32, 0.9));
+  border-color: color-mix(in srgb, var(--effect-tone) 18%, rgba(51, 65, 85, 0.9));
+  background: color-mix(in srgb, var(--effect-tone) 7%, var(--c-surface-muted));
 }
 
-@keyframes effect-icon-orbit {
-  to {
-    transform: rotate(360deg);
-  }
+:root[data-theme='dark'] .effect-shop-item:hover,
+:root[data-theme='dark'] .effect-shop-item:focus-visible {
+  border-color: color-mix(in srgb, var(--effect-tone) 30%, rgba(71, 85, 105, 1));
+  background: color-mix(in srgb, var(--effect-tone) 11%, var(--c-surface));
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.22);
 }
 
-@keyframes effect-halo-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes effect-charge-sweep {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
-}
-
-@keyframes effect-charge-icon {
-  0% {
-    transform: scale(1);
-  }
-  32% {
-    transform: scale(1.18);
-    box-shadow: 0 0 26px color-mix(in srgb, var(--effect-tone) 56%, transparent);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes coin-pop {
-  0% {
-    transform: scale(1);
-  }
-  36% {
-    transform: scale(1.14);
-  }
-  100% {
-    transform: scale(1);
-  }
+:root[data-theme='dark'] .effect-shop-icon {
+  background: color-mix(in srgb, var(--effect-tone) 12%, var(--c-surface-inset));
 }
 
 @media (max-width: 720px) {

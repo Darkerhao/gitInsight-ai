@@ -30,7 +30,7 @@ const emit = defineEmits<{
 }>();
 
 const assistant = useAssistant();
-const { repos, selectedRepos, config, report, currentReportId, lastReportResult, dailyReports, syncLogs, errorLogs, push, applyReportTimeRange } = assistant;
+const { repos, selectedRepos, config, currentReportId, dailyReports, syncLogs, errorLogs, push, applyReportTimeRange, loadDailyReportDraft } = assistant;
 
 const keyword = ref('');
 const selectedProject = ref('全部项目');
@@ -182,9 +182,7 @@ function loadActiveReport() {
   }
   applyReportTimeRange(record.date, record.timeRange);
   config.reporterName = record.reporterName || config.reporterName;
-  report.value = record.report;
-  currentReportId.value = record.id;
-  lastReportResult.value = null;
+  loadDailyReportDraft(record);
   emit('navigate', 'generate');
   ElMessage.success('已加载到日报生成页，可继续编辑');
 }

@@ -4,6 +4,8 @@ import type { ComputedRef, Ref } from 'vue';
 import { buildDateTime, shiftLocalDate } from './dateUtils';
 import { normalizeWorkHours } from './normalizers';
 
+type ReportRangeForm = { startDateTime: string; endDateTime: string };
+
 type ReportStateContext = {
   config: AppConfig;
   form: { date: string; startDateTime: string; endDateTime: string };
@@ -19,6 +21,37 @@ type ReportStateContext = {
   getConfigPayload: () => AppConfig;
   refreshLocalData: () => Promise<void>;
 };
+
+export function countResultFiles(result: ReportResult | null) {
+  if (!result) return 0;
+  return Array.from(new Set(result.commits.flatMap((commit) => commit.files))).length;
+}
+
+export function getReportRangePayloadFromForm(form: ReportRangeForm) {
+  const startMs = new Date(form.startDateTime).getTime();
+  const endMs = new Date(form.endDateTime).getTime();
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || startMs >= endMs) return null;
+  return {
+    startDateTime: form.startDateTime,
+    endDateTime: form.endDateTime,
+  };
+}
+
+export function resolveReportTimeRange(
+  payload: { startDateTime: string; endDateTime: string } | null,
+  label: string,
+  previousRange?: ReportTimeRange,
+): ReportTimeRange | undefined {
+  if (!payload) return undefined;
+  if (previousRange?.startDateTime === payload.startDateTime && previousRange.endDateTime === payload.endDateTime) {
+    return previousRange;
+  }
+
+  return {
+    ...payload,
+    label,
+  };
+}
 
 export function createReportState(ctx: ReportStateContext) {
   const {
@@ -36,12 +69,6 @@ export function createReportState(ctx: ReportStateContext) {
     getConfigPayload,
     refreshLocalData,
   } = ctx;
-
-  function countResultFiles(result: ReportResult | null) {
-    if (!result) return 0;
-    return Array.from(new Set(result.commits.flatMap((commit) => commit.files))).length;
-  }
-
 
   function formatDateTime(value?: string) {
     if (!value) return '暂无';
@@ -75,29 +102,14 @@ export function createReportState(ctx: ReportStateContext) {
 
 
   function getReportRangePayload() {
-    const startMs = new Date(form.startDateTime).getTime();
-    const endMs = new Date(form.endDateTime).getTime();
-    if (Number.isNaN(startMs) || Number.isNaN(endMs) || startMs >= endMs) return null;
-    return {
-      startDateTime: form.startDateTime,
-      endDateTime: form.endDateTime,
-    };
+    return getReportRangePayloadFromForm(form);
   }
 
 
   function getCurrentReportTimeRange(): ReportTimeRange | undefined {
     const payload = getReportRangePayload();
-    if (!payload) return undefined;
-
-    const resultRange = lastReportResult.value?.timeRange;
-    if (resultRange?.startDateTime === payload.startDateTime && resultRange.endDateTime === payload.endDateTime) {
-      return resultRange;
-    }
-
-    return {
-      ...payload,
-      label: `${formatDateTime(payload.startDateTime)} 至 ${formatDateTime(payload.endDateTime)}`,
-    };
+    const label = payload ? `${formatDateTime(payload.startDateTime)} 至 ${formatDateTime(payload.endDateTime)}` : '';
+    return resolveReportTimeRange(payload, label, lastReportResult.value?.timeRange);
   }
 
 

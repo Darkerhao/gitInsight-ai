@@ -1,31 +1,29 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import {
-  CalendarDays,
-  BrainCog,
-  CheckCircle2,
-  CircleAlert,
-  ClipboardCopy,
-  Clock3,
-  Download,
-  ExternalLink,
-  FileText,
-  FolderGit2,
-  Gamepad2,
-  ListChecks,
-  Pin,
-  Plus,
-  Save,
-  Search,
-  Send,
-  Sparkles,
-  Trash2,
-} from 'lucide-vue-next';
+import { BrainCog, CalendarDays, FileText } from 'lucide-vue-next';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
-import StatusBadge from '@/components/common/StatusBadge.vue';
+import ReportEditorCard from '@/components/report-generate/ReportEditorCard.vue';
+import ReportGenerationLoadingOverlay from '@/components/report-generate/ReportGenerationLoadingOverlay.vue';
+import ReportPublishSidebar from '@/components/report-generate/ReportPublishSidebar.vue';
+import ReportSetupCard from '@/components/report-generate/ReportSetupCard.vue';
 import { useAssistant } from '@/composables/useAssistant';
+import type { ProjectReportDraft } from '@/composables/useAssistant';
+import { countResultFiles, getReportRangePayloadFromForm, resolveReportTimeRange } from '@/composables/assistant/reportState';
+import { normalizeProjectWorkHours, normalizeWorkHours } from '@/composables/assistant/normalizers';
 import type { DailyReportRecord, RepoInfo } from '@shared/types';
+
+type DateShortcut = 'today' | 'yesterday' | 'rolling' | 'custom';
+type GenerationCheckAction = '' | 'config' | 'ai';
+
+interface GenerationCheck {
+  key: string;
+  label: string;
+  ok: boolean;
+  detail: string;
+  action: GenerationCheckAction;
+  required: boolean;
+}
 
 const emit = defineEmits<{
   (e: 'navigate', value: string): void;
@@ -35,7 +33,6 @@ const assistant = useAssistant();
 const {
   config,
   form,
-  report,
   status,
   loading,
   pushing,
@@ -46,43 +43,27 @@ const {
   aiProfileOptions,
   activeAiProfile,
   projectOptions,
-  lastReportResult,
+  activeDraftKey,
+  projectDrafts,
   dailyReports,
   chooseWorkspace,
-  generate,
-  push,
+  createProjectReportDraft,
   openFeishuSubmissionRecords,
-  saveCurrentReport,
+  removeRepo,
+  selectAiProfile,
+  persistConfig,
+  refreshLocalData,
   toggleRepo,
   isRepoPinned,
   toggleRepoPin,
-  removeRepo,
-  selectAiProfile,
-  selectFeishuProject,
-  updateProjectWorkHours,
   applyFullDayReportRange,
 } = assistant;
 
-const dateShortcut = ref<'today' | 'yesterday' | 'rolling' | 'custom'>('today');
-const repoKeyword = ref('');
-const gameScore = ref(0);
-const gameStreak = ref(0);
-const gameTarget = ref({ x: 52, y: 48 });
+const dateShortcut = ref<DateShortcut>('today');
 const workHourPresets = [1, 2, 4, 6, 7, 7.5, 8, 10];
-const loadingTips = [
-  '正在读取提交记录与影响文件',
-  '正在聚合模块变更与研发脉络',
-  '正在压缩上下文并生成日报正文',
-  '正在校验输出结构与明日计划',
-];
-const hasReport = computed(() => report.value.trim().length > 0);
+
 const selectedRepoNames = computed(() => selectedRepos.value.map((repo) => repo.name));
 const selectedRepoNamesText = computed(() => selectedRepoNames.value.join('、'));
-const loadingTip = computed(() => loadingTips[gameScore.value % loadingTips.length]);
-const gameTargetStyle = computed(() => ({
-  left: `${gameTarget.value.x}%`,
-  top: `${gameTarget.value.y}%`,
-}));
 
 const selectedRepoSummary = computed(() => {
   if (!selectedRepos.value.length) return '请选择要生成日报的仓库';
@@ -96,12 +77,6 @@ const repoContextText = computed(() => {
   return selectedRepoNamesText.value;
 });
 
-const filteredRepos = computed(() => {
-  const keyword = repoKeyword.value.trim().toLocaleLowerCase();
-  if (!keyword) return sortedRepos.value;
-  return sortedRepos.value.filter((repo) => `${repo.name} ${repo.path}`.toLocaleLowerCase().includes(keyword));
-});
-
 const reportRangeStartMs = computed(() => new Date(form.startDateTime).getTime());
 const reportRangeEndMs = computed(() => new Date(form.endDateTime).getTime());
 const reportRangeValid = computed(
@@ -113,20 +88,75 @@ const reportRangeLabel = computed(() => {
   return `${formatRangeDateTime(form.startDateTime)} 至 ${formatRangeDateTime(form.endDateTime)}`;
 });
 
-const generatedAtText = computed(() => formatDateTime(lastReportResult.value?.generatedAt || dailyReports.value[0]?.generatedAt));
-const commitCount = computed(() => lastReportResult.value?.commits.length ?? 0);
-const touchedFiles = computed(() => Array.from(new Set(lastReportResult.value?.commits.flatMap((commit) => commit.files) ?? [])));
-const reportLineCount = computed(() => report.value.split(/\r?\n/).filter((line) => line.trim()).length);
-
-const metrics = computed(() => [
-  { label: '已选仓库', value: selectedRepos.value.length },
-  { label: '提交记录', value: commitCount.value },
-  { label: '影响文件', value: touchedFiles.value.length },
-  { label: '正文行数', value: report.value ? reportLineCount.value : 0 },
-]);
-
+const activeDraft = computed(() => projectDrafts.value.find((item) => item.key === activeDraftKey.value) ?? projectDrafts.value[0]);
+const hasAnyReport = computed(() => projectDrafts.value.some((item) => item.report.trim().length > 0));
+const hasAnyDirtyReport = computed(() => projectDrafts.value.some((item) => item.dirty && item.report.trim().length > 0));
+const activeHasReport = computed(() => Boolean(activeDraft.value?.report.trim()));
+const activeHasLastReportResult = computed(() => Boolean(activeDraft.value?.lastReportResult));
 const generationRecords = computed(() => dailyReports.value.slice(0, 5));
-const generationChecks = computed(() => [
+
+const activeMetrics = computed(() => {
+  const draft = activeDraft.value;
+  const result = draft?.lastReportResult ?? null;
+  const touchedFiles = Array.from(new Set(result?.commits.flatMap((commit) => commit.files) ?? []));
+  const reportLineCount = draft?.report.split(/\r?\n/).filter((line) => line.trim()).length ?? 0;
+
+  return [
+    { label: '已生成项目', value: projectDrafts.value.filter((item) => item.report.trim()).length },
+    { label: '提交记录', value: result?.commits.length ?? 0 },
+    { label: '影响文件', value: touchedFiles.length },
+    { label: '正文行数', value: draft?.report ? reportLineCount : 0 },
+  ];
+});
+
+const editorDrafts = computed(() =>
+  projectDrafts.value.map((draft) => ({
+    key: draft.key,
+    repoName: draft.repo.name,
+    repoPath: draft.repo.path,
+    report: draft.report,
+    hasReport: draft.report.trim().length > 0,
+    hasLastReportResult: Boolean(draft.lastReportResult),
+    dirty: draft.dirty,
+    generateStatus: draft.generateStatus,
+    publishStatus: draft.publishStatus,
+    reportTitle: `${draft.repo.name} ${form.date || '未选择日期'} 研发日报`,
+    reportSubtitle: draft.report.trim() ? reportRangeLabel.value : '生成后的日报会在这里进入可编辑状态',
+    generatedAtText: formatDateTime(draft.lastReportResult?.generatedAt),
+  })),
+);
+
+const activePublishDraft = computed(() => {
+  const draft = activeDraft.value;
+  if (!draft) return undefined;
+  return {
+    key: draft.key,
+    repoName: draft.repo.name,
+    hasReport: draft.report.trim().length > 0,
+    projectOptionId: draft.projectOptionId,
+    workHours: draft.workHours,
+    publishStatus: draft.publishStatus,
+    publishMessage: draft.publishMessage,
+  };
+});
+
+const publishDraftItems = computed(() =>
+  projectDrafts.value.map((draft) => ({
+    key: draft.key,
+    repoName: draft.repo.name,
+    hasReport: draft.report.trim().length > 0,
+    projectOptionId: draft.projectOptionId,
+    workHours: draft.workHours,
+    publishStatus: draft.publishStatus,
+    publishMessage: draft.publishMessage,
+  })),
+);
+
+const publishableDrafts = computed(() => projectDrafts.value.filter((item) => item.report.trim() && item.projectOptionId.trim()));
+const canPublishActive = computed(() => Boolean(activeDraft.value?.report.trim() && activeDraft.value.projectOptionId.trim() && !pushing.value));
+const canPublishAll = computed(() => publishableDrafts.value.length > 0 && !pushing.value);
+
+const generationChecks = computed<GenerationCheck[]>(() => [
   {
     key: 'repo',
     label: '仓库范围',
@@ -177,7 +207,10 @@ const requiredGenerationChecks = computed(() => generationChecks.value.filter((i
 const completedRequiredCheckCount = computed(() => requiredGenerationChecks.value.filter((item) => item.ok).length);
 const blockedGenerationCheck = computed(() => generationChecks.value.find((item) => item.required && !item.ok));
 const pendingGenerationChecks = computed(() => generationChecks.value.filter((item) => !item.ok));
-const generateButtonLabel = computed(() => (report.value.trim() ? '重新生成日报' : '开始生成日报'));
+const generateButtonLabel = computed(() => {
+  if (!projectDrafts.value.length) return '生成全部日报';
+  return hasAnyReport.value ? '重新生成全部日报' : `生成 ${projectDrafts.value.length} 个项目日报`;
+});
 const setupReady = computed(() => !blockedGenerationCheck.value);
 const setupStatus = computed<'success' | 'pending'>(() => (setupReady.value ? 'success' : 'pending'));
 const setupStatusLabel = computed(() => (setupReady.value ? '生成条件就绪' : '待完善'));
@@ -188,26 +221,44 @@ const readinessDetail = computed(() => {
   return '仓库、日期、时间段和汇报人均已就绪';
 });
 const readinessProgressLabel = computed(() => `${completedRequiredCheckCount.value}/${requiredGenerationChecks.value.length} 必填项`);
-const reportTitle = computed(() => {
-  const repoTitle =
-    selectedRepos.value.length > 1 ? `${selectedRepos.value[0].name} 等 ${selectedRepos.value.length} 个仓库` : selectedRepoSummary.value;
-  return `${repoTitle} ${form.date || '未选择日期'} 研发日报`;
-});
-const reportSubtitle = computed(() => (hasReport.value ? reportRangeLabel.value : '生成后的日报会在这里进入可编辑状态'));
-const selectedProjectName = computed(
-  () => projectOptions.value.find((item) => item.id === config.feishuForm.projectOptionId)?.name || '',
+
+watch(
+  selectedRepos,
+  (repos) => {
+    const previousDrafts = new Map(projectDrafts.value.map((draft) => [draft.key, draft]));
+    projectDrafts.value = repos.map((repo) => {
+      const previous = previousDrafts.get(repo.path);
+      if (previous) {
+        previous.repo = repo;
+        return previous;
+      }
+
+      return createProjectReportDraft(repo, {
+        repo,
+      });
+    });
+
+    if (!projectDrafts.value.length) {
+      activeDraftKey.value = '';
+      return;
+    }
+    if (!projectDrafts.value.some((item) => item.key === activeDraftKey.value)) {
+      activeDraftKey.value = projectDrafts.value[0].key;
+    }
+  },
+  { immediate: true },
 );
-const canPublishReport = computed(() => hasReport.value && Boolean(config.feishuForm.projectOptionId));
-const publishStatusTitle = computed(() => {
-  if (!hasReport.value) return '等待日报正文';
-  if (!config.feishuForm.projectOptionId) return '请选择飞书目标';
-  return '可发布到飞书';
-});
-const publishStatusDetail = computed(() => {
-  if (!hasReport.value) return '先在左侧生成或编辑日报内容';
-  if (!config.feishuForm.projectOptionId) return '选择目标后即可同步到飞书日报表';
-  return `目标：${selectedProjectName.value || '已选择项目'}，工时 ${Number(config.feishuForm.defaultWorkHours).toFixed(1)} 小时`;
-});
+
+function getProjectWorkHours(optionId: string) {
+  const projectHours = normalizeProjectWorkHours(config.feishuForm.projectWorkHours);
+  return normalizeWorkHours(optionId ? projectHours[optionId] : undefined, config.feishuForm.defaultWorkHours);
+}
+
+async function persistConfigSnapshot() {
+  config.selectedRepoPaths = [...selectedRepoPaths.value];
+  config.feishuForm.projectWorkHours = normalizeProjectWorkHours(config.feishuForm.projectWorkHours);
+  await persistConfig();
+}
 
 function formatDate(date: Date) {
   const year = date.getFullYear();
@@ -250,7 +301,7 @@ function formatRangeDateTime(value?: string) {
   }).format(date);
 }
 
-function setDateShortcut(value: 'today' | 'yesterday' | 'rolling' | 'custom') {
+function setDateShortcut(value: DateShortcut) {
   dateShortcut.value = value;
   if (value === 'custom') return;
   const now = new Date();
@@ -268,7 +319,8 @@ function setDateShortcut(value: 'today' | 'yesterday' | 'rolling' | 'custom') {
   applyFullDayReportRange(formatDate(date));
 }
 
-function handleReportDateChange() {
+function handleReportDateChange(value: string) {
+  form.date = value;
   if (form.date) {
     applyFullDayReportRange(form.date);
   }
@@ -279,82 +331,385 @@ function handleRangeChange() {
   dateShortcut.value = 'custom';
 }
 
-function moveGameTarget() {
-  gameTarget.value = {
-    x: Math.round(12 + Math.random() * 76),
-    y: Math.round(18 + Math.random() * 58),
-  };
+function handleStartDateTimeChange(value: string) {
+  form.startDateTime = value;
+  handleRangeChange();
 }
 
-function hitGameTarget() {
-  gameScore.value += 1;
-  gameStreak.value += 1;
-  moveGameTarget();
+function handleEndDateTimeChange(value: string) {
+  form.endDateTime = value;
+  handleRangeChange();
 }
 
-watch(loading, (isLoading) => {
-  if (!isLoading) return;
-  gameScore.value = 0;
-  gameStreak.value = 0;
-  moveGameTarget();
-});
+function getReportRangePayload() {
+  return getReportRangePayloadFromForm(form);
+}
 
-async function handleGenerate() {
+function getCurrentReportTimeRange(draft: ProjectReportDraft) {
+  return resolveReportTimeRange(getReportRangePayload(), reportRangeLabel.value, draft.lastReportResult?.timeRange);
+}
+
+function getDraftByKey(key: string) {
+  return projectDrafts.value.find((item) => item.key === key);
+}
+
+function validateGenerationReady() {
   const blocked = blockedGenerationCheck.value;
   if (blocked) {
     ElMessage.warning(`请先完善：${blocked.label}`);
     if (blocked.action) emit('navigate', blocked.action);
-    return;
+    return false;
   }
+
   if (!activeAiProfile.value.enabled) {
     ElMessage.info('当前 AI 配置已停用，将使用基础日报模板生成');
   } else if (!activeAiProfile.value.apiKey) {
     ElMessage.info('当前 AI 配置未填写 API Key，将使用基础日报模板生成');
   }
-  await generate();
+  return true;
+}
+
+async function generateDraft(draftKey: string, options: { updateStatus?: boolean } = {}) {
+  const draft = getDraftByKey(draftKey);
+  if (!draft) return false;
+
+  const reportRange = getReportRangePayload();
+  if (!reportRange) {
+    ElMessage.warning('请选择有效的提交时间段');
+    return false;
+  }
+
+  draft.generateStatus = 'generating';
+  draft.generateMessage = '';
+  draft.publishStatus = 'idle';
+  draft.publishMessage = '';
+  if (options.updateStatus !== false) status.value = `正在生成 ${draft.repo.name} 的日报`;
+
+  try {
+    const result = await window.api.generateReport({
+      repoPaths: [draft.repo.path],
+      date: form.date,
+      ...reportRange,
+      reporterName: config.reporterName,
+      aiProfileId: config.activeAiProfileId,
+    });
+
+    const latestDraft = getDraftByKey(draftKey);
+    if (!latestDraft) return false;
+    latestDraft.lastReportResult = result;
+    latestDraft.reportId = result.historyId ?? null;
+    latestDraft.report = result.report;
+    latestDraft.generateStatus = 'success';
+    latestDraft.generateMessage = '';
+    latestDraft.dirty = false;
+    if (options.updateStatus !== false) status.value = `${latestDraft.repo.name} 已生成 ${result.commits.length} 条提交记录`;
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '生成失败';
+    const latestDraft = getDraftByKey(draftKey);
+    if (latestDraft) {
+      latestDraft.generateStatus = 'failed';
+      latestDraft.generateMessage = message;
+    }
+    if (options.updateStatus !== false) status.value = `${draft.repo.name} 生成失败：${message}`;
+    return false;
+  }
+}
+
+async function handleGenerateCurrent() {
+  const draft = activeDraft.value;
+  if (!draft || !validateGenerationReady()) return;
+
+  loading.value = true;
+  const draftKey = draft.key;
+  try {
+    await persistConfigSnapshot();
+    const success = await generateDraft(draftKey);
+    await refreshLocalData();
+    const latestDraft = getDraftByKey(draftKey);
+    if (success) {
+      activeDraftKey.value = draftKey;
+      ElMessage.success(`${latestDraft?.repo.name ?? draft.repo.name} 日报已生成`);
+      if (!latestDraft?.lastReportResult?.commits.length) ElMessage.warning('当前项目未匹配到可用于生成日报的提交记录');
+    } else {
+      ElMessage.error(latestDraft?.generateMessage || '生成失败');
+    }
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function handleGenerateAll() {
+  if (!validateGenerationReady()) return;
+  if (!projectDrafts.value.length) {
+    ElMessage.warning('请至少选择一个项目');
+    return;
+  }
+
+  loading.value = true;
+  let successCount = 0;
+  let failedCount = 0;
+  let firstSuccessfulDraftKey = '';
+  try {
+    await persistConfigSnapshot();
+    const draftKeys = projectDrafts.value.map((draft) => draft.key);
+    status.value = `正在并发生成 ${draftKeys.length} 个项目日报`;
+    const results = await Promise.allSettled(draftKeys.map((draftKey) => generateDraft(draftKey, { updateStatus: false })));
+    for (let index = 0; index < results.length; index += 1) {
+      const result = results[index];
+      const success = result.status === 'fulfilled' && result.value;
+      if (success) {
+        successCount += 1;
+        if (!firstSuccessfulDraftKey) firstSuccessfulDraftKey = draftKeys[index];
+      } else {
+        failedCount += 1;
+      }
+    }
+    await refreshLocalData();
+    if (!activeDraft.value?.report.trim() && firstSuccessfulDraftKey) {
+      activeDraftKey.value = firstSuccessfulDraftKey;
+    }
+    if (failedCount) {
+      status.value = `已生成 ${successCount} 个项目，${failedCount} 个项目失败`;
+      ElMessage.warning(`已生成 ${successCount} 个项目，${failedCount} 个项目失败`);
+    } else {
+      status.value = `已生成 ${successCount} 个项目日报`;
+      ElMessage.success(`已生成 ${successCount} 个项目日报`);
+    }
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function saveDraft(draft: ProjectReportDraft, options: { silent?: boolean; skipRefresh?: boolean } = {}) {
+  const content = draft.report.trim();
+  if (!content) {
+    if (!options.silent) ElMessage.warning('当前没有可保存的日报内容');
+    return null;
+  }
+
+  const result = draft.lastReportResult;
+  const record = await window.api.saveDailyReport({
+    id: draft.reportId ?? undefined,
+    date: form.date,
+    reporterName: config.reporterName,
+    repoNames: result?.repos.map((item) => item.name) ?? [draft.repo.name],
+    repoPaths: result?.repos.map((item) => item.path) ?? [draft.repo.path],
+    report: content,
+    status: result?.commits.length ? 'success' : 'draft',
+    commitsCount: result?.commits.length ?? 0,
+    filesCount: countResultFiles(result),
+    generatedAt: result?.generatedAt,
+    timeRange: getCurrentReportTimeRange(draft),
+    rawInput: result?.rawInput,
+  });
+
+  draft.reportId = record.id;
+  draft.dirty = false;
+  if (!options.skipRefresh) await refreshLocalData();
+  if (!options.silent) ElMessage.success(`${draft.repo.name} 日报已保存`);
+  return record;
 }
 
 async function handleSaveCurrentReport() {
-  if (!hasReport.value) {
-    ElMessage.warning('当前没有可保存的日报内容');
+  const draft = activeDraft.value;
+  if (!draft) return;
+  try {
+    await saveDraft(draft);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '保存日报失败');
+  }
+}
+
+async function handleSaveAllReports() {
+  const dirtyDrafts = projectDrafts.value.filter((draft) => draft.dirty && draft.report.trim());
+  if (!dirtyDrafts.length) {
+    ElMessage.info('没有需要保存的修改');
     return;
   }
-  await saveCurrentReport(report.value);
+
+  try {
+    for (const draft of dirtyDrafts) {
+      await saveDraft(draft, { silent: true, skipRefresh: true });
+    }
+    await refreshLocalData();
+    ElMessage.success(`已保存 ${dirtyDrafts.length} 个项目的修改`);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '保存全部修改失败');
+  }
 }
 
 async function copyReport() {
-  if (!report.value.trim()) {
+  const draft = activeDraft.value;
+  if (!draft?.report.trim()) {
     ElMessage.warning('当前没有可复制的日报内容');
     return;
   }
-  await navigator.clipboard.writeText(report.value);
-  ElMessage.success('日报内容已复制');
+  await navigator.clipboard.writeText(draft.report);
+  ElMessage.success(`${draft.repo.name} 日报内容已复制`);
 }
 
 function exportMarkdown() {
-  if (!report.value.trim()) {
+  const draft = activeDraft.value;
+  if (!draft?.report.trim()) {
     ElMessage.warning('当前没有可导出的日报内容');
     return;
   }
-  const blob = new Blob([report.value], { type: 'text/markdown;charset=utf-8' });
+  const blob = new Blob([draft.report], { type: 'text/markdown;charset=utf-8' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  link.download = `研发日报-${form.date}.md`;
+  link.download = `研发日报-${draft.repo.name}-${form.date}.md`;
   link.click();
   URL.revokeObjectURL(link.href);
   ElMessage.success('Markdown 已导出');
 }
 
+function updateDraftReport(key: string, value: string) {
+  const draft = projectDrafts.value.find((item) => item.key === key);
+  if (!draft) return;
+  draft.report = value;
+  draft.dirty = true;
+  if (draft.publishStatus === 'success') {
+    draft.publishStatus = 'idle';
+    draft.publishMessage = '内容已修改，需要重新发布';
+  }
+}
+
+function handleUpdateActiveDraftKey(value: string) {
+  activeDraftKey.value = value;
+}
+
+function handleUpdateDraftProject(key: string, optionId: string) {
+  const draft = projectDrafts.value.find((item) => item.key === key);
+  if (!draft) return;
+  draft.projectOptionId = optionId;
+  draft.workHours = getProjectWorkHours(optionId);
+  draft.publishStatus = 'idle';
+  draft.publishMessage = '';
+}
+
+function handleUpdateDraftHours(key: string, value: number | undefined) {
+  const draft = projectDrafts.value.find((item) => item.key === key);
+  if (!draft) return;
+  const hours = normalizeWorkHours(value, draft.workHours);
+  draft.workHours = hours;
+  if (draft.projectOptionId) {
+    config.feishuForm.projectWorkHours = {
+      ...normalizeProjectWorkHours(config.feishuForm.projectWorkHours),
+      [draft.projectOptionId]: hours,
+    };
+  }
+}
+
+function handleCommitDraftHours(key: string, value: number | undefined) {
+  handleUpdateDraftHours(key, value);
+  void persistConfigSnapshot().catch((error: unknown) => {
+    ElMessage.error(error instanceof Error ? error.message : '保存项目工时失败');
+  });
+}
+
+function buildDraftFeishuConfig(draft: ProjectReportDraft) {
+  const projectName = projectOptions.value.find((item) => item.id === draft.projectOptionId)?.name ?? '';
+  return {
+    ...config.feishuForm,
+    projectOptionId: draft.projectOptionId,
+    projectName,
+    defaultWorkHours: normalizeWorkHours(draft.workHours),
+    projectWorkHours: {
+      ...normalizeProjectWorkHours(config.feishuForm.projectWorkHours),
+      [draft.projectOptionId]: normalizeWorkHours(draft.workHours),
+    },
+  };
+}
+
+async function publishDraft(draft: ProjectReportDraft, options: { persistBeforePublish?: boolean } = {}) {
+  const content = draft.report.trim();
+  if (!content) {
+    draft.publishStatus = 'failed';
+    draft.publishMessage = '请先生成日报';
+    return false;
+  }
+  if (!draft.projectOptionId.trim()) {
+    draft.publishStatus = 'failed';
+    draft.publishMessage = '请选择飞书发布目标';
+    return false;
+  }
+
+  draft.publishStatus = 'publishing';
+  draft.publishMessage = '正在同步到飞书';
+  try {
+    if (options.persistBeforePublish !== false) await persistConfigSnapshot();
+    if (draft.dirty || !draft.reportId) {
+      await saveDraft(draft, { silent: true, skipRefresh: true });
+    }
+    await window.api.syncFeishuDaily({
+      config: buildDraftFeishuConfig(draft),
+      report: content,
+      date: form.date,
+      reporterName: config.reporterName,
+      workHours: normalizeWorkHours(draft.workHours),
+      reportId: draft.reportId ?? undefined,
+      triggerType: 'manual',
+    });
+    draft.publishStatus = 'success';
+    draft.publishMessage = '已同步到飞书日报表';
+    return true;
+  } catch (error) {
+    draft.publishStatus = 'failed';
+    draft.publishMessage = error instanceof Error ? error.message : '同步飞书失败';
+    return false;
+  }
+}
+
 async function publishActiveReport() {
-  if (!hasReport.value) {
+  const draft = activeDraft.value;
+  if (!draft) return;
+  if (!draft.report.trim()) {
     ElMessage.warning('请先生成日报');
     return;
   }
-  if (!config.feishuForm.projectOptionId) {
+  if (!draft.projectOptionId.trim()) {
     ElMessage.warning('请选择飞书发布目标');
     return;
   }
-  await push(report.value);
+
+  pushing.value = true;
+  try {
+    const success = await publishDraft(draft);
+    await refreshLocalData();
+    if (success) ElMessage.success(`${draft.repo.name} 已同步到飞书日报表`);
+    else ElMessage.error(draft.publishMessage || '同步飞书失败');
+  } finally {
+    pushing.value = false;
+  }
+}
+
+async function publishAllReports() {
+  const targets = publishableDrafts.value;
+  if (!targets.length) {
+    ElMessage.warning('没有可发布的项目，请先生成日报并选择飞书目标');
+    return;
+  }
+
+  pushing.value = true;
+  let successCount = 0;
+  let failedCount = 0;
+  try {
+    await persistConfigSnapshot();
+    for (const draft of targets) {
+      const success = await publishDraft(draft, { persistBeforePublish: false });
+      if (success) successCount += 1;
+      else failedCount += 1;
+    }
+    await refreshLocalData();
+    if (failedCount) {
+      ElMessage.warning(`已发布 ${successCount} 个项目，${failedCount} 个项目失败，可切换到失败项目重试`);
+    } else {
+      ElMessage.success(`已发布 ${successCount} 个项目到飞书`);
+    }
+  } finally {
+    pushing.value = false;
+  }
 }
 
 function getRecordStatus(item: DailyReportRecord) {
@@ -371,6 +726,30 @@ async function handleOpenFeishuSubmissionRecords() {
   }
 
   await openFeishuSubmissionRecords(form.date);
+}
+
+async function handleToggleRepo(path: string) {
+  if (!selectedRepoPaths.value.includes(path)) {
+    toggleRepo(path);
+    return;
+  }
+
+  const draft = projectDrafts.value.find((item) => item.key === path);
+  if (draft?.report.trim() || draft?.dirty) {
+    try {
+      await ElMessageBox.confirm(`取消选择「${draft.repo.name}」会移除当前页面内已生成或编辑的日报内容，确认继续？`, '取消选择项目', {
+        confirmButtonText: '取消选择',
+        cancelButtonText: '保留项目',
+        type: 'warning',
+      });
+    } catch (error) {
+      if (error === 'cancel' || error === 'close') return;
+      ElMessage.error(error instanceof Error ? error.message : '操作已取消');
+      return;
+    }
+  }
+
+  toggleRepo(path);
 }
 
 async function confirmRemoveRepo(item: RepoInfo) {
@@ -390,54 +769,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
 
 <template>
   <div class="view-stack report-generate-view">
-    <div v-if="loading" class="generation-loading-overlay" aria-live="polite">
-      <div class="generation-loading-shell">
-        <div class="generation-loading-copy">
-          <span class="loading-eyebrow">
-            <FileText :size="16" />
-            生成中
-          </span>
-          <h2>AI 正在整理研发日报</h2>
-          <p>{{ loadingTip }}</p>
-          <div class="loading-progress">
-            <i />
-          </div>
-          <div class="loading-pipeline" aria-hidden="true">
-            <span>Collect</span>
-            <span>Analyze</span>
-            <span>Compose</span>
-          </div>
-        </div>
-
-        <div class="loading-game-panel">
-          <div class="loading-game-head">
-            <div>
-              <strong>等待小游戏</strong>
-              <span>命中脉冲节点，给生成过程加点手感</span>
-            </div>
-            <div class="loading-game-score">
-              <Gamepad2 :size="16" />
-              {{ gameScore }}
-            </div>
-          </div>
-          <div class="loading-game-board">
-            <span class="loading-game-chip chip-a">commit</span>
-            <span class="loading-game-chip chip-b">diff</span>
-            <span class="loading-game-chip chip-c">report</span>
-            <button
-              class="loading-game-target"
-              type="button"
-              :style="gameTargetStyle"
-              aria-label="收集灵感点"
-              @click="hitGameTarget"
-            >
-              <Sparkles :size="22" />
-            </button>
-          </div>
-          <p>连续命中 {{ gameStreak }} 次，生成完成后会自动收起。</p>
-        </div>
-      </div>
-    </div>
+    <ReportGenerationLoadingOverlay :visible="loading" />
 
     <PageHeader title="日报生成" subtitle="基于 Git 提交记录生成研发日报">
       <template #actions>
@@ -449,332 +781,80 @@ async function confirmRemoveRepo(item: RepoInfo) {
 
     <div class="content-grid has-right-panel">
       <div class="view-stack">
-        <section class="surface-card step-card report-setup-card">
-          <div class="step-title with-action">
-            <div>
-              <span>1</span>
-              <strong>选择生成范围</strong>
-            </div>
-            <StatusBadge :status="setupStatus" :label="setupStatusLabel" />
-          </div>
+        <ReportSetupCard
+          :active-ai-profile-id="config.activeAiProfileId"
+          :form="form"
+          :setup-status="setupStatus"
+          :setup-status-label="setupStatusLabel"
+          :selected-repo-summary="selectedRepoSummary"
+          :repo-context-text="repoContextText"
+          :report-range-label="reportRangeLabel"
+          :readiness-progress-label="readinessProgressLabel"
+          :readiness-detail="readinessDetail"
+          :selected-repos="selectedRepos"
+          :selected-repo-paths="selectedRepoPaths"
+          :sorted-repos="sortedRepos"
+          :ai-profile-options="aiProfileOptions"
+          :date-shortcut="dateShortcut"
+          :is-repo-pinned="isRepoPinned"
+          @choose-workspace="chooseWorkspace"
+          @select-ai-profile="selectAiProfile"
+          @report-date-change="handleReportDateChange"
+          @start-date-time-change="handleStartDateTimeChange"
+          @end-date-time-change="handleEndDateTimeChange"
+          @set-date-shortcut="setDateShortcut"
+          @toggle-repo="handleToggleRepo"
+          @toggle-repo-pin="toggleRepoPin"
+          @remove-repo="confirmRemoveRepo"
+        />
 
-          <div class="report-context-bar">
-            <div class="report-context-item">
-              <FolderGit2 :size="16" />
-              <span>
-                <strong>{{ selectedRepoSummary }}</strong>
-                <small>{{ repoContextText }}</small>
-              </span>
-            </div>
-            <div class="report-context-item">
-              <Clock3 :size="16" />
-              <span>
-                <strong>提交范围</strong>
-                <small>{{ reportRangeLabel }}</small>
-              </span>
-            </div>
-            <div class="report-context-item">
-              <ListChecks :size="16" />
-              <span>
-                <strong>{{ readinessProgressLabel }}</strong>
-                <small>{{ readinessDetail }}</small>
-              </span>
-            </div>
-          </div>
-
-          <div class="field-grid">
-            <div class="field field-span-3 repo-picker-field">
-              <label>选择仓库</label>
-              <el-popover placement="bottom-start" trigger="click" :width="620" popper-class="repo-picker-popper">
-                <template #reference>
-                  <el-button class="repo-picker-trigger">
-                    <div class="repo-picker-trigger-copy">
-                      <strong>{{ selectedRepoSummary }}</strong>
-                      <span>{{ selectedRepos.length ? selectedRepos.map((repo) => repo.name).join('、') : '支持多仓库汇总生成研发日报' }}</span>
-                    </div>
-                    <small>{{ selectedRepoPaths.length }}/{{ sortedRepos.length }}</small>
-                  </el-button>
-                </template>
-
-                <div class="repo-picker-panel">
-                  <div class="repo-picker-head">
-                    <div>
-                      <strong>仓库选择</strong>
-                      <span>当前日报会基于已选仓库的提交记录生成</span>
-                    </div>
-                    <el-button :icon="Plus" type="primary" plain @click="chooseWorkspace">添加仓库</el-button>
-                  </div>
-
-                  <el-input v-model="repoKeyword" :prefix-icon="Search" clearable placeholder="搜索仓库名称或路径" />
-
-                  <div class="repo-picker-list">
-                    <el-button v-if="!sortedRepos.length" class="repo-picker-empty" plain @click="chooseWorkspace">
-                      暂无仓库，点击选择工作目录
-                    </el-button>
-
-                    <div
-                      v-for="repo in filteredRepos"
-                      :key="repo.path"
-                      class="repo-picker-item"
-                      :class="{ active: selectedRepoPaths.includes(repo.path), pinned: isRepoPinned(repo.path) }"
-                    >
-                      <el-button class="repo-picker-main" @click="toggleRepo(repo.path)">
-                        <span class="repo-picker-check">
-                          <CheckCircle2 v-if="selectedRepoPaths.includes(repo.path)" :size="16" />
-                        </span>
-                        <span class="repo-picker-copy">
-                          <strong>{{ repo.name }}</strong>
-                          <small>{{ repo.path }}</small>
-                        </span>
-                      </el-button>
-
-                      <el-tooltip :content="isRepoPinned(repo.path) ? '取消置顶' : '置顶仓库'" placement="top">
-                        <el-button
-                          class="repo-picker-icon"
-                          :class="{ active: isRepoPinned(repo.path) }"
-                          :aria-label="isRepoPinned(repo.path) ? `取消置顶 ${repo.name}` : `置顶 ${repo.name}`"
-                          :aria-pressed="isRepoPinned(repo.path)"
-                          plain
-                          @click.stop="toggleRepoPin(repo.path)"
-                        >
-                          <Pin :size="15" />
-                        </el-button>
-                      </el-tooltip>
-
-                      <el-tooltip content="从列表移除" placement="top">
-                        <el-button class="repo-picker-icon danger" :aria-label="`移除 ${repo.name}`" plain @click.stop="confirmRemoveRepo(repo)">
-                          <Trash2 :size="15" />
-                        </el-button>
-                      </el-tooltip>
-                    </div>
-
-                    <div v-if="sortedRepos.length && !filteredRepos.length" class="repo-picker-empty">
-                      未找到匹配仓库
-                    </div>
-                  </div>
-                </div>
-              </el-popover>
-            </div>
-
-            <div class="field field-span-3">
-              <label>AI 配置</label>
-              <el-select v-model="config.activeAiProfileId" placeholder="选择 AI 配置" @change="selectAiProfile">
-                <el-option v-for="item in aiProfileOptions" :key="item.value" :label="item.label" :value="item.value">
-                  <div class="select-option-row">
-                    <span>{{ item.label }}</span>
-                    <small>{{ item.model || item.baseUrl || '未配置模型' }}</small>
-                  </div>
-                </el-option>
-              </el-select>
-            </div>
-
-            <div class="field">
-              <label>日报日期</label>
-              <el-date-picker v-model="form.date" type="date" value-format="YYYY-MM-DD" :clearable="false" @change="handleReportDateChange" />
-            </div>
-            <div class="field">
-              <label>提交开始</label>
-              <el-date-picker
-                v-model="form.startDateTime"
-                type="datetime"
-                format="YYYY-MM-DD HH:mm"
-                value-format="YYYY-MM-DDTHH:mm:ss"
-                :clearable="false"
-                placeholder="开始时间"
-                @change="handleRangeChange"
-              />
-            </div>
-            <div class="field">
-              <label>提交结束</label>
-              <el-date-picker
-                v-model="form.endDateTime"
-                type="datetime"
-                format="YYYY-MM-DD HH:mm"
-                value-format="YYYY-MM-DDTHH:mm:ss"
-                :clearable="false"
-                placeholder="结束时间"
-                @change="handleRangeChange"
-              />
-            </div>
-          </div>
-
-          <div class="segmented-actions">
-            <el-button class="segmented-action" :class="{ active: dateShortcut === 'today' }" plain @click="setDateShortcut('today')">
-              今天
-            </el-button>
-            <el-button class="segmented-action" :class="{ active: dateShortcut === 'yesterday' }" plain @click="setDateShortcut('yesterday')">
-              昨天
-            </el-button>
-            <el-button class="segmented-action" :class="{ active: dateShortcut === 'rolling' }" plain @click="setDateShortcut('rolling')">
-              昨日 9 点至现在
-            </el-button>
-            <el-button class="segmented-action" :class="{ active: dateShortcut === 'custom' }" plain @click="setDateShortcut('custom')">
-              自定义范围
-            </el-button>
-          </div>
-        </section>
-
-        <section class="surface-card step-card report-editor-card">
-          <div class="step-title">
-            <span>2</span>
-            <strong>生成与编辑</strong>
-          </div>
-
-          <div class="generation-toolbar">
-            <div class="generation-toolbar-copy">
-              <strong>{{ setupReady ? '准备就绪，可以生成' : '生成条件未完成' }}</strong>
-              <span>{{ readinessDetail }}</span>
-            </div>
-            <el-button class="generate-cta" :icon="FileText" type="primary" size="large" :loading="loading" @click="handleGenerate">
-              {{ generateButtonLabel }}
-            </el-button>
-          </div>
-
-          <div class="generation-check-strip">
-            <el-button
-              v-for="item in generationChecks"
-              :key="item.key"
-              class="generation-check-chip"
-              :class="{ ready: item.ok, warning: item.required && !item.ok, optional: !item.required && !item.ok }"
-              :disabled="!item.action"
-              plain
-              @click="item.action && emit('navigate', item.action)"
-            >
-              <CheckCircle2 v-if="item.ok" :size="16" />
-              <CircleAlert v-else :size="16" />
-              <span class="generation-check-copy">
-                <strong>{{ item.label }}</strong>
-                <small>{{ item.ok ? '已就绪' : item.detail }}</small>
-              </span>
-            </el-button>
-          </div>
-
-          <div v-if="lastReportResult" class="metric-grid">
-            <div v-for="item in metrics" :key="item.label" class="metric-card">
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
-            </div>
-          </div>
-
-          <article class="report-preview" :class="{ 'is-empty': !hasReport }">
-            <div class="report-preview-head">
-              <div>
-                <h2>{{ reportTitle }}</h2>
-                <span>{{ reportSubtitle }}</span>
-              </div>
-              <small>生成时间：{{ generatedAtText }}</small>
-            </div>
-
-            <div v-if="!hasReport" class="report-empty-panel">
-              <FileText :size="30" />
-              <strong>等待生成日报正文</strong>
-              <span>选择仓库和时间范围后，点击“开始生成日报”，生成结果会在这里进入可编辑状态。</span>
-            </div>
-
-            <el-input
-              v-else
-              v-model="report"
-              class="editable-report"
-              type="textarea"
-              :autosize="{ minRows: 16, maxRows: 28 }"
-              resize="vertical"
-              placeholder="生成后的研发日报会显示在这里，可直接修改后保存"
-            />
-          </article>
-
-          <div class="button-row end">
-            <el-button :icon="Save" :disabled="!hasReport" plain @click="handleSaveCurrentReport">保存修改</el-button>
-            <el-button :icon="ClipboardCopy" :disabled="!hasReport" plain @click="copyReport">复制内容</el-button>
-            <el-button :icon="Download" :disabled="!hasReport" type="primary" plain @click="exportMarkdown">导出 Markdown</el-button>
-          </div>
-          <p v-if="status" class="muted-text">{{ status }}</p>
-        </section>
+        <ReportEditorCard
+          :drafts="editorDrafts"
+          :active-draft-key="activeDraftKey"
+          :status="status"
+          :setup-ready="setupReady"
+          :readiness-detail="readinessDetail"
+          :generate-button-label="generateButtonLabel"
+          :loading="loading"
+          :generation-checks="generationChecks"
+          :metrics="activeMetrics"
+          :active-has-report="activeHasReport"
+          :active-has-last-report-result="activeHasLastReportResult"
+          :can-save-all="hasAnyDirtyReport"
+          @update:active-draft-key="handleUpdateActiveDraftKey"
+          @update-draft-report="updateDraftReport"
+          @generate-all="handleGenerateAll"
+          @generate-current="handleGenerateCurrent"
+          @save-current="handleSaveCurrentReport"
+          @save-all="handleSaveAllReports"
+          @copy-current="copyReport"
+          @export-current="exportMarkdown"
+          @navigate="emit('navigate', $event)"
+        />
       </div>
 
-      <aside class="view-stack">
-        <section class="surface-card publish-panel">
-          <div class="step-title with-action">
-            <div>
-              <span>3</span>
-              <strong>发布与同步</strong>
-            </div>
-            <StatusBadge :status="canPublishReport ? 'success' : 'pending'" :label="canPublishReport ? '可发布' : '待准备'" />
-          </div>
-
-          <div class="publish-summary-card" :class="{ ready: canPublishReport }">
-            <Send :size="18" />
-            <div>
-              <strong>{{ publishStatusTitle }}</strong>
-              <span>{{ publishStatusDetail }}</span>
-            </div>
-          </div>
-
-          <div class="publish-hint">
-            <span>自动同步、字段映射与定时配置统一在日报配置页维护。</span>
-            <el-button link type="primary" @click="emit('navigate', 'config')">去配置</el-button>
-          </div>
-          <div class="field">
-            <label>选择目标</label>
-            <el-select v-model="config.feishuForm.projectOptionId" placeholder="请先获取飞书项目选项" @change="selectFeishuProject">
-              <el-option v-for="item in projectOptions" :key="item.id" :label="item.name" :value="item.id" />
-            </el-select>
-          </div>
-          <div class="field">
-            <label>工作时长</label>
-            <div class="hour-field">
-              <el-input-number
-                v-model="config.feishuForm.defaultWorkHours"
-                :min="0.5"
-                :max="24"
-                :step="0.5"
-                :precision="1"
-                controls-position="right"
-                @change="updateProjectWorkHours"
-              />
-              <span>小时</span>
-            </div>
-            <div class="hour-presets">
-              <el-button
-                v-for="hours in workHourPresets"
-                :key="hours"
-                class="hour-preset-btn"
-                :class="{ active: Number(config.feishuForm.defaultWorkHours) === hours }"
-                plain
-                size="small"
-                @click="updateProjectWorkHours(hours)"
-              >
-                {{ hours }}h
-              </el-button>
-            </div>
-          </div>
-          <el-button :icon="Send" type="primary" :loading="pushing" :disabled="!canPublishReport" @click="publishActiveReport">
-            发布研发日报到飞书
-          </el-button>
-          <el-button class="submission-record-btn" :icon="ExternalLink" plain :loading="feishuLoading" @click="handleOpenFeishuSubmissionRecords">
-            查看日报提交记录
-          </el-button>
-        </section>
-
-        <section class="surface-card record-panel">
-          <div class="panel-head">
-            <div>
-              <h3>生成记录</h3>
-              <small>最近 5 条</small>
-            </div>
-            <el-button link type="primary" @click="emit('navigate', 'history')">查看全部</el-button>
-          </div>
-          <div class="record-list">
-            <div v-if="!generationRecords.length" class="empty-state">暂无生成记录</div>
-            <div v-for="item in generationRecords" :key="item.id" class="record-item">
-              <StatusBadge :status="getRecordStatus(item).status" :label="getRecordStatus(item).label" />
-              <div>
-                <strong>{{ item.date }} 日报</strong>
-                <span>{{ item.repoNames.join('、') || '未记录项目' }} · {{ formatDateTime(item.generatedAt) }}</span>
-              </div>
-            </div>
-          </div>
-        </section>
-      </aside>
+      <ReportPublishSidebar
+        :active-draft="activePublishDraft"
+        :drafts="publishDraftItems"
+        :project-options="projectOptions"
+        :generation-records="generationRecords"
+        :can-publish-active="canPublishActive"
+        :can-publish-all="canPublishAll"
+        :publishable-count="publishableDrafts.length"
+        :total-draft-count="projectDrafts.length"
+        :pushing="pushing"
+        :feishu-loading="feishuLoading"
+        :work-hour-presets="workHourPresets"
+        :format-date-time="formatDateTime"
+        :get-record-status="getRecordStatus"
+        @navigate="emit('navigate', $event)"
+        @update-draft-project="handleUpdateDraftProject"
+        @update-draft-hours="handleUpdateDraftHours"
+        @commit-draft-hours="handleCommitDraftHours"
+        @publish-current="publishActiveReport"
+        @publish-all="publishAllReports"
+        @open-submission-records="handleOpenFeishuSubmissionRecords"
+      />
     </div>
   </div>
 </template>

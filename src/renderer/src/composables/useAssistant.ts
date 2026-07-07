@@ -29,10 +29,29 @@ import {
   normalizeOptions,
   normalizeProjectWorkHours,
   normalizeRepoSelections,
+  normalizeWorkHours,
   normalizeWorkspaceDirs,
 } from './assistant/normalizers';
 import { createRepoState } from './assistant/repoState';
 import { createReportState } from './assistant/reportState';
+
+export type DraftGenerateStatus = 'idle' | 'generating' | 'success' | 'failed';
+export type DraftPublishStatus = 'idle' | 'publishing' | 'success' | 'failed';
+
+export interface ProjectReportDraft {
+  key: string;
+  repo: RepoInfo;
+  report: string;
+  reportId: number | null;
+  lastReportResult: ReportResult | null;
+  projectOptionId: string;
+  workHours: number;
+  generateStatus: DraftGenerateStatus;
+  generateMessage: string;
+  publishStatus: DraftPublishStatus;
+  publishMessage: string;
+  dirty: boolean;
+}
 
 function createAssistant() {
   const today = formatLocalDate(new Date());
@@ -52,6 +71,8 @@ function createAssistant() {
   const report = ref('');
   const currentReportId = ref<number | null>(null);
   const lastReportResult = ref<ReportResult | null>(null);
+  const activeDraftKey = ref('');
+  const projectDrafts = ref<ProjectReportDraft[]>([]);
   const dailyReports = ref<DailyReportRecord[]>([]);
   const syncLogs = ref<SyncLogRecord[]>([]);
   const errorLogs = ref<ErrorLogRecord[]>([]);
@@ -87,6 +108,67 @@ function createAssistant() {
     startDateTime: buildDateTime(today, '00:00'),
     endDateTime: buildDateTime(tomorrow, '00:00'),
   });
+
+  function getProjectWorkHours(optionId: string) {
+    const projectHours = normalizeProjectWorkHours(config.feishuForm.projectWorkHours);
+    return normalizeWorkHours(optionId ? projectHours[optionId] : undefined, config.feishuForm.defaultWorkHours);
+  }
+
+  function createProjectReportDraft(repo: RepoInfo, initial: Partial<ProjectReportDraft> = {}): ProjectReportDraft {
+    const projectOptionId = initial.projectOptionId ?? config.feishuForm.projectOptionId ?? '';
+    return {
+      key: repo.path,
+      repo,
+      report: '',
+      reportId: null,
+      lastReportResult: null,
+      projectOptionId,
+      workHours: getProjectWorkHours(projectOptionId),
+      generateStatus: 'idle',
+      generateMessage: '',
+      publishStatus: 'idle',
+      publishMessage: '',
+      dirty: false,
+      ...initial,
+    };
+  }
+
+  function loadDailyReportDraft(record: DailyReportRecord) {
+    const recordRepos = record.repoPaths.map((path, index) => {
+      const existingRepo = repos.value.find((repo) => repo.path === path);
+      return existingRepo ?? { path, name: record.repoNames[index] || path };
+    });
+    const fallbackRepos = recordRepos.length ? recordRepos : [{ path: `history-report-${record.id}`, name: record.repoNames[0] || `历史日报 ${record.id}` }];
+    const knownPaths = new Set(repos.value.map((repo) => repo.path));
+    const missingRepos = fallbackRepos.filter((repo) => !knownPaths.has(repo.path));
+    if (missingRepos.length) {
+      repos.value = [...repos.value, ...missingRepos].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+    }
+
+    selectedRepoPaths.value = normalizeRepoSelections([...selectedRepoPaths.value, ...fallbackRepos.map((repo) => repo.path)]);
+    const previousDrafts = new Map(projectDrafts.value.map((draft) => [draft.key, draft]));
+    const loadedDrafts = fallbackRepos.map((repo) => {
+      const previous = previousDrafts.get(repo.path);
+      const projectOptionId = previous?.projectOptionId || config.feishuForm.projectOptionId || '';
+      return createProjectReportDraft(repo, {
+        ...previous,
+        repo,
+        report: record.report,
+        reportId: record.id,
+        lastReportResult: null,
+        projectOptionId,
+        workHours: previous?.workHours ?? getProjectWorkHours(projectOptionId),
+        generateStatus: record.status === 'failed' ? 'failed' : 'success',
+        generateMessage: '',
+        publishStatus: 'idle',
+        publishMessage: '',
+        dirty: false,
+      });
+    });
+    const loadedKeys = new Set(loadedDrafts.map((draft) => draft.key));
+    projectDrafts.value = [...projectDrafts.value.filter((draft) => !loadedKeys.has(draft.key)), ...loadedDrafts];
+    activeDraftKey.value = loadedDrafts[0]?.key ?? activeDraftKey.value;
+  }
 
   let repoState: ReturnType<typeof createRepoState>;
   let autoSyncStateApi: ReturnType<typeof createAutoSyncState>;
@@ -234,7 +316,7 @@ function createAssistant() {
     removeAutoSyncListener = window.api.onAutoSyncUpdated(autoSyncStateApi.applyAutoSyncState);
     removeFeishuAuthListener = window.api.onFeishuAuthUpdated((snapshot) => {
       void feishuState.applyFeishuAuthSnapshot(snapshot).catch((error: unknown) => {
-        ElMessage.error(error instanceof Error ? error.message : '??????????????????');
+        ElMessage.error(error instanceof Error ? error.message : '同步飞书登录态失败');
       });
     });
     await loadConfig();
@@ -263,6 +345,8 @@ function createAssistant() {
     report,
     currentReportId,
     lastReportResult,
+    activeDraftKey,
+    projectDrafts,
     dailyReports,
     syncLogs,
     errorLogs,
@@ -283,6 +367,7 @@ function createAssistant() {
     autoSyncStatusType: autoSyncStateApi.autoSyncStatusType,
     autoSyncStatusLabel: autoSyncStateApi.autoSyncStatusLabel,
     isConfigDirty: configState.isConfigDirty,
+    persistConfig: configState.persistConfig,
     applyFullDayReportRange: reportState.applyFullDayReportRange,
     applyReportTimeRange: reportState.applyReportTimeRange,
     formatDateTime: reportState.formatDateTime,
@@ -310,6 +395,8 @@ function createAssistant() {
     refreshDailyReports: localDataState.refreshDailyReports,
     refreshLocalData: localDataState.refreshLocalData,
     saveCurrentReport: reportState.saveCurrentReport,
+    createProjectReportDraft,
+    loadDailyReportDraft,
     toggleRepo: repoState.toggleRepo,
     isRepoPinned: repoState.isRepoPinned,
     toggleRepoPin: repoState.toggleRepoPin,
