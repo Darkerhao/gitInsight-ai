@@ -298,15 +298,48 @@ export interface AutoSyncValidationResult {
 
 export type JiaziFarmResourceType = 'water' | 'sunlight' | 'nutrient';
 
+/** 农场元信息（farm-wide，单行）：甲子周期 + 已解锁的作物档次与地块数 */
 export interface JiaziFarmState {
   cycleStartDate: string;
+  unlockedCropTier: number;
+  unlockedPlotCount: number;
+  updatedAt: string;
+}
+
+/** 作物等级树的一档；unlocked/canAfford 由后端按当前进度与甲币余额算出 */
+export interface JiaziFarmCropTier {
+  tier: number;
+  name: string;
+  growthToHarvest: number;
+  harvestReward: number;
+  unlockCost: number;
+  unlocked: boolean;
+  canAfford: boolean;
+}
+
+/** 单块地：种植的作物档次 + 资源/成长/收获进度 */
+export interface JiaziFarmPlot {
+  slot: number;
+  cropTier: number;
+  cropName: string;
   water: number;
   sunlight: number;
   nutrient: number;
   growth: number;
   level: number;
   totalHarvests: number;
+  growthToHarvest: number;
+  canHarvest: boolean;
+  harvestReward: number;
   updatedAt: string;
+}
+
+/** 下一块可解锁地块的定价信息 */
+export interface JiaziFarmPlotUnlock {
+  nextSlot: number;
+  cost: number;
+  canAfford: boolean;
+  maxed: boolean;
 }
 
 export interface JiaziFarmTask {
@@ -334,22 +367,48 @@ export interface JiaziFarmHarvestRecord {
 export interface JiaziFarmSnapshot {
   date: string;
   state: JiaziFarmState;
+  plots: JiaziFarmPlot[];
+  cropTiers: JiaziFarmCropTier[];
+  plotUnlock: JiaziFarmPlotUnlock;
   tasks: JiaziFarmTask[];
   harvestRecords: JiaziFarmHarvestRecord[];
   ganzhiName: string;
   cycleDay: number;
   seasonLabel: string;
-  cropName: string;
-  canHarvest: boolean;
+  /** 甲币余额（读钱包），供农场内商店判断买得起与否 */
+  coins: number;
+  /** 浇灌一次的花费与增益（前端展示定价用） */
+  waterPack: { cost: number; resourceAmount: number; growthAmount: number };
+  /** 一键催熟的每点成长单价 */
+  coinPerGrowth: number;
 }
 
 export interface JiaziFarmTaskPayload {
   date?: string;
+  plotSlot: number;
   taskKey: JiaziFarmTask['key'];
 }
 
 export interface JiaziFarmHarvestPayload {
   date?: string;
+  plotSlot: number;
+}
+
+export interface JiaziFarmWaterPayload {
+  date?: string;
+  plotSlot: number;
+  resourceType: JiaziFarmResourceType;
+}
+
+export interface JiaziFarmQuickRipenPayload {
+  date?: string;
+  plotSlot: number;
+}
+
+export interface JiaziFarmPlantPayload {
+  date?: string;
+  plotSlot: number;
+  cropTier: number;
 }
 
 export interface CheckinWallet {

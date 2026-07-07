@@ -86,3 +86,17 @@ No official API — it drives the Feishu daily-report **web form**: `feishu:logi
 - The preload file is resolved at runtime in `createMainWindow()` with a fallback (`../preload/index.js` then `../preload/preload.cjs`) because dev and production emit different preload filenames.
 - User-facing strings, prompts, error messages, and the generated report are all in Chinese — match that when touching UI, errors, or AI-prompt text.
 - Design/plan documents live in `docs/` (in Chinese); `task_plan.md`/`findings.md`/`progress.md` at the repo root are working scratch files, not documentation.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues for `Darkerhao/gitInsight-ai`; external PRs are not treated as a triage request surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The repo uses the default five-label triage vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repo uses a single-context domain docs layout: root `CONTEXT.md` plus `docs/adr/`. See `docs/agents/domain.md`.

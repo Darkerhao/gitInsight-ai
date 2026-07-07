@@ -114,6 +114,18 @@ export async function getDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_jiazi_farm_harvests_created_at ON jiazi_farm_harvests(created_at);
 
+    CREATE TABLE IF NOT EXISTS jiazi_farm_plots (
+      slot INTEGER PRIMARY KEY,
+      crop_tier INTEGER NOT NULL DEFAULT 1,
+      water INTEGER NOT NULL DEFAULT 0,
+      sunlight INTEGER NOT NULL DEFAULT 0,
+      nutrient INTEGER NOT NULL DEFAULT 0,
+      growth INTEGER NOT NULL DEFAULT 0,
+      level INTEGER NOT NULL DEFAULT 1,
+      total_harvests INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS checkin_wallet (
       id INTEGER PRIMARY KEY CHECK(id = 1),
       coins INTEGER NOT NULL DEFAULT 0,
@@ -134,6 +146,7 @@ export async function getDatabase() {
     CREATE INDEX IF NOT EXISTS idx_checkin_coin_transactions_created_at ON checkin_coin_transactions(created_at);
   `);
   ensureDailyReportTimeRangeColumns(sqlDatabase);
+  ensureJiaziFarmPlots(sqlDatabase);
   await persistDatabase();
   return sqlDatabase;
 }
@@ -162,6 +175,47 @@ export function ensureDailyReportTimeRangeColumns(db: import('sql.js').Database)
   if (!columns.has('start_datetime')) db.run('ALTER TABLE daily_reports ADD COLUMN start_datetime TEXT');
   if (!columns.has('end_datetime')) db.run('ALTER TABLE daily_reports ADD COLUMN end_datetime TEXT');
   if (!columns.has('time_range_label')) db.run('ALTER TABLE daily_reports ADD COLUMN time_range_label TEXT');
+}
+
+
+/**
+ * 农场多地块迁移：为 jiazi_farm_state 补充「已解锁作物档次/地块数」两列，
+ * 并把老用户的单行农场进度迁移进 jiazi_farm_plots 的 slot=1，保住已有成长/等级。
+ */
+export function ensureJiaziFarmPlots(db: import('sql.js').Database) {
+  const stateColumns = new Set(
+    (db.exec('PRAGMA table_info(jiazi_farm_state)')[0]?.values ?? []).map((row) => String(row[1])),
+  );
+  if (!stateColumns.has('unlocked_crop_tier')) {
+    db.run('ALTER TABLE jiazi_farm_state ADD COLUMN unlocked_crop_tier INTEGER NOT NULL DEFAULT 1');
+  }
+  if (!stateColumns.has('unlocked_plot_count')) {
+    db.run('ALTER TABLE jiazi_farm_state ADD COLUMN unlocked_plot_count INTEGER NOT NULL DEFAULT 1');
+  }
+
+  const plotCount = Number(db.exec('SELECT COUNT(*) AS count FROM jiazi_farm_plots')[0]?.values[0]?.[0]) || 0;
+  if (plotCount > 0) return;
+
+  const legacyRows = db.exec(
+    'SELECT water, sunlight, nutrient, growth, level, total_harvests, updated_at FROM jiazi_farm_state WHERE id = 1',
+  )[0]?.values[0];
+  if (!legacyRows) return;
+
+  const [water, sunlight, nutrient, growth, level, totalHarvests, updatedAt] = legacyRows;
+  db.run(
+    `INSERT INTO jiazi_farm_plots
+      (slot, crop_tier, water, sunlight, nutrient, growth, level, total_harvests, updated_at)
+     VALUES (1, 1, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      Number(water) || 0,
+      Number(sunlight) || 0,
+      Number(nutrient) || 0,
+      Number(growth) || 0,
+      Number(level) || 1,
+      Number(totalHarvests) || 0,
+      String(updatedAt || new Date().toISOString()),
+    ],
+  );
 }
 
 

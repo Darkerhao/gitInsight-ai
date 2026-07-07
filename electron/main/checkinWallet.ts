@@ -7,6 +7,7 @@ import type {
 } from '../../src/shared/types.js';
 import { getDatabase, persistDatabase } from './database.js';
 import { shiftDateString, toLocalDateString } from './dateUtils.js';
+import { sendToMainWindow } from './windows.js';
 
 const DAILY_CHECKIN_REWARD_MIN = 8888;
 const DAILY_CHECKIN_REWARD_MAX = 88888;
@@ -49,7 +50,7 @@ function buildSnapshot(wallet: CheckinWallet): CheckinWalletSnapshot {
 }
 
 async function insertCoinTransaction(payload: {
-  type: 'checkin' | 'spend' | 'import';
+  type: 'checkin' | 'spend' | 'import' | 'reward';
   amount: number;
   balanceAfter: number;
   reason: string;
@@ -63,6 +64,10 @@ async function insertCoinTransaction(payload: {
      VALUES (?, ?, ?, ?, ?, ?)`,
     [payload.type, payload.amount, payload.balanceAfter, payload.reason, payload.refKey ?? null, payload.createdAt],
   );
+}
+
+function broadcastWallet(snapshot: CheckinWalletSnapshot) {
+  sendToMainWindow('checkin-wallet:updated', snapshot);
 }
 
 export async function getOrCreateCheckinWallet(): Promise<CheckinWallet> {
@@ -129,7 +134,9 @@ export async function importCheckinWallet(payload: CheckinWalletImportPayload): 
     });
   }
   await persistDatabase();
-  return buildSnapshot(importedWallet);
+  const snapshot = buildSnapshot(importedWallet);
+  broadcastWallet(snapshot);
+  return snapshot;
 }
 
 export async function runDailyCheckin(): Promise<CheckinResult> {
@@ -164,7 +171,9 @@ export async function runDailyCheckin(): Promise<CheckinResult> {
     createdAt: now,
   });
   await persistDatabase();
-  return { ...buildSnapshot(nextWallet), rewardCoins };
+  const result = { ...buildSnapshot(nextWallet), rewardCoins };
+  broadcastWallet(result);
+  return result;
 }
 
 export async function spendCheckinCoins(payload: CheckinCoinSpendPayload): Promise<CheckinWalletSnapshot> {
@@ -198,5 +207,43 @@ export async function spendCheckinCoins(payload: CheckinCoinSpendPayload): Promi
     createdAt: now,
   });
   await persistDatabase();
-  return buildSnapshot(nextWallet);
+  const snapshot = buildSnapshot(nextWallet);
+  broadcastWallet(snapshot);
+  return snapshot;
+}
+
+export async function awardCheckinCoins(payload: {
+  amount: number;
+  reason: string;
+  refKey?: string;
+}): Promise<CheckinWalletSnapshot> {
+  const amount = normalizeCoins(payload.amount);
+  if (amount <= 0) throw new Error('甲币奖励金额必须大于 0');
+
+  const wallet = await getOrCreateCheckinWallet();
+  const now = new Date().toISOString();
+  const nextWallet: CheckinWallet = {
+    ...wallet,
+    coins: wallet.coins + amount,
+    updatedAt: now,
+  };
+  const db = await getDatabase();
+  db.run(
+    `UPDATE checkin_wallet
+     SET coins = ?, updated_at = ?
+     WHERE id = 1`,
+    [nextWallet.coins, now],
+  );
+  await insertCoinTransaction({
+    type: 'reward',
+    amount,
+    balanceAfter: nextWallet.coins,
+    reason: (typeof payload.reason === 'string' ? payload.reason.trim() : '') || '甲币奖励',
+    refKey: payload.refKey,
+    createdAt: now,
+  });
+  await persistDatabase();
+  const snapshot = buildSnapshot(nextWallet);
+  broadcastWallet(snapshot);
+  return snapshot;
 }

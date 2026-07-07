@@ -20,8 +20,11 @@ import type {
   FeishuTestSubmitPayload,
   GenerateReportParams,
   JiaziFarmHarvestPayload,
+  JiaziFarmPlantPayload,
+  JiaziFarmQuickRipenPayload,
   JiaziFarmSnapshot,
   JiaziFarmTaskPayload,
+  JiaziFarmWaterPayload,
   RepoInfo,
   ReportResult,
   SaveDailyReportPayload,
@@ -67,12 +70,27 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('jiazi-farm:claim-task', payload) as Promise<JiaziFarmSnapshot>,
   harvestJiaziFarm: (payload: JiaziFarmHarvestPayload) =>
     ipcRenderer.invoke('jiazi-farm:harvest', payload) as Promise<JiaziFarmSnapshot>,
+  waterJiaziPlot: (payload: JiaziFarmWaterPayload) =>
+    ipcRenderer.invoke('jiazi-farm:water', payload) as Promise<JiaziFarmSnapshot>,
+  quickRipenJiaziPlot: (payload: JiaziFarmQuickRipenPayload) =>
+    ipcRenderer.invoke('jiazi-farm:quick-ripen', payload) as Promise<JiaziFarmSnapshot>,
+  plantJiaziCrop: (payload: JiaziFarmPlantPayload) =>
+    ipcRenderer.invoke('jiazi-farm:plant', payload) as Promise<JiaziFarmSnapshot>,
+  unlockJiaziCropTier: (date?: string) =>
+    ipcRenderer.invoke('jiazi-farm:unlock-crop-tier', date) as Promise<JiaziFarmSnapshot>,
+  unlockJiaziPlot: (date?: string) =>
+    ipcRenderer.invoke('jiazi-farm:unlock-plot', date) as Promise<JiaziFarmSnapshot>,
   saveDailyReport: (payload: SaveDailyReportPayload) =>
     ipcRenderer.invoke('daily-report:save', payload) as Promise<DailyReportRecord>,
   onAutoSyncUpdated: (callback: (state: AutoSyncState) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: AutoSyncState) => callback(state);
     ipcRenderer.on('auto-sync:updated', listener);
     return () => ipcRenderer.removeListener('auto-sync:updated', listener);
+  },
+  onCheckinWalletUpdated: (callback: (snapshot: CheckinWalletSnapshot) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, snapshot: CheckinWalletSnapshot) => callback(snapshot);
+    ipcRenderer.on('checkin-wallet:updated', listener);
+    return () => ipcRenderer.removeListener('checkin-wallet:updated', listener);
   },
   onFeishuAuthUpdated: (callback: (snapshot: FeishuAuthSnapshot) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, snapshot: FeishuAuthSnapshot) => callback(snapshot);

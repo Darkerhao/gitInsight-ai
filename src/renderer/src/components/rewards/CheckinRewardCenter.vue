@@ -12,8 +12,8 @@ import type { RewardEffectKey } from '@/components/rewards/rewardEffects';
 import type { CheckinWallet, CheckinWalletImportPayload, CheckinWalletSnapshot } from '@shared/types';
 
 const CHECKIN_STORAGE_KEY = 'gitinsight:checkin-wallet';
-const DAILY_CHECKIN_REWARD_MIN = 8888;
-const DAILY_CHECKIN_REWARD_MAX = 88888;
+const DAILY_CHECKIN_REWARD_MIN = 88888;
+const DAILY_CHECKIN_REWARD_MAX = 888888;
 
 const effectTierGroups = groupEffectsByTier();
 
@@ -26,6 +26,7 @@ const activeEffect = ref<RewardEffectKey | null>(null);
 const effectSeed = ref(0);
 let effectTimer: number | null = null;
 let effectFrame: number | null = null;
+let unsubscribeWalletUpdated: (() => void) | null = null;
 
 const checkedInToday = computed(() => wallet.value.lastCheckinDate === todayKey.value);
 const checkinButtonText = computed(() =>
@@ -167,10 +168,16 @@ async function playEffect(effect: RewardEffectKey) {
 
 onMounted(() => {
   void loadWalletSnapshot();
+  // 农场花币/收获反哺后主进程会广播钱包快照，顶栏余额随之实时刷新
+  unsubscribeWalletUpdated = window.api.onCheckinWalletUpdated((snapshot) => {
+    applyWalletSnapshot(snapshot);
+  });
 });
 
 onBeforeUnmount(() => {
   stopEffect();
+  unsubscribeWalletUpdated?.();
+  unsubscribeWalletUpdated = null;
 });
 </script>
 
