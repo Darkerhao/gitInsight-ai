@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
-import { Bot, BrainCog, FileCog, FileText, FolderKanban, History, Settings, Sparkles } from 'lucide-vue-next';
+import { Bot, BrainCog, FileCog, FileText, FolderKanban, History, Settings, Sparkles, Sprout } from 'lucide-vue-next';
 
 const props = defineProps<{
   activeNav: string;
@@ -26,6 +26,14 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    id: 'growth',
+    label: '成长中心',
+    icon: Sprout,
+    children: [
+      { key: 'farm', label: '甲子农场', icon: Sprout, enabled: true },
+    ],
+  },
+  {
     id: 'settings',
     label: '设置',
     icon: Settings,
@@ -40,7 +48,7 @@ const navItems = computed<NavItem[]>(() => {
   const items: NavItem[] = [];
 
   for (const group of navGroups) {
-    if (group.children.length === 1) {
+    if (group.children.length === 1 && group.id !== 'growth') {
       items.push({ ...group.children[0], type: 'leaf' });
     } else {
       items.push({ ...group, type: 'group' });

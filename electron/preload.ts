@@ -15,6 +15,9 @@ import type {
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
   GenerateReportParams,
+  JiaziFarmHarvestPayload,
+  JiaziFarmSnapshot,
+  JiaziFarmTaskPayload,
   RepoInfo,
   ReportResult,
   SaveDailyReportPayload,
@@ -46,6 +49,12 @@ contextBridge.exposeInMainWorld('api', {
   listSyncLogs: (limit?: number) => ipcRenderer.invoke('sync-log:list', limit) as Promise<SyncLogRecord[]>,
   listErrorLogs: (limit?: number) => ipcRenderer.invoke('error-log:list', limit) as Promise<ErrorLogRecord[]>,
   getStorageInfo: () => ipcRenderer.invoke('storage:info') as Promise<StorageInfo>,
+  getJiaziFarmSnapshot: (date?: string) =>
+    ipcRenderer.invoke('jiazi-farm:get-snapshot', date) as Promise<JiaziFarmSnapshot>,
+  claimJiaziFarmTask: (payload: JiaziFarmTaskPayload) =>
+    ipcRenderer.invoke('jiazi-farm:claim-task', payload) as Promise<JiaziFarmSnapshot>,
+  harvestJiaziFarm: (payload: JiaziFarmHarvestPayload) =>
+    ipcRenderer.invoke('jiazi-farm:harvest', payload) as Promise<JiaziFarmSnapshot>,
   saveDailyReport: (payload: SaveDailyReportPayload) =>
     ipcRenderer.invoke('daily-report:save', payload) as Promise<DailyReportRecord>,
   onAutoSyncUpdated: (callback: (state: AutoSyncState) => void) => {

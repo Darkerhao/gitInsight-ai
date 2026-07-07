@@ -295,3 +295,59 @@ export interface AutoSyncValidationResult {
   valid: boolean;
   message: string;
 }
+
+export type JiaziFarmResourceType = 'water' | 'sunlight' | 'nutrient';
+
+export interface JiaziFarmState {
+  cycleStartDate: string;
+  water: number;
+  sunlight: number;
+  nutrient: number;
+  growth: number;
+  level: number;
+  totalHarvests: number;
+  updatedAt: string;
+}
+
+export interface JiaziFarmTask {
+  key: 'daily_visit' | 'report_generated' | 'feishu_synced' | 'git_activity';
+  title: string;
+  description: string;
+  resourceType: JiaziFarmResourceType;
+  rewardAmount: number;
+  growthAmount: number;
+  available: boolean;
+  claimed: boolean;
+  claimedAt: string;
+}
+
+export interface JiaziFarmHarvestRecord {
+  id: number;
+  date: string;
+  ganzhiName: string;
+  cropName: string;
+  level: number;
+  resourcesSummary: Partial<Record<JiaziFarmResourceType, number>>;
+  createdAt: string;
+}
+
+export interface JiaziFarmSnapshot {
+  date: string;
+  state: JiaziFarmState;
+  tasks: JiaziFarmTask[];
+  harvestRecords: JiaziFarmHarvestRecord[];
+  ganzhiName: string;
+  cycleDay: number;
+  seasonLabel: string;
+  cropName: string;
+  canHarvest: boolean;
+}
+
+export interface JiaziFarmTaskPayload {
+  date?: string;
+  taskKey: JiaziFarmTask['key'];
+}
+
+export interface JiaziFarmHarvestPayload {
+  date?: string;
+}

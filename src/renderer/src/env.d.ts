@@ -14,6 +14,9 @@ import type {
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
   GenerateReportParams,
+  JiaziFarmHarvestPayload,
+  JiaziFarmSnapshot,
+  JiaziFarmTaskPayload,
   RepoInfo,
   ReportResult,
   SyncFeishuDailyPayload,
@@ -40,6 +43,9 @@ declare global {
       listSyncLogs: (limit?: number) => Promise<import('@shared/types').SyncLogRecord[]>;
       listErrorLogs: (limit?: number) => Promise<import('@shared/types').ErrorLogRecord[]>;
       getStorageInfo: () => Promise<import('@shared/types').StorageInfo>;
+      getJiaziFarmSnapshot: (date?: string) => Promise<JiaziFarmSnapshot>;
+      claimJiaziFarmTask: (payload: JiaziFarmTaskPayload) => Promise<JiaziFarmSnapshot>;
+      harvestJiaziFarm: (payload: JiaziFarmHarvestPayload) => Promise<JiaziFarmSnapshot>;
       saveDailyReport: (payload: import('@shared/types').SaveDailyReportPayload) => Promise<import('@shared/types').DailyReportRecord>;
       onAutoSyncUpdated: (callback: (state: AutoSyncState) => void) => () => void;
       onFeishuAuthUpdated: (callback: (snapshot: FeishuAuthSnapshot) => void) => () => void;

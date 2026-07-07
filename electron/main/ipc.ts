@@ -6,6 +6,8 @@ import type {
   FeishuSubmissionRecordsPayload,
   FeishuTestSubmitPayload,
   GenerateReportParams,
+  JiaziFarmHarvestPayload,
+  JiaziFarmTaskPayload,
   SaveDailyReportPayload,
   SyncFeishuDailyPayload,
 } from '../../src/shared/types.js';
@@ -14,6 +16,7 @@ import { loadConfig, saveConfig } from './config.js';
 import { getStorageInfo, listDailyReports, listErrorLogs, listSyncLogs, saveDailyReport } from './database.js';
 import { listFeishuFieldOptions, listFeishuProjectOptions, syncFeishuDaily, testSubmitFeishuForm } from './feishuForm.js';
 import { openFeishuLogin, openFeishuSubmissionRecords } from './feishuAuth.js';
+import { claimJiaziFarmTask, getJiaziFarmSnapshot, harvestJiaziFarm } from './jiaziFarm.js';
 import { generateReport } from './report.js';
 import { scanRepositories } from './repoScan.js';
 import { getMainWindow } from './windows.js';
@@ -35,6 +38,9 @@ export function registerIpcHandlers() {
   ipcMain.handle('sync-log:list', async (_event, limit?: number) => listSyncLogs(limit));
   ipcMain.handle('error-log:list', async (_event, limit?: number) => listErrorLogs(limit));
   ipcMain.handle('storage:info', async () => getStorageInfo());
+  ipcMain.handle('jiazi-farm:get-snapshot', async (_event, date?: string) => getJiaziFarmSnapshot(date));
+  ipcMain.handle('jiazi-farm:claim-task', async (_event, payload: JiaziFarmTaskPayload) => claimJiaziFarmTask(payload));
+  ipcMain.handle('jiazi-farm:harvest', async (_event, payload: JiaziFarmHarvestPayload) => harvestJiaziFarm(payload));
   ipcMain.handle('feishu:login', async (_event, payload: FeishuLoginPayload) => openFeishuLogin(payload));
   ipcMain.handle('feishu:open-submission-records', async (_event, payload: FeishuSubmissionRecordsPayload) => openFeishuSubmissionRecords(payload));
   ipcMain.handle('feishu:list-fields', async (_event, payload: FeishuProjectOptionsPayload) => listFeishuFieldOptions(payload));

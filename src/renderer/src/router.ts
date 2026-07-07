@@ -1,7 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
 
-export const navKeys = ['config', 'generate', 'history', 'ai', 'system'] as const;
+export const navKeys = ['config', 'generate', 'history', 'farm', 'ai', 'system'] as const;
 export type NavKey = (typeof navKeys)[number];
 
 const EmptyRouteView = {
@@ -27,7 +27,7 @@ const routes: RouteRecordRaw[] = [
     redirect: () => getLastRoute(),
   },
   {
-    path: '/:nav(config|generate|history|ai|system)',
+    path: '/:nav(config|generate|history|farm|ai|system)',
     component: EmptyRouteView,
   },
   {

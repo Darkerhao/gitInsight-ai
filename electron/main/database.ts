@@ -78,6 +78,41 @@ export async function getDatabase() {
       detail TEXT,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS jiazi_farm_state (
+      id INTEGER PRIMARY KEY CHECK(id = 1),
+      cycle_start_date TEXT NOT NULL,
+      water INTEGER NOT NULL DEFAULT 0,
+      sunlight INTEGER NOT NULL DEFAULT 0,
+      nutrient INTEGER NOT NULL DEFAULT 0,
+      growth INTEGER NOT NULL DEFAULT 0,
+      level INTEGER NOT NULL DEFAULT 1,
+      total_harvests INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS jiazi_farm_task_claims (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
+      task_key TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      reward_amount INTEGER NOT NULL,
+      growth_amount INTEGER NOT NULL,
+      claimed_at TEXT NOT NULL,
+      UNIQUE(date, task_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_jiazi_farm_task_claims_date ON jiazi_farm_task_claims(date);
+
+    CREATE TABLE IF NOT EXISTS jiazi_farm_harvests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
+      ganzhi_name TEXT NOT NULL,
+      crop_name TEXT NOT NULL,
+      level INTEGER NOT NULL,
+      resources_summary_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_jiazi_farm_harvests_created_at ON jiazi_farm_harvests(created_at);
   `);
   ensureDailyReportTimeRangeColumns(sqlDatabase);
   await persistDatabase();
