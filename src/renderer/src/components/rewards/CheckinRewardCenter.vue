@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Coins, Gift } from 'lucide-vue-next';
 import { ElMessage } from 'element-plus';
 import RewardEffectOverlay from '@/components/rewards/RewardEffectOverlay.vue';
@@ -9,12 +9,7 @@ import {
   groupEffectsByTier,
 } from '@/components/rewards/rewardEffects';
 import type { RewardEffectKey } from '@/components/rewards/rewardEffects';
-
-type CheckinWallet = {
-  coins: number;
-  lastCheckinDate: string;
-  streak: number;
-};
+import type { CheckinWallet, CheckinWalletImportPayload, CheckinWalletSnapshot } from '@shared/types';
 
 const CHECKIN_STORAGE_KEY = 'gitinsight:checkin-wallet';
 const DAILY_CHECKIN_REWARD_MIN = 8888;
@@ -22,42 +17,31 @@ const DAILY_CHECKIN_REWARD_MAX = 88888;
 
 const effectTierGroups = groupEffectsByTier();
 
-const wallet = ref<CheckinWallet>(loadWallet());
+const wallet = ref<CheckinWallet>({ coins: 0, lastCheckinDate: '', streak: 0, updatedAt: '' });
+const todayKey = ref('');
+const walletLoading = ref(false);
+const checkinLoading = ref(false);
+const spendingEffect = ref<RewardEffectKey | null>(null);
 const activeEffect = ref<RewardEffectKey | null>(null);
 const effectSeed = ref(0);
 let effectTimer: number | null = null;
 let effectFrame: number | null = null;
 
-const todayKey = computed(() => getLocalDateKey(new Date()));
 const checkedInToday = computed(() => wallet.value.lastCheckinDate === todayKey.value);
 const checkinButtonText = computed(() =>
   checkedInToday.value ? '今日已签' : `签到随机 +${DAILY_CHECKIN_REWARD_MIN}-${DAILY_CHECKIN_REWARD_MAX}`
 );
-const walletStatusText = computed(() => (checkedInToday.value ? '今日已签到' : '今日待签到'));
+const walletStatusText = computed(() => {
+  if (walletLoading.value) return '甲币状态读取中';
+  return checkedInToday.value ? '今日已签到' : '今日待签到';
+});
 
-function getLocalDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function shiftDateKey(dateKey: string, dayOffset: number) {
-  const [year, month, day] = dateKey.split('-').map(Number);
-  if (!year || !month || !day) return '';
-  return getLocalDateKey(new Date(year, month - 1, day + dayOffset));
-}
-
-function getDailyCheckinReward() {
-  return Math.floor(Math.random() * (DAILY_CHECKIN_REWARD_MAX - DAILY_CHECKIN_REWARD_MIN + 1)) + DAILY_CHECKIN_REWARD_MIN;
-}
-
-function normalizeWallet(value: unknown): CheckinWallet {
+function normalizeLocalWallet(value: unknown): CheckinWalletImportPayload {
   if (!value || typeof value !== 'object') {
     return { coins: 0, lastCheckinDate: '', streak: 0 };
   }
 
-  const source = value as Partial<CheckinWallet>;
+  const source = value as Partial<CheckinWalletImportPayload>;
   return {
     coins: Number.isFinite(source.coins) ? Math.max(0, Math.floor(Number(source.coins))) : 0,
     lastCheckinDate: typeof source.lastCheckinDate === 'string' ? source.lastCheckinDate : '',
@@ -65,20 +49,46 @@ function normalizeWallet(value: unknown): CheckinWallet {
   };
 }
 
-function loadWallet() {
+function readLocalWalletForMigration() {
   try {
     const stored = window.localStorage.getItem(CHECKIN_STORAGE_KEY);
-    return normalizeWallet(stored ? JSON.parse(stored) : null);
+    return normalizeLocalWallet(stored ? JSON.parse(stored) : null);
   } catch {
     return { coins: 0, lastCheckinDate: '', streak: 0 };
   }
 }
 
-function persistWallet() {
+function hasImportableWallet(value: CheckinWalletImportPayload) {
+  return value.coins > 0 || Boolean(value.lastCheckinDate) || value.streak > 0;
+}
+
+function clearMigratedLocalWallet() {
   try {
-    window.localStorage.setItem(CHECKIN_STORAGE_KEY, JSON.stringify(wallet.value));
+    window.localStorage.removeItem(CHECKIN_STORAGE_KEY);
   } catch {
-    ElMessage.warning('甲币状态暂时无法保存');
+    // The database wallet is authoritative even if old local cache cleanup fails.
+  }
+}
+
+function applyWalletSnapshot(snapshot: CheckinWalletSnapshot) {
+  wallet.value = snapshot.wallet;
+  todayKey.value = snapshot.today;
+}
+
+async function loadWalletSnapshot() {
+  walletLoading.value = true;
+  try {
+    const localWallet = readLocalWalletForMigration();
+    if (hasImportableWallet(localWallet)) {
+      applyWalletSnapshot(await window.api.importCheckinWallet(localWallet));
+      clearMigratedLocalWallet();
+    } else {
+      applyWalletSnapshot(await window.api.getCheckinWalletSnapshot());
+    }
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '读取甲币钱包失败');
+  } finally {
+    walletLoading.value = false;
   }
 }
 
@@ -108,25 +118,29 @@ function startEffect(effect: RewardEffectKey) {
   effectTimer = window.setTimeout(stopEffect, EFFECT_DURATIONS[effect]);
 }
 
-function runDailyCheckin() {
+async function runDailyCheckin() {
   if (checkedInToday.value) {
     ElMessage.info('今天已经签到过了');
     return;
   }
 
-  const yesterdayKey = shiftDateKey(todayKey.value, -1);
-  const nextStreak = wallet.value.lastCheckinDate === yesterdayKey ? wallet.value.streak + 1 : 1;
-  const rewardCoins = getDailyCheckinReward();
-  wallet.value = {
-    coins: wallet.value.coins + rewardCoins,
-    lastCheckinDate: todayKey.value,
-    streak: nextStreak,
-  };
-  persistWallet();
-  ElMessage.success(`签到成功，获得 ${rewardCoins} 甲币`);
+  checkinLoading.value = true;
+  try {
+    const result = await window.api.runDailyCheckin();
+    applyWalletSnapshot(result);
+    if (result.rewardCoins > 0) {
+      ElMessage.success(`签到成功，获得 ${result.rewardCoins} 甲币`);
+    } else {
+      ElMessage.info('今天已经签到过了');
+    }
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '签到失败');
+  } finally {
+    checkinLoading.value = false;
+  }
 }
 
-function playEffect(effect: RewardEffectKey) {
+async function playEffect(effect: RewardEffectKey) {
   const option = EFFECT_OPTION_MAP[effect];
   if (!option) return;
 
@@ -135,14 +149,25 @@ function playEffect(effect: RewardEffectKey) {
     return;
   }
 
-  wallet.value = {
-    ...wallet.value,
-    coins: wallet.value.coins - option.cost,
-  };
-  persistWallet();
-  startEffect(effect);
-  ElMessage.success(`已使用 ${option.cost} 甲币，已启用「${option.label}」`);
+  spendingEffect.value = effect;
+  try {
+    applyWalletSnapshot(await window.api.spendCheckinCoins({
+      amount: option.cost,
+      reason: `使用轻量效果：${option.label}`,
+      refKey: effect,
+    }));
+    startEffect(effect);
+    ElMessage.success(`已使用 ${option.cost} 甲币，已启用「${option.label}」`);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '甲币消费失败');
+  } finally {
+    spendingEffect.value = null;
+  }
 }
+
+onMounted(() => {
+  void loadWalletSnapshot();
+});
 
 onBeforeUnmount(() => {
   stopEffect();
@@ -152,7 +177,7 @@ onBeforeUnmount(() => {
 <template>
   <el-popover placement="bottom-end" trigger="click" :width="410" popper-class="coin-popover">
     <template #reference>
-      <el-button class="topbar-coin-btn" :icon="Coins" aria-label="甲币签到">
+      <el-button class="topbar-coin-btn" :icon="Coins" :loading="walletLoading" aria-label="甲币签到">
         <span :key="wallet.coins" class="coin-amount">{{ wallet.coins }}</span>
         <small>甲币</small>
       </el-button>
@@ -162,7 +187,7 @@ onBeforeUnmount(() => {
       <div class="coin-panel-head">
         <div>
           <strong :key="wallet.coins" class="coin-amount">{{ wallet.coins }} 甲币</strong>
-          <span>{{ walletStatusText }} · 轻量效果库</span>
+          <span>{{ walletStatusText }} · 轻量效果店</span>
         </div>
         <el-tag class="coin-streak-tag" type="warning" effect="light" round>
           连续 {{ wallet.streak }} 天
@@ -173,7 +198,8 @@ onBeforeUnmount(() => {
         class="coin-checkin-btn"
         type="primary"
         :icon="Gift"
-        :disabled="checkedInToday"
+        :disabled="checkedInToday || walletLoading"
+        :loading="checkinLoading"
         @click="runDailyCheckin"
       >
         {{ checkinButtonText }}
@@ -194,9 +220,9 @@ onBeforeUnmount(() => {
               { 'is-apex': effect.apex },
             ]"
             type="button"
-            :disabled="wallet.coins < effect.cost"
+            :disabled="walletLoading || Boolean(spendingEffect) || wallet.coins < effect.cost"
             :style="{ '--effect-tone': effect.tone }"
-            :title="`${effect.codename} — ${effect.narrative}`"
+            :title="`${effect.codename} - ${effect.narrative}`"
             @click="playEffect(effect.key)"
           >
             <span class="effect-shop-icon">
@@ -361,30 +387,10 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
-.effect-tier-head span {
-  color: var(--c-text-faint);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-}
-
 .effect-tier-head small {
   margin-left: auto;
   color: var(--c-text-faint);
   font-size: 10px;
-}
-
-.effect-tier-head.tier-singularity {
-  --tier-tone: #8b5cf6;
-}
-
-.effect-tier-head.tier-tactical {
-  --tier-tone: #3b82f6;
-}
-
-.effect-tier-head.tier-signal {
-  --tier-tone: #d97706;
 }
 
 .effect-shop-item {
@@ -434,30 +440,6 @@ onBeforeUnmount(() => {
 .effect-shop-item:hover::before,
 .effect-shop-item:focus-visible::before {
   opacity: 1;
-}
-
-.effect-shop-item.tier-tactical {
-  border-color: color-mix(in srgb, var(--effect-tone) 20%, #e2e8f0);
-  background: color-mix(in srgb, var(--effect-tone) 4%, #fff);
-}
-
-.effect-shop-item.tier-tactical .effect-shop-icon {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--effect-tone) 18%, transparent);
-}
-
-.effect-shop-item.tier-singularity {
-  border-color: color-mix(in srgb, var(--effect-tone) 22%, #e2e8f0);
-  background: color-mix(in srgb, var(--effect-tone) 5%, #fff);
-  color: var(--c-text);
-}
-
-.effect-shop-item.tier-singularity .effect-shop-icon {
-  background: color-mix(in srgb, var(--effect-tone) 10%, #fff);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--effect-tone) 22%, transparent);
-}
-
-.effect-shop-item.is-apex {
-  border-color: color-mix(in srgb, var(--effect-tone) 28%, #e2e8f0);
 }
 
 .effect-shop-item:disabled {
@@ -570,9 +552,7 @@ onBeforeUnmount(() => {
   border-bottom-color: rgba(51, 65, 85, 0.9);
 }
 
-:root[data-theme='dark'] .effect-shop-item,
-:root[data-theme='dark'] .effect-shop-item.tier-tactical,
-:root[data-theme='dark'] .effect-shop-item.tier-singularity {
+:root[data-theme='dark'] .effect-shop-item {
   border-color: color-mix(in srgb, var(--effect-tone) 18%, rgba(51, 65, 85, 0.9));
   background: color-mix(in srgb, var(--effect-tone) 7%, var(--c-surface-muted));
 }

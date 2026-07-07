@@ -1,6 +1,8 @@
 import { dialog, ipcMain } from 'electron';
 import type {
   AppConfig,
+  CheckinCoinSpendPayload,
+  CheckinWalletImportPayload,
   FeishuLoginPayload,
   FeishuProjectOptionsPayload,
   FeishuSubmissionRecordsPayload,
@@ -12,6 +14,7 @@ import type {
   SyncFeishuDailyPayload,
 } from '../../src/shared/types.js';
 import { getAutoSyncState, runAutoSync, saveConfigAndReschedule, validateAutoSync } from './autoSync.js';
+import { getCheckinWalletSnapshot, importCheckinWallet, runDailyCheckin, spendCheckinCoins } from './checkinWallet.js';
 import { loadConfig, saveConfig } from './config.js';
 import { getStorageInfo, listDailyReports, listErrorLogs, listSyncLogs, saveDailyReport } from './database.js';
 import { listFeishuFieldOptions, listFeishuProjectOptions, syncFeishuDaily, testSubmitFeishuForm } from './feishuForm.js';
@@ -38,6 +41,10 @@ export function registerIpcHandlers() {
   ipcMain.handle('sync-log:list', async (_event, limit?: number) => listSyncLogs(limit));
   ipcMain.handle('error-log:list', async (_event, limit?: number) => listErrorLogs(limit));
   ipcMain.handle('storage:info', async () => getStorageInfo());
+  ipcMain.handle('checkin-wallet:get-snapshot', async () => getCheckinWalletSnapshot());
+  ipcMain.handle('checkin-wallet:daily-checkin', async () => runDailyCheckin());
+  ipcMain.handle('checkin-wallet:import-local', async (_event, payload: CheckinWalletImportPayload) => importCheckinWallet(payload));
+  ipcMain.handle('checkin-wallet:spend', async (_event, payload: CheckinCoinSpendPayload) => spendCheckinCoins(payload));
   ipcMain.handle('jiazi-farm:get-snapshot', async (_event, date?: string) => getJiaziFarmSnapshot(date));
   ipcMain.handle('jiazi-farm:claim-task', async (_event, payload: JiaziFarmTaskPayload) => claimJiaziFarmTask(payload));
   ipcMain.handle('jiazi-farm:harvest', async (_event, payload: JiaziFarmHarvestPayload) => harvestJiaziFarm(payload));

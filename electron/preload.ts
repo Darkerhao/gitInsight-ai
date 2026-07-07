@@ -4,6 +4,10 @@ import type {
   AutoSyncRunResult,
   AutoSyncState,
   AutoSyncValidationResult,
+  CheckinCoinSpendPayload,
+  CheckinResult,
+  CheckinWalletImportPayload,
+  CheckinWalletSnapshot,
   DailyReportRecord,
   ErrorLogRecord,
   FeishuAuthSnapshot,
@@ -49,6 +53,14 @@ contextBridge.exposeInMainWorld('api', {
   listSyncLogs: (limit?: number) => ipcRenderer.invoke('sync-log:list', limit) as Promise<SyncLogRecord[]>,
   listErrorLogs: (limit?: number) => ipcRenderer.invoke('error-log:list', limit) as Promise<ErrorLogRecord[]>,
   getStorageInfo: () => ipcRenderer.invoke('storage:info') as Promise<StorageInfo>,
+  getCheckinWalletSnapshot: () =>
+    ipcRenderer.invoke('checkin-wallet:get-snapshot') as Promise<CheckinWalletSnapshot>,
+  runDailyCheckin: () =>
+    ipcRenderer.invoke('checkin-wallet:daily-checkin') as Promise<CheckinResult>,
+  importCheckinWallet: (payload: CheckinWalletImportPayload) =>
+    ipcRenderer.invoke('checkin-wallet:import-local', payload) as Promise<CheckinWalletSnapshot>,
+  spendCheckinCoins: (payload: CheckinCoinSpendPayload) =>
+    ipcRenderer.invoke('checkin-wallet:spend', payload) as Promise<CheckinWalletSnapshot>,
   getJiaziFarmSnapshot: (date?: string) =>
     ipcRenderer.invoke('jiazi-farm:get-snapshot', date) as Promise<JiaziFarmSnapshot>,
   claimJiaziFarmTask: (payload: JiaziFarmTaskPayload) =>

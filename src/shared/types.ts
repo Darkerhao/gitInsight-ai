@@ -351,3 +351,32 @@ export interface JiaziFarmTaskPayload {
 export interface JiaziFarmHarvestPayload {
   date?: string;
 }
+
+export interface CheckinWallet {
+  coins: number;
+  lastCheckinDate: string;
+  streak: number;
+  updatedAt: string;
+}
+
+export interface CheckinWalletSnapshot {
+  wallet: CheckinWallet;
+  today: string;
+  checkedInToday: boolean;
+}
+
+export interface CheckinResult extends CheckinWalletSnapshot {
+  rewardCoins: number;
+}
+
+export interface CheckinWalletImportPayload {
+  coins: number;
+  lastCheckinDate: string;
+  streak: number;
+}
+
+export interface CheckinCoinSpendPayload {
+  amount: number;
+  reason: string;
+  refKey?: string;
+}

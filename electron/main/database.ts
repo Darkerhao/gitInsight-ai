@@ -113,6 +113,25 @@ export async function getDatabase() {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_jiazi_farm_harvests_created_at ON jiazi_farm_harvests(created_at);
+
+    CREATE TABLE IF NOT EXISTS checkin_wallet (
+      id INTEGER PRIMARY KEY CHECK(id = 1),
+      coins INTEGER NOT NULL DEFAULT 0,
+      last_checkin_date TEXT NOT NULL DEFAULT '',
+      streak INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS checkin_coin_transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      balance_after INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      ref_key TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_checkin_coin_transactions_created_at ON checkin_coin_transactions(created_at);
   `);
   ensureDailyReportTimeRangeColumns(sqlDatabase);
   await persistDatabase();

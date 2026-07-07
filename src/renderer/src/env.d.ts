@@ -5,6 +5,10 @@ import type {
   AutoSyncRunResult,
   AutoSyncState,
   AutoSyncValidationResult,
+  CheckinCoinSpendPayload,
+  CheckinResult,
+  CheckinWalletImportPayload,
+  CheckinWalletSnapshot,
   FeishuAuthSnapshot,
   FeishuFieldOption,
   FeishuLoginPayload,
@@ -43,6 +47,10 @@ declare global {
       listSyncLogs: (limit?: number) => Promise<import('@shared/types').SyncLogRecord[]>;
       listErrorLogs: (limit?: number) => Promise<import('@shared/types').ErrorLogRecord[]>;
       getStorageInfo: () => Promise<import('@shared/types').StorageInfo>;
+      getCheckinWalletSnapshot: () => Promise<CheckinWalletSnapshot>;
+      runDailyCheckin: () => Promise<CheckinResult>;
+      importCheckinWallet: (payload: CheckinWalletImportPayload) => Promise<CheckinWalletSnapshot>;
+      spendCheckinCoins: (payload: CheckinCoinSpendPayload) => Promise<CheckinWalletSnapshot>;
       getJiaziFarmSnapshot: (date?: string) => Promise<JiaziFarmSnapshot>;
       claimJiaziFarmTask: (payload: JiaziFarmTaskPayload) => Promise<JiaziFarmSnapshot>;
       harvestJiaziFarm: (payload: JiaziFarmHarvestPayload) => Promise<JiaziFarmSnapshot>;
