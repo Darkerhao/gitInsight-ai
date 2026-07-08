@@ -9,7 +9,7 @@ import ReportPublishSidebar from '@/components/report-generate/ReportPublishSide
 import ReportSetupCard from '@/components/report-generate/ReportSetupCard.vue';
 import { useAssistant } from '@/composables/useAssistant';
 import type { ProjectReportDraft } from '@/composables/useAssistant';
-import { countResultFiles, getReportRangePayloadFromForm, resolveReportTimeRange } from '@/composables/assistant/reportState';
+import { countResultFiles, getReportRangePayloadFromForm, resolveReportTimeRange, toPlainRawInput } from '@/composables/assistant/reportState';
 import { normalizeProjectWorkHours, normalizeWorkHours } from '@/composables/assistant/normalizers';
 import type { DailyReportRecord, RepoInfo } from '@shared/types';
 
@@ -502,7 +502,7 @@ async function saveDraft(draft: ProjectReportDraft, options: { silent?: boolean;
     filesCount: countResultFiles(result),
     generatedAt: result?.generatedAt,
     timeRange: getCurrentReportTimeRange(draft),
-    rawInput: result?.rawInput,
+    rawInput: toPlainRawInput(result?.rawInput),
   });
 
   draft.reportId = record.id;

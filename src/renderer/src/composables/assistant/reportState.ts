@@ -44,12 +44,30 @@ export function resolveReportTimeRange(
 ): ReportTimeRange | undefined {
   if (!payload) return undefined;
   if (previousRange?.startDateTime === payload.startDateTime && previousRange.endDateTime === payload.endDateTime) {
-    return previousRange;
+    return toPlainReportTimeRange(previousRange);
   }
 
   return {
     ...payload,
     label,
+  };
+}
+
+export function toPlainReportTimeRange(timeRange?: ReportTimeRange): ReportTimeRange | undefined {
+  if (!timeRange) return undefined;
+  return {
+    startDateTime: timeRange.startDateTime,
+    endDateTime: timeRange.endDateTime,
+    label: timeRange.label,
+  };
+}
+
+export function toPlainRawInput(rawInput?: ReportResult['rawInput']): ReportResult['rawInput'] | undefined {
+  if (!rawInput) return undefined;
+  return {
+    gitLogs: rawInput.gitLogs,
+    files: rawInput.files,
+    diff: rawInput.diff,
   };
 }
 
@@ -213,7 +231,7 @@ export function createReportState(ctx: ReportStateContext) {
       filesCount: countResultFiles(result),
       generatedAt: result?.generatedAt,
       timeRange: getCurrentReportTimeRange(),
-      rawInput: result?.rawInput,
+      rawInput: toPlainRawInput(result?.rawInput),
     });
     currentReportId.value = record.id;
     await refreshLocalData();

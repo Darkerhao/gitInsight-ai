@@ -130,7 +130,14 @@ function applyPresetHours(key: string, value: number) {
 
       <div class="field">
         <label>选择目标</label>
-        <el-select v-model="activeProjectOptionId" :disabled="!activeDraft" placeholder="请先获取飞书项目选项">
+        <el-select
+          v-model="activeProjectOptionId"
+          :disabled="!activeDraft"
+          filterable
+          placeholder="请先获取飞书项目选项"
+          no-match-text="未找到匹配项目"
+          no-data-text="暂无飞书项目选项"
+        >
           <el-option v-for="item in projectOptions" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
       </div>
@@ -200,8 +207,11 @@ function applyPresetHours(key: string, value: number) {
             <el-select
               :model-value="item.projectOptionId"
               :disabled="!item.hasReport"
+              filterable
               size="small"
               placeholder="飞书目标"
+              no-match-text="未找到匹配项目"
+              no-data-text="暂无飞书项目选项"
               @change="(value: string) => emit('update-draft-project', item.key, value)"
             >
               <el-option v-for="option in projectOptions" :key="option.id" :label="option.name" :value="option.id" />
