@@ -103,7 +103,7 @@ function applyPresetHours(key: string, value: number) {
 </script>
 
 <template>
-  <aside class="view-stack">
+  <aside class="view-stack publish-sidebar">
     <section class="surface-card publish-panel">
       <div class="step-title with-action">
         <div>
@@ -113,179 +113,185 @@ function applyPresetHours(key: string, value: number) {
         <StatusBadge :status="canPublishActive ? 'success' : 'pending'" :label="canPublishActive ? '可发布' : '待准备'" />
       </div>
 
-      <div class="publish-summary-card" :class="{ ready: canPublishActive }">
-        <Send :size="18" />
-        <div>
-          <strong>{{ publishStatusTitle }}</strong>
-          <span>{{ publishStatusDetail }}，发布日期 {{ reportDate || '未选择' }}</span>
+      <div class="publish-control-section publish-status-section">
+        <div class="publish-summary-card" :class="{ ready: canPublishActive }">
+          <Send :size="18" />
+          <div>
+            <strong>{{ publishStatusTitle }}</strong>
+            <span>{{ publishStatusDetail }}，发布日期 {{ reportDate || '未选择' }}</span>
+          </div>
+        </div>
+
+        <div class="publish-hint">
+          <span>自动同步、字段映射与定时配置统一在日报配置页维护。</span>
+          <el-button link type="primary" @click="emit('navigate', 'config')">去配置</el-button>
         </div>
       </div>
 
-      <div class="publish-hint">
-        <span>自动同步、字段映射与定时配置统一在日报配置页维护。</span>
-        <el-button link type="primary" @click="emit('navigate', 'config')">去配置</el-button>
-      </div>
-
-      <div class="field">
-        <label>当前项目</label>
-        <div class="active-project-card">
-          <strong>{{ activeDraft?.repoName || '暂无项目' }}</strong>
-          <span>{{ publishableCount }}/{{ totalDraftCount }} 个项目可发布</span>
+      <div class="publish-control-section current-publish-section">
+        <div class="field">
+          <label>当前项目</label>
+          <div class="active-project-card">
+            <strong>{{ activeDraft?.repoName || '暂无项目' }}</strong>
+            <span>{{ publishableCount }}/{{ totalDraftCount }} 个项目可发布</span>
+          </div>
         </div>
-      </div>
 
-      <div class="field publish-date-field">
-        <label>发布日期</label>
-        <el-date-picker
-          :model-value="reportDate"
-          type="date"
-          value-format="YYYY-MM-DD"
-          :clearable="false"
-          placeholder="选择发布日期"
-          @change="(value: string) => emit('report-date-change', value)"
-        />
-        <div class="publish-date-shortcuts">
-          <el-button
-            class="publish-date-shortcut-btn"
-            :class="{ active: dateShortcut === 'today' }"
-            :icon="CalendarDays"
-            plain
-            size="small"
-            @click="emit('set-date-shortcut', 'today')"
-          >
-            今天
-          </el-button>
-          <el-button
-            class="publish-date-shortcut-btn"
-            :class="{ active: dateShortcut === 'yesterday' }"
-            :icon="CalendarDays"
-            plain
-            size="small"
-            @click="emit('set-date-shortcut', 'yesterday')"
-          >
-            昨天
-          </el-button>
-        </div>
-        <small class="field-hint">同步飞书会使用此日期；当前提交范围：{{ reportRangeLabel }}</small>
-      </div>
-
-      <div class="field">
-        <label>选择目标</label>
-        <el-select
-          v-model="activeProjectOptionId"
-          :disabled="!activeDraft"
-          filterable
-          placeholder="请先获取飞书项目选项"
-          no-match-text="未找到匹配项目"
-          no-data-text="暂无飞书项目选项"
-        >
-          <el-option v-for="item in projectOptions" :key="item.id" :label="item.name" :value="item.id" />
-        </el-select>
-      </div>
-      <div class="field">
-        <label>工作时长</label>
-        <div class="hour-field">
-          <el-input-number
-            v-model="activeWorkHours"
-            :disabled="!activeDraft"
-            :min="0.5"
-            :max="24"
-            :step="0.5"
-            :precision="1"
-            controls-position="right"
-            @change="(value: number | null | undefined) => activeDraft && commitDraftHours(activeDraft.key, value)"
+        <div class="field publish-date-field">
+          <label>发布日期</label>
+          <el-date-picker
+            :model-value="reportDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            :clearable="false"
+            placeholder="选择发布日期"
+            @change="(value: string) => emit('report-date-change', value)"
           />
-          <span>小时</span>
+          <div class="publish-date-shortcuts">
+            <el-button
+              class="publish-date-shortcut-btn"
+              :class="{ active: dateShortcut === 'today' }"
+              :icon="CalendarDays"
+              plain
+              size="small"
+              @click="emit('set-date-shortcut', 'today')"
+            >
+              今天
+            </el-button>
+            <el-button
+              class="publish-date-shortcut-btn"
+              :class="{ active: dateShortcut === 'yesterday' }"
+              :icon="CalendarDays"
+              plain
+              size="small"
+              @click="emit('set-date-shortcut', 'yesterday')"
+            >
+              昨天
+            </el-button>
+          </div>
+          <small class="field-hint">同步飞书会使用此日期；当前提交范围：{{ reportRangeLabel }}</small>
         </div>
-        <div class="hour-presets">
-          <el-button
-            v-for="hours in workHourPresets"
-            :key="hours"
-            class="hour-preset-btn"
-            :class="{ active: Number(activeDraft?.workHours) === hours }"
+
+        <div class="field">
+          <label>选择目标</label>
+          <el-select
+            v-model="activeProjectOptionId"
             :disabled="!activeDraft"
-            plain
-            size="small"
-            @click="activeDraft && applyPresetHours(activeDraft.key, hours)"
+            filterable
+            placeholder="请先获取飞书项目选项"
+            no-match-text="未找到匹配项目"
+            no-data-text="暂无飞书项目选项"
           >
-            {{ hours }}h
+            <el-option v-for="item in projectOptions" :key="item.id" :label="item.name" :value="item.id" />
+          </el-select>
+        </div>
+        <div class="field">
+          <label>工作时长</label>
+          <div class="hour-field">
+            <el-input-number
+              v-model="activeWorkHours"
+              :disabled="!activeDraft"
+              :min="0.5"
+              :max="24"
+              :step="0.5"
+              :precision="1"
+              controls-position="right"
+              @change="(value: number | null | undefined) => activeDraft && commitDraftHours(activeDraft.key, value)"
+            />
+            <span>小时</span>
+          </div>
+          <div class="hour-presets">
+            <el-button
+              v-for="hours in workHourPresets"
+              :key="hours"
+              class="hour-preset-btn"
+              :class="{ active: Number(activeDraft?.workHours) === hours }"
+              :disabled="!activeDraft"
+              plain
+              size="small"
+              @click="activeDraft && applyPresetHours(activeDraft.key, hours)"
+            >
+              {{ hours }}h
+            </el-button>
+          </div>
+        </div>
+
+        <div class="current-publish-action">
+          <el-button class="current-publish-btn" :icon="Send" type="primary" :loading="pushing" :disabled="!canPublishActive" @click="emit('publish-current')">
+            仅发布当前项目
           </el-button>
         </div>
       </div>
 
-      <div class="current-publish-action">
-        <el-button class="current-publish-btn" :icon="Send" type="primary" :loading="pushing" :disabled="!canPublishActive" @click="emit('publish-current')">
-          仅发布当前项目
+      <div class="publish-control-section batch-publish-section">
+        <div class="batch-publish-panel">
+          <div class="batch-publish-head">
+            <div>
+              <strong>批量发布项目</strong>
+              <span>发布全部时会按下方每个项目的目标和工时逐条提交</span>
+            </div>
+            <small>{{ publishableCount }}/{{ totalDraftCount }}</small>
+          </div>
+
+          <div class="batch-publish-list">
+            <div v-if="!drafts.length" class="empty-state">暂无可配置项目</div>
+            <div
+              v-for="item in drafts"
+              :key="item.key"
+              class="batch-publish-item"
+              :class="{ disabled: !item.hasReport, success: item.publishStatus === 'success', failed: item.publishStatus === 'failed' }"
+            >
+              <div class="batch-publish-item-head">
+                <strong>{{ item.repoName }}</strong>
+                <el-tag v-if="!item.hasReport" type="info" size="small" effect="plain">待生成</el-tag>
+                <el-tag v-else-if="!item.projectOptionId" type="warning" size="small" effect="plain">待选目标</el-tag>
+                <el-tag v-else-if="item.publishStatus === 'success'" type="success" size="small" effect="plain">已发布</el-tag>
+                <el-tag v-else-if="item.publishStatus === 'failed'" type="danger" size="small" effect="plain">失败</el-tag>
+                <el-tag v-else type="success" size="small" effect="plain">可发布</el-tag>
+              </div>
+
+              <el-select
+                :model-value="item.projectOptionId"
+                :disabled="!item.hasReport"
+                filterable
+                size="small"
+                placeholder="飞书目标"
+                no-match-text="未找到匹配项目"
+                no-data-text="暂无飞书项目选项"
+                @change="(value: string) => emit('update-draft-project', item.key, value)"
+              >
+                <el-option v-for="option in projectOptions" :key="option.id" :label="option.name" :value="option.id" />
+              </el-select>
+
+              <div class="batch-hour-row">
+                <el-input-number
+                  :model-value="item.workHours"
+                  :disabled="!item.hasReport"
+                  :min="0.5"
+                  :max="24"
+                  :step="0.5"
+                  :precision="1"
+                  size="small"
+                  controls-position="right"
+                  @update:model-value="(value: number | null | undefined) => updateDraftHours(item.key, value)"
+                  @change="(value: number | null | undefined) => commitDraftHours(item.key, value)"
+                />
+                <span>小时</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="batch-publish-footer">
+            <el-button class="batch-publish-btn" :icon="Send" plain :loading="pushing" :disabled="!canPublishAll" @click="emit('publish-all')">
+              发布全部已生成项目
+            </el-button>
+          </div>
+        </div>
+
+        <el-button class="submission-record-btn" :icon="ExternalLink" plain :loading="feishuLoading" @click="emit('open-submission-records')">
+          查看日报提交记录
         </el-button>
       </div>
-
-      <div class="batch-publish-panel">
-        <div class="batch-publish-head">
-          <div>
-            <strong>批量发布项目</strong>
-            <span>发布全部时会按下方每个项目的目标和工时逐条提交</span>
-          </div>
-          <small>{{ publishableCount }}/{{ totalDraftCount }}</small>
-        </div>
-
-        <div class="batch-publish-list">
-          <div v-if="!drafts.length" class="empty-state">暂无可配置项目</div>
-          <div
-            v-for="item in drafts"
-            :key="item.key"
-            class="batch-publish-item"
-            :class="{ disabled: !item.hasReport, success: item.publishStatus === 'success', failed: item.publishStatus === 'failed' }"
-          >
-            <div class="batch-publish-item-head">
-              <strong>{{ item.repoName }}</strong>
-              <el-tag v-if="!item.hasReport" type="info" size="small" effect="plain">待生成</el-tag>
-              <el-tag v-else-if="!item.projectOptionId" type="warning" size="small" effect="plain">待选目标</el-tag>
-              <el-tag v-else-if="item.publishStatus === 'success'" type="success" size="small" effect="plain">已发布</el-tag>
-              <el-tag v-else-if="item.publishStatus === 'failed'" type="danger" size="small" effect="plain">失败</el-tag>
-              <el-tag v-else type="success" size="small" effect="plain">可发布</el-tag>
-            </div>
-
-            <el-select
-              :model-value="item.projectOptionId"
-              :disabled="!item.hasReport"
-              filterable
-              size="small"
-              placeholder="飞书目标"
-              no-match-text="未找到匹配项目"
-              no-data-text="暂无飞书项目选项"
-              @change="(value: string) => emit('update-draft-project', item.key, value)"
-            >
-              <el-option v-for="option in projectOptions" :key="option.id" :label="option.name" :value="option.id" />
-            </el-select>
-
-            <div class="batch-hour-row">
-              <el-input-number
-                :model-value="item.workHours"
-                :disabled="!item.hasReport"
-                :min="0.5"
-                :max="24"
-                :step="0.5"
-                :precision="1"
-                size="small"
-                controls-position="right"
-                @update:model-value="(value: number | null | undefined) => updateDraftHours(item.key, value)"
-                @change="(value: number | null | undefined) => commitDraftHours(item.key, value)"
-              />
-              <span>小时</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="batch-publish-footer">
-          <el-button class="batch-publish-btn" :icon="Send" plain :loading="pushing" :disabled="!canPublishAll" @click="emit('publish-all')">
-            发布全部已生成项目
-          </el-button>
-        </div>
-      </div>
-
-      <el-button class="submission-record-btn" :icon="ExternalLink" plain :loading="feishuLoading" @click="emit('open-submission-records')">
-        查看日报提交记录
-      </el-button>
     </section>
 
     <section class="surface-card record-panel">

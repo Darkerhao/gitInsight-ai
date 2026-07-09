@@ -1995,7 +1995,7 @@ textarea {
 .publish-panel {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .publish-panel h3 {
@@ -2022,10 +2022,10 @@ textarea {
 }
 
 .batch-publish-panel {
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-block);
-  background: #fbfcff;
-  padding: 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .batch-publish-head {
@@ -2066,8 +2066,8 @@ textarea {
 .batch-publish-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  max-height: 360px;
+  gap: 8px;
+  max-height: 330px;
   overflow: auto;
   padding-right: 2px;
 }
@@ -2075,11 +2075,11 @@ textarea {
 .batch-publish-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
+  gap: 7px;
   border: 1px solid var(--c-border);
   border-radius: 8px;
   background: #fff;
-  padding: 10px;
+  padding: 10px 11px;
 }
 
 .batch-publish-item.success {
@@ -2141,24 +2141,26 @@ textarea {
 }
 
 .current-publish-action {
-  padding-top: 2px;
+  padding-top: 4px;
 }
 
 .current-publish-btn.el-button {
+  min-height: 38px;
   font-weight: 700;
 }
 
 .publish-hint {
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-block);
-  background: #fbfcff;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--c-text-muted);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 12px;
-  font-size: 13px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .publish-hint .el-button {
@@ -2284,12 +2286,12 @@ textarea {
 
 /* ============ 日报生成页 ============ */
 .report-generate-view {
-  --report-aside-width: 340px;
+  --report-aside-width: clamp(370px, 20vw, 400px);
 }
 
 .report-generate-view .content-grid.has-right-panel {
   grid-template-columns: minmax(0, 1fr) var(--report-aside-width);
-  gap: 18px;
+  gap: 20px;
 }
 
 .report-setup-card,
@@ -2645,12 +2647,39 @@ textarea {
   background: transparent;
 }
 
+.publish-sidebar {
+  min-width: 0;
+}
+
+.publish-control-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.publish-control-section + .publish-control-section {
+  padding-top: 14px;
+  border-top: 1px solid var(--c-border);
+}
+
+.publish-status-section {
+  gap: 10px;
+}
+
+.current-publish-section {
+  gap: 13px;
+}
+
+.batch-publish-section {
+  gap: 12px;
+}
+
 .active-project-card {
   min-width: 0;
-  border: 1px solid var(--c-border);
+  border: 0;
   border-radius: var(--radius-block);
-  background: #fbfcff;
-  padding: 10px 12px;
+  background: var(--c-surface-inset);
+  padding: 11px 12px;
 }
 
 .active-project-card strong,
@@ -2678,9 +2707,9 @@ textarea {
   grid-template-columns: 34px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
-  border: 1px solid var(--c-border);
+  border: 0;
   border-radius: var(--radius-block);
-  background: #fbfcff;
+  background: var(--c-surface-inset);
   padding: 12px;
 }
 
@@ -2694,7 +2723,6 @@ textarea {
 }
 
 .publish-summary-card.ready {
-  border-color: rgba(22, 163, 74, 0.24);
   background: #fbfffd;
 }
 
@@ -2722,7 +2750,7 @@ textarea {
 }
 
 .record-panel .panel-head {
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
 .record-panel .panel-head > div {
@@ -2738,10 +2766,13 @@ textarea {
 
 .record-panel .record-list {
   gap: 0;
+  max-height: 300px;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .record-panel .record-item {
-  padding: 10px 0;
+  padding: 11px 0;
   border-bottom: 1px solid var(--c-border);
 }
 
