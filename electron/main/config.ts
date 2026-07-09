@@ -7,8 +7,10 @@ import {
   DEFAULT_AI_MODEL_OPTIONS,
   DEFAULT_AUTO_SYNC_CONFIG,
   DEFAULT_FEISHU_FORM_CONFIG,
+  DEFAULT_TOKEN_PROXY_CONFIG,
+  DEFAULT_MODEL_PRICING,
 } from '../../src/shared/types.js';
-import type { AiProfile, AppConfig, AutoSyncConfig, AutoSyncStatus } from '../../src/shared/types.js';
+import type { AiProfile, AppConfig, AutoSyncConfig, AutoSyncStatus, ModelPricing } from '../../src/shared/types.js';
 import { ensureConfigDir, getConfigPath, getSecretsPath } from './paths.js';
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -27,6 +29,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   activeAiProfileId: DEFAULT_AI_PROFILE_ID,
   feishuForm: { ...DEFAULT_FEISHU_FORM_CONFIG },
   autoSync: { ...DEFAULT_AUTO_SYNC_CONFIG },
+  tokenProxy: { ...DEFAULT_TOKEN_PROXY_CONFIG },
+  modelPricing: [...DEFAULT_MODEL_PRICING],
 };
 
 
@@ -210,6 +214,14 @@ export function normalizeConfig(config?: Partial<AppConfig>): AppConfig {
       projectWorkHours: normalizeProjectWorkHours(config?.feishuForm?.projectWorkHours),
     },
     autoSync: normalizeAutoSyncConfig(config?.autoSync),
+    tokenProxy: {
+      ...DEFAULT_TOKEN_PROXY_CONFIG,
+      ...(config?.tokenProxy ?? {}),
+      enabled: Boolean(config?.tokenProxy?.enabled),
+      port: Number(config?.tokenProxy?.port) || DEFAULT_TOKEN_PROXY_CONFIG.port,
+      targets: Array.isArray(config?.tokenProxy?.targets) ? config.tokenProxy.targets : [],
+    },
+    modelPricing: normalizeModelPricing(config?.modelPricing),
   };
 }
 
@@ -229,6 +241,30 @@ export function normalizeWorkspaceDirs(options: unknown, currentWorkspaceDir?: s
 export function normalizeOptions(options: unknown, fallbackOptions: string[]) {
   const source = Array.isArray(options) ? options : fallbackOptions;
   return Array.from(new Set(source.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean)));
+}
+
+
+function normalizeModelPricing(options: unknown): ModelPricing[] {
+  const source = Array.isArray(options) ? options : [];
+  const merged = new Map<string, ModelPricing>();
+  for (const item of DEFAULT_MODEL_PRICING) {
+    merged.set(item.model.toLowerCase(), { ...item });
+  }
+  for (const item of source) {
+    if (!item || typeof item !== 'object') continue;
+    const pricing = item as Partial<ModelPricing>;
+    const model = typeof pricing.model === 'string' ? pricing.model.trim() : '';
+    if (!model) continue;
+    merged.set(model.toLowerCase(), {
+      model,
+      inputPer1M: Number(pricing.inputPer1M) || 0,
+      outputPer1M: Number(pricing.outputPer1M) || 0,
+      ...(pricing.cacheReadPer1M != null ? { cacheReadPer1M: Number(pricing.cacheReadPer1M) || 0 } : {}),
+      ...(pricing.cacheCreationPer1M != null ? { cacheCreationPer1M: Number(pricing.cacheCreationPer1M) || 0 } : {}),
+      ...(pricing.cachedPer1M != null ? { cachedPer1M: Number(pricing.cachedPer1M) || 0 } : {}),
+    });
+  }
+  return [...merged.values()];
 }
 
 
@@ -313,4 +349,3 @@ export async function saveConfig(config: AppConfig) {
   await writeFile(getConfigPath(), JSON.stringify(stripSensitiveConfig(normalizedConfig), null, 2), 'utf-8');
   return normalizedConfig;
 }
-

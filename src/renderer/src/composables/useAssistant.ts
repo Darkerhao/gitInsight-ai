@@ -7,6 +7,8 @@ import {
   DEFAULT_AI_MODEL_OPTIONS,
   DEFAULT_AUTO_SYNC_CONFIG,
   DEFAULT_FEISHU_FORM_CONFIG,
+  DEFAULT_TOKEN_PROXY_CONFIG,
+  DEFAULT_MODEL_PRICING,
 } from '@shared/types';
 import type {
   AppConfig,
@@ -34,6 +36,7 @@ import {
 } from './assistant/normalizers';
 import { createRepoState } from './assistant/repoState';
 import { createReportState } from './assistant/reportState';
+import { createTokenStatsState } from './assistant/tokenStatsState';
 
 export type DraftGenerateStatus = 'idle' | 'generating' | 'success' | 'failed';
 export type DraftPublishStatus = 'idle' | 'publishing' | 'success' | 'failed';
@@ -101,6 +104,8 @@ function createAssistant() {
     activeAiProfileId: DEFAULT_AI_PROFILE_ID,
     feishuForm: { ...DEFAULT_FEISHU_FORM_CONFIG },
     autoSync: { ...DEFAULT_AUTO_SYNC_CONFIG },
+    tokenProxy: { ...DEFAULT_TOKEN_PROXY_CONFIG },
+    modelPricing: [...DEFAULT_MODEL_PRICING],
   });
 
   const form = reactive({
@@ -247,6 +252,8 @@ function createAssistant() {
     refreshLocalData: () => localDataState.refreshLocalData(),
   });
 
+  const tokenStatsState = createTokenStatsState();
+
   async function loadConfig() {
     const saved = await window.api.loadConfig();
     Object.assign(config, {
@@ -328,6 +335,7 @@ function createAssistant() {
     removeFeishuAuthListener?.();
     removeAutoSyncListener = null;
     removeFeishuAuthListener = null;
+    tokenStatsState.dispose();
   }
 
   return {
@@ -402,6 +410,18 @@ function createAssistant() {
     isRepoPinned: repoState.isRepoPinned,
     toggleRepoPin: repoState.toggleRepoPin,
     removeRepo: repoState.removeRepo,
+    tokenScans: tokenStatsState.tokenScans,
+    scanProgress: tokenStatsState.scanProgress,
+    scanning: tokenStatsState.scanning,
+    proxyStatus: tokenStatsState.proxyStatus,
+    usageStats: tokenStatsState.usageStats,
+    usageLoading: tokenStatsState.usageLoading,
+    runTokenScan: tokenStatsState.runTokenScan,
+    loadTokenScans: tokenStatsState.loadTokenScans,
+    refreshProxyStatus: tokenStatsState.refreshProxyStatus,
+    startProxy: tokenStatsState.startProxy,
+    stopProxy: tokenStatsState.stopProxy,
+    loadUsageStats: tokenStatsState.loadUsageStats,
     init,
     dispose,
   };

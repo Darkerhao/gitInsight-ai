@@ -144,9 +144,50 @@ export async function getDatabase() {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_checkin_coin_transactions_created_at ON checkin_coin_transactions(created_at);
+
+    CREATE TABLE IF NOT EXISTS token_scan_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      repo_path TEXT NOT NULL,
+      repo_name TEXT NOT NULL,
+      total_files INTEGER NOT NULL,
+      total_tokens INTEGER NOT NULL,
+      breakdown_json TEXT NOT NULL,
+      scanned_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_token_scan_repo ON token_scan_results(repo_path);
+    CREATE INDEX IF NOT EXISTS idx_token_scan_time ON token_scan_results(scanned_at);
+
+    CREATE TABLE IF NOT EXISTS api_usage_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source TEXT NOT NULL,
+      project_name TEXT,
+      project_path TEXT,
+      model TEXT NOT NULL,
+      provider TEXT,
+      prompt_tokens INTEGER NOT NULL DEFAULT 0,
+      completion_tokens INTEGER NOT NULL DEFAULT 0,
+      total_tokens INTEGER NOT NULL DEFAULT 0,
+      cached_tokens INTEGER NOT NULL DEFAULT 0,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+      cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+      input_cost_usd TEXT NOT NULL DEFAULT '0',
+      output_cost_usd TEXT NOT NULL DEFAULT '0',
+      cache_read_cost_usd TEXT NOT NULL DEFAULT '0',
+      cache_creation_cost_usd TEXT NOT NULL DEFAULT '0',
+      total_cost_usd TEXT NOT NULL DEFAULT '0',
+      request_path TEXT,
+      duration_ms INTEGER,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_api_usage_project ON api_usage_logs(project_name);
+    CREATE INDEX IF NOT EXISTS idx_api_usage_model ON api_usage_logs(model);
+    CREATE INDEX IF NOT EXISTS idx_api_usage_time ON api_usage_logs(created_at);
   `);
   ensureDailyReportTimeRangeColumns(sqlDatabase);
   ensureJiaziFarmPlots(sqlDatabase);
+  ensureApiUsageDetailColumns(sqlDatabase);
   await persistDatabase();
   return sqlDatabase;
 }
@@ -216,6 +257,35 @@ export function ensureJiaziFarmPlots(db: import('sql.js').Database) {
       String(updatedAt || new Date().toISOString()),
     ],
   );
+}
+
+
+export function ensureApiUsageDetailColumns(db: import('sql.js').Database) {
+  const columns = new Set((db.exec('PRAGMA table_info(api_usage_logs)')[0]?.values ?? []).map((row) => String(row[1])));
+  const additions: Array<[string, string]> = [
+    ['input_tokens', 'INTEGER NOT NULL DEFAULT 0'],
+    ['output_tokens', 'INTEGER NOT NULL DEFAULT 0'],
+    ['cache_read_tokens', 'INTEGER NOT NULL DEFAULT 0'],
+    ['cache_creation_tokens', 'INTEGER NOT NULL DEFAULT 0'],
+    ['input_cost_usd', "TEXT NOT NULL DEFAULT '0'"],
+    ['output_cost_usd', "TEXT NOT NULL DEFAULT '0'"],
+    ['cache_read_cost_usd', "TEXT NOT NULL DEFAULT '0'"],
+    ['cache_creation_cost_usd', "TEXT NOT NULL DEFAULT '0'"],
+    ['total_cost_usd', "TEXT NOT NULL DEFAULT '0'"],
+  ];
+
+  for (const [name, definition] of additions) {
+    if (!columns.has(name)) db.run(`ALTER TABLE api_usage_logs ADD COLUMN ${name} ${definition}`);
+  }
+
+  db.run(`
+    UPDATE api_usage_logs
+    SET
+      input_tokens = CASE WHEN input_tokens = 0 AND prompt_tokens > 0 THEN MAX(prompt_tokens - cached_tokens, 0) ELSE input_tokens END,
+      output_tokens = CASE WHEN output_tokens = 0 AND completion_tokens > 0 THEN completion_tokens ELSE output_tokens END,
+      cache_read_tokens = CASE WHEN cache_read_tokens = 0 AND cached_tokens > 0 THEN cached_tokens ELSE cache_read_tokens END,
+      total_tokens = CASE WHEN total_tokens = 0 THEN MAX(prompt_tokens - cached_tokens, 0) + completion_tokens + cached_tokens ELSE total_tokens END
+  `);
 }
 
 
