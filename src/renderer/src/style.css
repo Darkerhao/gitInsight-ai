@@ -2167,6 +2167,39 @@ textarea {
   font-weight: 600;
 }
 
+.publish-date-field .el-date-editor {
+  width: 100%;
+}
+
+.publish-date-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.publish-date-shortcut-btn.el-button {
+  min-width: 0;
+  height: 30px;
+  border-color: var(--c-border-strong);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--c-text-muted);
+  font-size: 12px;
+  padding-inline: 0;
+}
+
+.publish-date-shortcut-btn.el-button + .publish-date-shortcut-btn.el-button {
+  margin-left: 0;
+}
+
+.publish-date-shortcut-btn.el-button.active,
+.publish-date-shortcut-btn.el-button:hover,
+.publish-date-shortcut-btn.el-button:focus-visible {
+  border-color: var(--c-primary);
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+}
+
 .switch-line {
   display: flex;
   align-items: center;
@@ -2736,6 +2769,10 @@ textarea {
 :root[data-theme='dark'] .batch-publish-item,
 :root[data-theme='dark'] .publish-summary-card {
   background: var(--c-surface-muted);
+}
+
+:root[data-theme='dark'] .publish-date-shortcut-btn.el-button {
+  background: var(--c-surface);
 }
 
 :root[data-theme='dark'] .generation-check-chip.el-button.ready,

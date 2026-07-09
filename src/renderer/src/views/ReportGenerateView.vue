@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, h, ref, watch } from 'vue';
 import { BrainCog, CalendarDays, FileText } from 'lucide-vue-next';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
@@ -154,8 +154,8 @@ const publishDraftItems = computed(() =>
 );
 
 const publishableDrafts = computed(() => projectDrafts.value.filter((item) => item.report.trim() && item.projectOptionId.trim()));
-const canPublishActive = computed(() => Boolean(activeDraft.value?.report.trim() && activeDraft.value.projectOptionId.trim() && !pushing.value));
-const canPublishAll = computed(() => publishableDrafts.value.length > 0 && !pushing.value);
+const canPublishActive = computed(() => Boolean(activeDraft.value?.report.trim() && activeDraft.value.projectOptionId.trim() && form.date && !pushing.value));
+const canPublishAll = computed(() => Boolean(form.date && publishableDrafts.value.length > 0 && !pushing.value));
 
 const generationChecks = computed<GenerationCheck[]>(() => [
   {
@@ -303,6 +303,9 @@ function formatRangeDateTime(value?: string) {
 }
 
 function setDateShortcut(value: DateShortcut) {
+  const previousDate = form.date;
+  const previousStartDateTime = form.startDateTime;
+  const previousEndDateTime = form.endDateTime;
   dateShortcut.value = value;
   if (value === 'custom') return;
   const now = new Date();
@@ -313,33 +316,56 @@ function setDateShortcut(value: DateShortcut) {
     form.date = formatDate(now);
     form.startDateTime = formatDateTimeValue(start);
     form.endDateTime = formatDateTimeValue(now);
+    resetPublishStateAfterRangeChange(previousDate, previousStartDateTime, previousEndDateTime);
     return;
   }
   const date = new Date(now);
   if (value === 'yesterday') date.setDate(date.getDate() - 1);
   applyFullDayReportRange(formatDate(date));
+  resetPublishStateAfterRangeChange(previousDate, previousStartDateTime, previousEndDateTime);
 }
 
 function handleReportDateChange(value: string) {
+  const previousDate = form.date;
+  const previousStartDateTime = form.startDateTime;
+  const previousEndDateTime = form.endDateTime;
   form.date = value;
   if (form.date) {
     applyFullDayReportRange(form.date);
   }
   dateShortcut.value = 'custom';
+  resetPublishStateAfterRangeChange(previousDate, previousStartDateTime, previousEndDateTime);
 }
 
-function handleRangeChange() {
+function resetPublishStateAfterRangeChange(previousDate: string, previousStartDateTime: string, previousEndDateTime: string) {
+  const changed = previousDate !== form.date || previousStartDateTime !== form.startDateTime || previousEndDateTime !== form.endDateTime;
+  if (!changed) return;
+
+  for (const draft of projectDrafts.value) {
+    if (draft.publishStatus === 'success') {
+      draft.publishStatus = 'idle';
+      draft.publishMessage = '发布日期或提交范围已修改，需要重新发布';
+    }
+  }
+}
+
+function handleRangeChange(previousStartDateTime: string, previousEndDateTime: string) {
   dateShortcut.value = 'custom';
+  resetPublishStateAfterRangeChange(form.date, previousStartDateTime, previousEndDateTime);
 }
 
 function handleStartDateTimeChange(value: string) {
+  const previousStartDateTime = form.startDateTime;
+  const previousEndDateTime = form.endDateTime;
   form.startDateTime = value;
-  handleRangeChange();
+  handleRangeChange(previousStartDateTime, previousEndDateTime);
 }
 
 function handleEndDateTimeChange(value: string) {
+  const previousStartDateTime = form.startDateTime;
+  const previousEndDateTime = form.endDateTime;
   form.endDateTime = value;
-  handleRangeChange();
+  handleRangeChange(previousStartDateTime, previousEndDateTime);
 }
 
 function getReportRangePayload() {
@@ -625,6 +651,11 @@ function buildDraftFeishuConfig(draft: ProjectReportDraft) {
 
 async function publishDraft(draft: ProjectReportDraft, options: { persistBeforePublish?: boolean } = {}) {
   const content = draft.report.trim();
+  if (!form.date) {
+    draft.publishStatus = 'failed';
+    draft.publishMessage = '请选择发布日期';
+    return false;
+  }
   if (!content) {
     draft.publishStatus = 'failed';
     draft.publishMessage = '请先生成日报';
@@ -662,6 +693,34 @@ async function publishDraft(draft: ProjectReportDraft, options: { persistBeforeP
   }
 }
 
+async function confirmPublishDate(scopeLabel: string) {
+  if (!form.date) {
+    ElMessage.warning('请选择发布日期');
+    return false;
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      h('div', { class: 'publish-date-confirm' }, [
+        h('p', ['发布日期：', h('strong', form.date)]),
+        h('p', `提交范围：${reportRangeLabel.value}`),
+        h('p', `${scopeLabel}将同步到飞书日报表，请确认日期无误。`),
+      ]),
+      '确认发布日期',
+      {
+        confirmButtonText: '确认发布',
+        cancelButtonText: '返回修改',
+        type: 'warning',
+      },
+    );
+    return true;
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return false;
+    ElMessage.error(error instanceof Error ? error.message : '发布已取消');
+    return false;
+  }
+}
+
 async function publishActiveReport() {
   const draft = activeDraft.value;
   if (!draft) return;
@@ -673,6 +732,8 @@ async function publishActiveReport() {
     ElMessage.warning('请选择飞书发布目标');
     return;
   }
+  const confirmed = await confirmPublishDate(`当前项目「${draft.repo.name}」`);
+  if (!confirmed) return;
 
   pushing.value = true;
   try {
@@ -691,6 +752,8 @@ async function publishAllReports() {
     ElMessage.warning('没有可发布的项目，请先生成日报并选择飞书目标');
     return;
   }
+  const confirmed = await confirmPublishDate(`共 ${targets.length} 个项目`);
+  if (!confirmed) return;
 
   pushing.value = true;
   let successCount = 0;
@@ -840,6 +903,9 @@ async function confirmRemoveRepo(item: RepoInfo) {
         :drafts="publishDraftItems"
         :project-options="projectOptions"
         :generation-records="generationRecords"
+        :report-date="form.date"
+        :report-range-label="reportRangeLabel"
+        :date-shortcut="dateShortcut"
         :can-publish-active="canPublishActive"
         :can-publish-all="canPublishAll"
         :publishable-count="publishableDrafts.length"
@@ -850,6 +916,8 @@ async function confirmRemoveRepo(item: RepoInfo) {
         :format-date-time="formatDateTime"
         :get-record-status="getRecordStatus"
         @navigate="emit('navigate', $event)"
+        @report-date-change="handleReportDateChange"
+        @set-date-shortcut="setDateShortcut"
         @update-draft-project="handleUpdateDraftProject"
         @update-draft-hours="handleUpdateDraftHours"
         @commit-draft-hours="handleCommitDraftHours"

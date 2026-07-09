@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ExternalLink, Send } from 'lucide-vue-next';
+import { CalendarDays, ExternalLink, Send } from 'lucide-vue-next';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import type { DailyReportRecord, FeishuProjectOption } from '@shared/types';
 
+type DateShortcut = 'today' | 'yesterday' | 'rolling' | 'custom';
 type RecordStatus = 'success' | 'failed' | 'pending';
 type DraftPublishStatus = 'idle' | 'publishing' | 'success' | 'failed';
 
@@ -22,6 +23,9 @@ const props = defineProps<{
   drafts: ProjectPublishDraft[];
   projectOptions: FeishuProjectOption[];
   generationRecords: DailyReportRecord[];
+  reportDate: string;
+  reportRangeLabel: string;
+  dateShortcut: DateShortcut;
   canPublishActive: boolean;
   canPublishAll: boolean;
   publishableCount: number;
@@ -38,6 +42,8 @@ const emit = defineEmits<{
   (e: 'update-draft-project', key: string, value: string): void;
   (e: 'update-draft-hours', key: string, value: number | undefined): void;
   (e: 'commit-draft-hours', key: string, value: number | undefined): void;
+  (e: 'report-date-change', value: string): void;
+  (e: 'set-date-shortcut', value: DateShortcut): void;
   (e: 'publish-current'): void;
   (e: 'publish-all'): void;
   (e: 'open-submission-records'): void;
@@ -111,7 +117,7 @@ function applyPresetHours(key: string, value: number) {
         <Send :size="18" />
         <div>
           <strong>{{ publishStatusTitle }}</strong>
-          <span>{{ publishStatusDetail }}</span>
+          <span>{{ publishStatusDetail }}，发布日期 {{ reportDate || '未选择' }}</span>
         </div>
       </div>
 
@@ -126,6 +132,41 @@ function applyPresetHours(key: string, value: number) {
           <strong>{{ activeDraft?.repoName || '暂无项目' }}</strong>
           <span>{{ publishableCount }}/{{ totalDraftCount }} 个项目可发布</span>
         </div>
+      </div>
+
+      <div class="field publish-date-field">
+        <label>发布日期</label>
+        <el-date-picker
+          :model-value="reportDate"
+          type="date"
+          value-format="YYYY-MM-DD"
+          :clearable="false"
+          placeholder="选择发布日期"
+          @change="(value: string) => emit('report-date-change', value)"
+        />
+        <div class="publish-date-shortcuts">
+          <el-button
+            class="publish-date-shortcut-btn"
+            :class="{ active: dateShortcut === 'today' }"
+            :icon="CalendarDays"
+            plain
+            size="small"
+            @click="emit('set-date-shortcut', 'today')"
+          >
+            今天
+          </el-button>
+          <el-button
+            class="publish-date-shortcut-btn"
+            :class="{ active: dateShortcut === 'yesterday' }"
+            :icon="CalendarDays"
+            plain
+            size="small"
+            @click="emit('set-date-shortcut', 'yesterday')"
+          >
+            昨天
+          </el-button>
+        </div>
+        <small class="field-hint">同步飞书会使用此日期；当前提交范围：{{ reportRangeLabel }}</small>
       </div>
 
       <div class="field">
