@@ -4,6 +4,8 @@ import { join } from 'node:path';
 
 export let mainWindow: BrowserWindow | null = null;
 
+const APP_BACKGROUND_COLOR = '#f4f6fb';
+
 export function getWindowIconPath() {
   const platformCandidates = process.platform === 'darwin'
     ? [
@@ -48,17 +50,39 @@ export function createMainWindow() {
     : join(__dirname, '../preload/preload.cjs');
 
   mainWindow = new BrowserWindow({
+    show: false,
     width: 1400,
     height: 900,
     minWidth: 1200,
     minHeight: 780,
     icon: getWindowOptionsIcon(),
+    backgroundColor: APP_BACKGROUND_COLOR,
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
     },
+  });
+
+  const createdWindow = mainWindow;
+  const revealMainWindow = () => {
+    if (createdWindow.isDestroyed()) return;
+    if (!createdWindow.isVisible()) createdWindow.show();
+  };
+  const revealFallbackTimer = setTimeout(revealMainWindow, 5000);
+
+  createdWindow.once('ready-to-show', () => {
+    clearTimeout(revealFallbackTimer);
+    revealMainWindow();
+  });
+  createdWindow.webContents.once('did-fail-load', () => {
+    clearTimeout(revealFallbackTimer);
+    revealMainWindow();
+  });
+  createdWindow.on('closed', () => {
+    clearTimeout(revealFallbackTimer);
+    if (mainWindow === createdWindow) mainWindow = null;
   });
 
   const devServerUrl = process.env.ELECTRON_RENDERER_URL || process.env.VITE_DEV_SERVER_URL;

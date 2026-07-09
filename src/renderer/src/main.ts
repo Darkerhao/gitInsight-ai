@@ -8,3 +8,16 @@ import App from './App.vue';
 import router from './router';
 
 createApp(App).use(router).use(ElementPlus, { locale: zhCn }).mount('#app');
+
+const bootShell = document.getElementById('app-boot');
+if (bootShell) {
+  window.requestAnimationFrame(() => {
+    bootShell.classList.add('is-leaving');
+    window.setTimeout(() => {
+      bootShell.remove();
+      document.documentElement.removeAttribute('data-boot-theme');
+    }, 220);
+  });
+} else {
+  document.documentElement.removeAttribute('data-boot-theme');
+}

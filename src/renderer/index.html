@@ -5,13 +5,311 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file:; font-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*;"
+      content="default-src 'self'; script-src 'self' 'sha256-7RpXNmUcW6wU766R0J1SAyIydJV+rNnbneVjbOlnr+Q='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file:; font-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*;"
     />
     <link rel="icon" type="image/png" href="/src/assets/logo.png" />
     <title>AI日报助手</title>
+    <script>
+      (() => {
+        try {
+          if (window.localStorage.getItem('gitinsight:theme-mode') === 'dark') {
+            document.documentElement.dataset.bootTheme = 'dark';
+          }
+        } catch {
+          // Keep the boot shell light if localStorage is unavailable.
+        }
+      })();
+    </script>
+    <style>
+      :root {
+        background: #f4f6fb;
+        color: #1f2937;
+        color-scheme: light;
+        font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      html,
+      body,
+      #app {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #f4f6fb;
+      }
+
+      .app-boot {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        grid-template-columns: 256px minmax(0, 1fr);
+        width: 100%;
+        height: 100%;
+        min-height: 100vh;
+        background: #f4f6fb;
+        color: #1f2937;
+        transition: opacity 180ms ease, visibility 180ms ease;
+      }
+
+      .app-boot.is-leaving {
+        opacity: 0;
+        pointer-events: none;
+        visibility: hidden;
+      }
+
+      .app-boot-sidebar {
+        border-right: 1px solid #eef0f4;
+        background: #ffffff;
+        padding: 22px 16px;
+      }
+
+      .app-boot-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 34px;
+        margin-bottom: 28px;
+      }
+
+      .app-boot-logo {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        background: linear-gradient(135deg, #3b6cf6, #5a86ff);
+        box-shadow: 0 6px 14px rgba(59, 108, 246, 0.24);
+      }
+
+      .app-boot-title {
+        width: 108px;
+        height: 16px;
+      }
+
+      .app-boot-line,
+      .app-boot-title,
+      .app-boot-card,
+      .app-boot-chip,
+      .app-boot-action {
+        position: relative;
+        overflow: hidden;
+        border-radius: 8px;
+        background: #e9eef7;
+      }
+
+      .app-boot-line::after,
+      .app-boot-title::after,
+      .app-boot-card::after,
+      .app-boot-chip::after,
+      .app-boot-action::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        transform: translateX(-100%);
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.68), transparent);
+        animation: app-boot-shimmer 1.25s ease-in-out infinite;
+      }
+
+      .app-boot-nav {
+        display: grid;
+        gap: 10px;
+      }
+
+      .app-boot-line {
+        height: 42px;
+      }
+
+      .app-boot-line:nth-child(1) {
+        background: #eaf0ff;
+      }
+
+      .app-boot-main {
+        display: grid;
+        grid-template-rows: 72px minmax(0, 1fr);
+        min-width: 0;
+      }
+
+      .app-boot-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 0 28px;
+        background: #ffffff;
+        border-bottom: 1px solid #eef0f4;
+      }
+
+      .app-boot-copy {
+        display: grid;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .app-boot-copy strong {
+        font-size: 18px;
+        line-height: 1.2;
+      }
+
+      .app-boot-copy span {
+        color: #9aa3b2;
+        font-size: 13px;
+      }
+
+      .app-boot-actions {
+        display: flex;
+        gap: 10px;
+      }
+
+      .app-boot-action {
+        width: 38px;
+        height: 38px;
+        border-radius: 8px;
+      }
+
+      .app-boot-content {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 20px;
+        min-height: 0;
+        padding: 22px 28px;
+      }
+
+      .app-boot-panel {
+        display: grid;
+        gap: 16px;
+        align-content: start;
+        min-width: 0;
+      }
+
+      .app-boot-card {
+        height: 176px;
+        border: 1px solid #eef0f4;
+        background: #ffffff;
+        box-shadow: 0 1px 3px rgba(17, 24, 39, 0.04), 0 8px 24px rgba(17, 24, 39, 0.04);
+      }
+
+      .app-boot-card.large {
+        height: 298px;
+      }
+
+      .app-boot-side {
+        display: grid;
+        gap: 14px;
+        align-content: start;
+      }
+
+      .app-boot-chip {
+        height: 86px;
+        border: 1px solid #eef0f4;
+        background: #ffffff;
+      }
+
+      :root[data-boot-theme='dark'] {
+        background: #0f141d;
+        color: #e7edf7;
+        color-scheme: dark;
+      }
+
+      :root[data-boot-theme='dark'] body,
+      :root[data-boot-theme='dark'] #app,
+      :root[data-boot-theme='dark'] .app-boot {
+        background: #0f141d;
+        color: #e7edf7;
+      }
+
+      :root[data-boot-theme='dark'] .app-boot-sidebar,
+      :root[data-boot-theme='dark'] .app-boot-topbar,
+      :root[data-boot-theme='dark'] .app-boot-card,
+      :root[data-boot-theme='dark'] .app-boot-chip {
+        background: #161d29;
+        border-color: #283244;
+      }
+
+      :root[data-boot-theme='dark'] .app-boot-line,
+      :root[data-boot-theme='dark'] .app-boot-title,
+      :root[data-boot-theme='dark'] .app-boot-action {
+        background: #202a39;
+      }
+
+      :root[data-boot-theme='dark'] .app-boot-line:nth-child(1) {
+        background: rgba(122, 162, 255, 0.16);
+      }
+
+      :root[data-boot-theme='dark'] .app-boot-copy span {
+        color: #748196;
+      }
+
+      :root[data-boot-theme='dark'] .app-boot-line::after,
+      :root[data-boot-theme='dark'] .app-boot-title::after,
+      :root[data-boot-theme='dark'] .app-boot-card::after,
+      :root[data-boot-theme='dark'] .app-boot-chip::after,
+      :root[data-boot-theme='dark'] .app-boot-action::after {
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+      }
+
+      @keyframes app-boot-shimmer {
+        to {
+          transform: translateX(100%);
+        }
+      }
+
+      @media (max-width: 960px) {
+        .app-boot {
+          grid-template-columns: 76px minmax(0, 1fr);
+        }
+
+        .app-boot-title {
+          display: none;
+        }
+
+        .app-boot-content {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .app-boot-side {
+          display: none;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>
+    <div id="app-boot" class="app-boot" aria-label="AI日报助手启动中">
+      <aside class="app-boot-sidebar" aria-hidden="true">
+        <div class="app-boot-brand">
+          <div class="app-boot-logo"></div>
+          <div class="app-boot-title"></div>
+        </div>
+        <div class="app-boot-nav">
+          <div class="app-boot-line"></div>
+          <div class="app-boot-line"></div>
+          <div class="app-boot-line"></div>
+          <div class="app-boot-line"></div>
+        </div>
+      </aside>
+      <main class="app-boot-main">
+        <header class="app-boot-topbar">
+          <div class="app-boot-copy">
+            <strong>AI日报助手</strong>
+            <span>正在启动工作台</span>
+          </div>
+          <div class="app-boot-actions" aria-hidden="true">
+            <div class="app-boot-action"></div>
+            <div class="app-boot-action"></div>
+          </div>
+        </header>
+        <section class="app-boot-content" aria-hidden="true">
+          <div class="app-boot-panel">
+            <div class="app-boot-card"></div>
+            <div class="app-boot-card large"></div>
+          </div>
+          <div class="app-boot-side">
+            <div class="app-boot-chip"></div>
+            <div class="app-boot-chip"></div>
+            <div class="app-boot-chip"></div>
+          </div>
+        </section>
+      </main>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
