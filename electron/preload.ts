@@ -31,13 +31,6 @@ import type {
   StorageInfo,
   SyncLogRecord,
   SyncFeishuDailyPayload,
-  TokenProxyConfig,
-  TokenScanProgress,
-  TokenScanRecord,
-  TokenProxyStatus,
-  ApiUsageRecord,
-  UsageFilter,
-  UsageStats,
 } from '../src/shared/types.js';
 
 contextBridge.exposeInMainWorld('api', {
@@ -89,26 +82,6 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('jiazi-farm:unlock-plot', date) as Promise<JiaziFarmSnapshot>,
   saveDailyReport: (payload: SaveDailyReportPayload) =>
     ipcRenderer.invoke('daily-report:save', payload) as Promise<DailyReportRecord>,
-  // Token 统计
-  runTokenScan: (repoPaths: string[]) =>
-    ipcRenderer.invoke('token-scan:run', repoPaths) as Promise<TokenScanRecord[]>,
-  listTokenScans: (limit?: number) =>
-    ipcRenderer.invoke('token-scan:list', limit) as Promise<TokenScanRecord[]>,
-  startTokenProxy: (proxyConfig: TokenProxyConfig) =>
-    ipcRenderer.invoke('token-proxy:start', proxyConfig) as Promise<{ port: number }>,
-  stopTokenProxy: () =>
-    ipcRenderer.invoke('token-proxy:stop') as Promise<void>,
-  getTokenProxyStatus: () =>
-    ipcRenderer.invoke('token-proxy:status') as Promise<TokenProxyStatus>,
-  listApiUsage: (filter?: UsageFilter) =>
-    ipcRenderer.invoke('api-usage:list', filter) as Promise<ApiUsageRecord[]>,
-  getUsageStats: (filter?: UsageFilter) =>
-    ipcRenderer.invoke('api-usage:stats', filter) as Promise<UsageStats>,
-  onTokenScanProgress: (callback: (progress: TokenScanProgress) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, progress: TokenScanProgress) => callback(progress);
-    ipcRenderer.on('token-scan:progress', listener);
-    return () => ipcRenderer.removeListener('token-scan:progress', listener);
-  },
   onAutoSyncUpdated: (callback: (state: AutoSyncState) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: AutoSyncState) => callback(state);
     ipcRenderer.on('auto-sync:updated', listener);

@@ -255,39 +255,6 @@ ${rawInput.diff}
     throw new Error('AI接口未返回有效内容');
   }
 
-  // 记录 usage（副作用，不影响返回值）
-  try {
-    const usage = data?.usage;
-    if (usage) {
-      const { recordApiUsage } = await import('./tokenUsageDb.js');
-      const promptTokens = Number(usage.prompt_tokens ?? usage.input_tokens) || 0;
-      const completionTokens = Number(usage.completion_tokens ?? usage.output_tokens) || 0;
-      const cacheReadTokens = Number(
-        usage.prompt_tokens_details?.cached_tokens ??
-          usage.cache_read_input_tokens ??
-          usage.prompt_cache_hit_tokens,
-      ) || 0;
-      const cacheCreationTokens = Number(usage.cache_creation_input_tokens) || 0;
-      const inputTokens = Math.max(promptTokens - cacheReadTokens, 0);
-      await recordApiUsage({
-        source: 'report',
-        model: config.aiModel,
-        provider: (() => { try { return new URL(config.aiBaseUrl).hostname; } catch { return ''; } })(),
-        promptTokens,
-        completionTokens,
-        totalTokens: inputTokens + completionTokens + cacheReadTokens + cacheCreationTokens,
-        cachedTokens: cacheReadTokens,
-        inputTokens,
-        outputTokens: completionTokens,
-        cacheReadTokens,
-        cacheCreationTokens,
-        requestPath: '/v1/chat/completions',
-      });
-    }
-  } catch {
-    // usage 记录失败不影响主流程
-  }
-
   return content.trim();
 }
 

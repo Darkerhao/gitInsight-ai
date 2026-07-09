@@ -9,7 +9,6 @@ import ReportConfigView from '@/views/ReportConfigView.vue';
 import ReportGenerateView from '@/views/ReportGenerateView.vue';
 import HistoryLogsView from '@/views/HistoryLogsView.vue';
 import JiaziFarmView from '@/views/JiaziFarmView.vue';
-import TokenStatsView from '@/views/TokenStatsView.vue';
 import SystemSettingsView from '@/views/SystemSettingsView.vue';
 import { navKeys } from '@/router';
 import type { NavKey } from '@/router';
@@ -47,7 +46,6 @@ const viewMap = {
   history: HistoryLogsView,
   farm: JiaziFarmView,
   ai: ReportConfigView,
-  tokens: TokenStatsView,
   system: SystemSettingsView,
 };
 

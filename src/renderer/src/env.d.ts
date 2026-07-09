@@ -63,15 +63,6 @@ declare global {
       unlockJiaziCropTier: (date?: string) => Promise<JiaziFarmSnapshot>;
       unlockJiaziPlot: (date?: string) => Promise<JiaziFarmSnapshot>;
       saveDailyReport: (payload: import('@shared/types').SaveDailyReportPayload) => Promise<import('@shared/types').DailyReportRecord>;
-      // Token 统计
-      runTokenScan: (repoPaths: string[]) => Promise<import('@shared/types').TokenScanRecord[]>;
-      listTokenScans: (limit?: number) => Promise<import('@shared/types').TokenScanRecord[]>;
-      startTokenProxy: (proxyConfig: import('@shared/types').TokenProxyConfig) => Promise<{ port: number }>;
-      stopTokenProxy: () => Promise<void>;
-      getTokenProxyStatus: () => Promise<import('@shared/types').TokenProxyStatus>;
-      listApiUsage: (filter?: import('@shared/types').UsageFilter) => Promise<import('@shared/types').ApiUsageRecord[]>;
-      getUsageStats: (filter?: import('@shared/types').UsageFilter) => Promise<import('@shared/types').UsageStats>;
-      onTokenScanProgress: (callback: (progress: import('@shared/types').TokenScanProgress) => void) => () => void;
       onAutoSyncUpdated: (callback: (state: AutoSyncState) => void) => () => void;
       onCheckinWalletUpdated: (callback: (snapshot: CheckinWalletSnapshot) => void) => () => void;
       onFeishuAuthUpdated: (callback: (snapshot: FeishuAuthSnapshot) => void) => () => void;

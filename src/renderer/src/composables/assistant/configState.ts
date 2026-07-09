@@ -1,7 +1,7 @@
 import { computed } from 'vue';
 import type { Ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { DEFAULT_AI_PROFILE, DEFAULT_AUTO_SYNC_CONFIG, DEFAULT_TOKEN_PROXY_CONFIG } from '@shared/types';
+import { DEFAULT_AI_PROFILE, DEFAULT_AUTO_SYNC_CONFIG } from '@shared/types';
 import type { AiProfile, AppConfig } from '@shared/types';
 import {
   mergeCurrentOption,
@@ -169,29 +169,6 @@ export function createConfigState(ctx: ConfigStateContext) {
         lastScheduledRunKey: toPlainString(config.autoSync.lastScheduledRunKey),
         lastSuccessKey: toPlainString(config.autoSync.lastSuccessKey),
       },
-      tokenProxy: {
-        enabled: Boolean(config.tokenProxy.enabled),
-        port: Number(config.tokenProxy.port) || DEFAULT_TOKEN_PROXY_CONFIG.port,
-        targets: Array.isArray(config.tokenProxy.targets)
-          ? config.tokenProxy.targets.map((t) => ({
-              id: toPlainString(t.id),
-              name: toPlainString(t.name),
-              targetBaseUrl: toPlainString(t.targetBaseUrl),
-              apiKey: toPlainString(t.apiKey),
-              pathPrefix: toPlainString(t.pathPrefix),
-            }))
-          : [],
-      },
-      modelPricing: Array.isArray(config.modelPricing)
-        ? config.modelPricing.map((p) => ({
-            model: toPlainString(p.model),
-            inputPer1M: Number(p.inputPer1M) || 0,
-            outputPer1M: Number(p.outputPer1M) || 0,
-            ...(p.cacheReadPer1M != null ? { cacheReadPer1M: Number(p.cacheReadPer1M) || 0 } : {}),
-            ...(p.cacheCreationPer1M != null ? { cacheCreationPer1M: Number(p.cacheCreationPer1M) || 0 } : {}),
-            ...(p.cachedPer1M != null ? { cachedPer1M: Number(p.cachedPer1M) || 0 } : {}),
-          }))
-        : [],
     };
   }
 

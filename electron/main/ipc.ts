@@ -15,8 +15,6 @@ import type {
   JiaziFarmWaterPayload,
   SaveDailyReportPayload,
   SyncFeishuDailyPayload,
-  TokenProxyConfig,
-  UsageFilter,
 } from '../../src/shared/types.js';
 import { getAutoSyncState, runAutoSync, saveConfigAndReschedule, validateAutoSync } from './autoSync.js';
 import { getCheckinWalletSnapshot, importCheckinWallet, runDailyCheckin, spendCheckinCoins } from './checkinWallet.js';
@@ -36,9 +34,6 @@ import {
 } from './jiaziFarm.js';
 import { generateReport } from './report.js';
 import { scanRepositories } from './repoScan.js';
-import { scanProjectTokens } from './tokenScan.js';
-import { startTokenProxy, stopTokenProxy, getTokenProxyStatus } from './tokenProxy.js';
-import { listTokenScans, listApiUsage, getUsageStats } from './tokenUsageDb.js';
 import { getMainWindow } from './windows.js';
 
 export function registerIpcHandlers() {
@@ -82,22 +77,4 @@ export function registerIpcHandlers() {
     await saveConfig(config);
     return runAutoSync('manual');
   });
-
-  // Token 统计
-  ipcMain.handle('token-scan:run', async (_event, repoPaths: string[]) => {
-    try {
-      const mainWindow = getMainWindow();
-      return await scanProjectTokens(repoPaths, (progress) => {
-        mainWindow?.webContents.send('token-scan:progress', progress);
-      });
-    } catch (error) {
-      throw new Error(error instanceof Error ? error.message : '扫描失败');
-    }
-  });
-  ipcMain.handle('token-scan:list', async (_event, limit?: number) => listTokenScans(limit));
-  ipcMain.handle('token-proxy:start', async (_event, proxyConfig: TokenProxyConfig) => startTokenProxy(proxyConfig));
-  ipcMain.handle('token-proxy:stop', async () => stopTokenProxy());
-  ipcMain.handle('token-proxy:status', async () => getTokenProxyStatus());
-  ipcMain.handle('api-usage:list', async (_event, filter?: UsageFilter) => listApiUsage(filter));
-  ipcMain.handle('api-usage:stats', async (_event, filter?: UsageFilter) => getUsageStats(filter));
 }
