@@ -9,8 +9,8 @@ import { getDatabase, persistDatabase } from './database.js';
 import { shiftDateString, toLocalDateString } from './dateUtils.js';
 import { sendToMainWindow } from './windows.js';
 
-const DAILY_CHECKIN_REWARD_MIN = 8888;
-const DAILY_CHECKIN_REWARD_MAX = 88888;
+const DAILY_CHECKIN_REWARD_MIN = 88888;
+const DAILY_CHECKIN_REWARD_MAX = 888888;
 
 function normalizeCoins(value: unknown) {
   const coins = Math.floor(Number(value));

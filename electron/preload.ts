@@ -19,6 +19,8 @@ import type {
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
   GenerateReportParams,
+  HistoryLogPage,
+  HistoryLogQuery,
   JiaziFarmHarvestPayload,
   JiaziFarmPlantPayload,
   JiaziFarmQuickRipenPayload,
@@ -55,6 +57,8 @@ contextBridge.exposeInMainWorld('api', {
   listDailyReports: (limit?: number) => ipcRenderer.invoke('daily-report:list', limit) as Promise<DailyReportRecord[]>,
   listSyncLogs: (limit?: number) => ipcRenderer.invoke('sync-log:list', limit) as Promise<SyncLogRecord[]>,
   listErrorLogs: (limit?: number) => ipcRenderer.invoke('error-log:list', limit) as Promise<ErrorLogRecord[]>,
+  queryHistoryLogs: (query?: HistoryLogQuery) => ipcRenderer.invoke('history-log:query', query) as Promise<HistoryLogPage>,
+  listHistoryProjects: () => ipcRenderer.invoke('history-log:list-projects') as Promise<string[]>,
   getStorageInfo: () => ipcRenderer.invoke('storage:info') as Promise<StorageInfo>,
   getCheckinWalletSnapshot: () =>
     ipcRenderer.invoke('checkin-wallet:get-snapshot') as Promise<CheckinWalletSnapshot>,

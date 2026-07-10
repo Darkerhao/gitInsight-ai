@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Plus, RefreshCw, Trash2 } from 'lucide-vue-next';
+import { CheckCircle2, ClipboardList, LogIn, Plus, RefreshCw, TestTube2, Trash2, UserRound } from 'lucide-vue-next';
 import { useAssistant } from '@/composables/useAssistant';
 import SectionTitle from '@/components/common/SectionTitle.vue';
 
@@ -22,7 +22,10 @@ const {
   aiProfileOptions,
   activeAiProfile,
   feishuFieldOptions,
+  feishuLoading,
   fieldLoading,
+  projectLoading,
+  projectOptions,
   createAiProfile,
   selectAiProfile,
   removeAiProfile,
@@ -30,9 +33,13 @@ const {
   rememberAiModelOption,
   removeAiBaseUrlOption,
   removeAiModelOption,
+  loginFeishu,
   loadFeishuFields,
   loadFeishuProjects,
+  testSubmitFeishu,
 } = assistant;
+
+type FeishuGuideAction = 'login' | 'fields' | 'projects' | 'mapping' | 'test';
 
 const fieldMappingRows = [
   { label: '日期字段', model: 'dateFieldId', placeholder: '选择日期字段 ID' },
@@ -47,6 +54,81 @@ const isAiOnly = computed(() => props.mode === 'ai');
 const sectionTitle = computed(() => (isAiOnly.value ? 'AI 配置管理' : 'AI 接入与飞书连接'));
 const sectionSubtitle = computed(() => (isAiOnly.value ? '维护统一模型连接信息' : '维护模型、授权凭据和表单字段映射'));
 const canRemoveAiProfile = computed(() => config.aiProfiles.length > 1);
+const feishuAuthReady = computed(() =>
+  Boolean(
+    config.feishuForm.endpoint.trim() &&
+      config.feishuForm.shareToken.trim() &&
+      config.feishuForm.cookie.trim() &&
+      config.feishuForm.csrfToken.trim(),
+  ),
+);
+const feishuFieldMappingReady = computed(() => fieldMappingRows.every((row) => Boolean(config.feishuForm[row.model].trim())));
+const feishuProjectReady = computed(() => Boolean(config.feishuForm.projectFieldId.trim() && config.feishuForm.projectOptionId.trim()));
+const feishuReporterReady = computed(() => Boolean(config.feishuForm.reporterUserId.trim()));
+const feishuSubmitReady = computed(
+  () => feishuAuthReady.value && feishuFieldMappingReady.value && feishuProjectReady.value && feishuReporterReady.value,
+);
+const feishuGuideDoneCount = computed(
+  () =>
+    [feishuAuthReady.value, feishuFieldMappingReady.value, feishuProjectReady.value && feishuReporterReady.value, feishuSubmitReady.value].filter(Boolean)
+      .length,
+);
+const feishuGuideStatusLabel = computed(() => `${feishuGuideDoneCount.value}/4 步完成`);
+const feishuGuideSteps = computed(() => [
+  {
+    key: 'auth',
+    title: '连接飞书',
+    detail: feishuAuthReady.value ? '登录态、CSRF 和表单接口信息已齐备' : '先登录飞书，并补齐提交接口、shareToken、Cookie 与 CSRF Token',
+    done: feishuAuthReady.value,
+    panel: 'feishu',
+    action: 'login' as FeishuGuideAction,
+    actionLabel: '登录飞书',
+    icon: LogIn,
+    loading: feishuLoading.value,
+    disabled: false,
+  },
+  {
+    key: 'fields',
+    title: '映射表单字段',
+    detail: feishuFieldMappingReady.value
+      ? '日期、汇报人、明细表、项目、工时和内容字段均已映射'
+      : `还有 ${fieldMappingRows.filter((row) => !config.feishuForm[row.model].trim()).length} 个字段需要选择或填写`,
+    done: feishuFieldMappingReady.value,
+    panel: 'fields',
+    action: 'fields' as FeishuGuideAction,
+    actionLabel: feishuFieldOptions.value.length ? '重新解析字段' : '解析字段',
+    icon: ClipboardList,
+    loading: fieldLoading.value,
+    disabled: !config.feishuForm.shareToken.trim() && !config.feishuForm.endpoint.trim(),
+  },
+  {
+    key: 'mapping',
+    title: '确认人员与项目',
+    detail:
+      feishuProjectReady.value && feishuReporterReady.value
+        ? `已选择 ${projectOptions.value.find((item) => item.id === config.feishuForm.projectOptionId)?.name || config.feishuForm.projectName || '飞书项目'}`
+        : '选择飞书项目，并填写汇报人 userId',
+    done: feishuProjectReady.value && feishuReporterReady.value,
+    panel: 'mapping',
+    action: feishuProjectReady.value ? ('mapping' as FeishuGuideAction) : ('projects' as FeishuGuideAction),
+    actionLabel: feishuProjectReady.value ? '完善映射' : '刷新项目',
+    icon: UserRound,
+    loading: projectLoading.value,
+    disabled: !config.feishuForm.projectFieldId.trim(),
+  },
+  {
+    key: 'test',
+    title: '提交前检查',
+    detail: feishuSubmitReady.value ? '配置已满足测试提交条件' : '完成前面步骤后，再写入一条测试记录验证闭环',
+    done: feishuSubmitReady.value,
+    panel: 'feishu',
+    action: 'test' as FeishuGuideAction,
+    actionLabel: '测试提交',
+    icon: TestTube2,
+    loading: feishuLoading.value,
+    disabled: !feishuSubmitReady.value,
+  },
+]);
 const activePanels = computed<string[]>({
   get: () => (isAiOnly.value ? ['ai'] : advancedConfigPanels.value),
   set: (value) => {
@@ -60,6 +142,19 @@ const activePanels = computed<string[]>({
 
 function handleAiProfileChange(value: string) {
   selectAiProfile(value);
+}
+
+function openAdvancedPanel(name: string) {
+  activePanels.value = Array.from(new Set([...activePanels.value, name]));
+}
+
+function runFeishuGuideAction(action: FeishuGuideAction, panel: string) {
+  openAdvancedPanel(panel);
+  if (action === 'login') return loginFeishu();
+  if (action === 'fields') return loadFeishuFields();
+  if (action === 'projects') return loadFeishuProjects();
+  if (action === 'test') return testSubmitFeishu();
+  return undefined;
 }
 </script>
 
@@ -157,6 +252,45 @@ function handleAiProfileChange(value: string) {
     </div>
 
     <el-collapse v-else v-model="activePanels" class="advanced-collapse">
+      <section class="feishu-guide-card" aria-label="飞书接入向导">
+        <div class="feishu-guide-head">
+          <div>
+            <strong>飞书接入向导</strong>
+            <span>按顺序完成连接、字段映射、项目人员映射和测试提交。</span>
+          </div>
+          <el-tag :type="feishuGuideDoneCount === 4 ? 'success' : 'warning'" effect="light" round>
+            {{ feishuGuideStatusLabel }}
+          </el-tag>
+        </div>
+
+        <div class="feishu-guide-steps">
+          <article
+            v-for="step in feishuGuideSteps"
+            :key="step.key"
+            class="feishu-guide-step"
+            :class="{ done: step.done }"
+          >
+            <div class="feishu-guide-step-icon">
+              <component :is="step.done ? CheckCircle2 : step.icon" :size="18" />
+            </div>
+            <div class="feishu-guide-step-copy">
+              <strong>{{ step.title }}</strong>
+              <span>{{ step.detail }}</span>
+            </div>
+            <el-button
+              size="small"
+              plain
+              :type="step.done ? 'success' : 'primary'"
+              :loading="step.loading"
+              :disabled="step.disabled"
+              @click="runFeishuGuideAction(step.action, step.panel)"
+            >
+              {{ step.actionLabel }}
+            </el-button>
+          </article>
+        </div>
+      </section>
+
       <el-collapse-item :title="isAiOnly ? '模型连接配置' : 'AI 接入配置'" name="ai">
         <div class="field-grid">
           <div class="field field-span-3">

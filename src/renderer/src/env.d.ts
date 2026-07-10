@@ -18,6 +18,8 @@ import type {
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
   GenerateReportParams,
+  HistoryLogPage,
+  HistoryLogQuery,
   JiaziFarmHarvestPayload,
   JiaziFarmPlantPayload,
   JiaziFarmQuickRipenPayload,
@@ -49,6 +51,8 @@ declare global {
       listDailyReports: (limit?: number) => Promise<import('@shared/types').DailyReportRecord[]>;
       listSyncLogs: (limit?: number) => Promise<import('@shared/types').SyncLogRecord[]>;
       listErrorLogs: (limit?: number) => Promise<import('@shared/types').ErrorLogRecord[]>;
+      queryHistoryLogs: (query?: HistoryLogQuery) => Promise<HistoryLogPage>;
+      listHistoryProjects: () => Promise<string[]>;
       getStorageInfo: () => Promise<import('@shared/types').StorageInfo>;
       getCheckinWalletSnapshot: () => Promise<CheckinWalletSnapshot>;
       runDailyCheckin: () => Promise<CheckinResult>;

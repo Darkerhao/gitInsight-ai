@@ -20,9 +20,31 @@ const {
   applyFullDayReportRange,
 } = assistant;
 
+type BasicActionKey = 'login' | 'refresh' | 'test';
+
 const selectedProjectName = computed(
   () => projectOptions.value.find((item) => item.id === config.feishuForm.projectOptionId)?.name || config.feishuForm.projectName || '未选择项目',
 );
+
+const fieldMappingReady = computed(() =>
+  Boolean(
+    config.feishuForm.questionId.trim() &&
+      config.feishuForm.dateFieldId.trim() &&
+      config.feishuForm.userFieldId.trim() &&
+      config.feishuForm.projectFieldId.trim() &&
+      config.feishuForm.hoursFieldId.trim() &&
+      config.feishuForm.contentFieldId.trim(),
+  ),
+);
+const feishuAuthReady = computed(() =>
+  Boolean(
+    config.feishuForm.endpoint.trim() &&
+      config.feishuForm.shareToken.trim() &&
+      config.feishuForm.cookie.trim() &&
+      config.feishuForm.csrfToken.trim(),
+  ),
+);
+const mappingReady = computed(() => Boolean(config.feishuForm.reporterUserId.trim() && config.feishuForm.projectOptionId.trim()));
 
 const basicSummaryItems = computed(() => [
   {
@@ -42,11 +64,30 @@ const basicSummaryItems = computed(() => [
   },
 ]);
 
-const basicActions = [
-  { key: 'login', label: '登录飞书', icon: LogIn, loading: feishuLoading, type: 'default' },
-  { key: 'refresh', label: '刷新项目', icon: RefreshCw, loading: projectLoading, type: 'default' },
-  { key: 'test', label: '测试提交', icon: TestTube2, loading: feishuLoading, type: 'primary' },
-] as const;
+const basicActions = computed(() => [
+  { key: 'login' as const, label: '登录飞书', icon: LogIn, loading: feishuLoading.value, type: 'default', disabled: false, title: '' },
+  {
+    key: 'refresh' as const,
+    label: '刷新项目',
+    icon: RefreshCw,
+    loading: projectLoading.value,
+    type: 'default',
+    disabled: !config.feishuForm.projectFieldId.trim(),
+    title: config.feishuForm.projectFieldId.trim() ? '' : '请先在飞书字段映射中选择所属项目字段',
+  },
+  {
+    key: 'test' as const,
+    label: '测试提交',
+    icon: TestTube2,
+    loading: feishuLoading.value,
+    type: 'primary',
+    disabled: !feishuAuthReady.value || !fieldMappingReady.value || !mappingReady.value,
+    title:
+      feishuAuthReady.value && fieldMappingReady.value && mappingReady.value
+        ? ''
+        : '请先完成飞书连接、字段映射、项目选择和汇报人 userId',
+  },
+]);
 
 function handleReportDateChange(value: string | null) {
   if (value) {
@@ -54,7 +95,7 @@ function handleReportDateChange(value: string | null) {
   }
 }
 
-function runBasicAction(key: (typeof basicActions)[number]['key']) {
+function runBasicAction(key: BasicActionKey) {
   if (key === 'login') return loginFeishu();
   if (key === 'refresh') return loadFeishuProjects();
   return testSubmitFeishu();
@@ -123,8 +164,10 @@ function runBasicAction(key: (typeof basicActions)[number]['key']) {
         :key="action.key"
         :icon="action.icon"
         :type="action.type"
-        :loading="action.loading.value"
+        :loading="action.loading"
+        :disabled="action.disabled"
         :plain="action.type === 'primary'"
+        :title="action.title"
         @click="runBasicAction(action.key)"
       >
         {{ action.label }}

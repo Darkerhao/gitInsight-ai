@@ -189,6 +189,45 @@ export interface ErrorLogRecord {
   createdAt: string;
 }
 
+export type HistoryLogStatus = 'success' | 'failed' | 'info';
+export type HistoryLogType = '日报生成' | '手动同步' | '同步任务' | '错误日志';
+export type HistoryLogStatusFilter = '全部状态' | '成功' | '失败';
+export type HistoryLogTypeFilter = '全部类型' | HistoryLogType;
+
+export interface HistoryLogRecord {
+  id: string;
+  numericId: number;
+  time: string;
+  type: HistoryLogType;
+  project: string;
+  action: string;
+  status: HistoryLogStatus;
+  duration: string;
+  operator: string;
+  trigger: string;
+  file?: string;
+  detail: string;
+  reportRecord?: DailyReportRecord;
+}
+
+export interface HistoryLogQuery {
+  keyword?: string;
+  project?: string;
+  type?: HistoryLogTypeFilter;
+  status?: HistoryLogStatusFilter;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface HistoryLogPage {
+  records: HistoryLogRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface StorageInfo {
   appVersion: string;
   appEdition: AppEdition;

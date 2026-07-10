@@ -9,6 +9,11 @@ import type {
   DailyReportRecord,
   ErrorLogRecord,
   GenerateReportParams,
+  HistoryLogPage,
+  HistoryLogQuery,
+  HistoryLogRecord,
+  HistoryLogStatus,
+  HistoryLogType,
   ReportResult,
   ReportTimeRange,
   SaveDailyReportPayload,
@@ -290,6 +295,188 @@ export function rowToErrorLogRecord(row: Record<string, unknown>): ErrorLogRecor
 }
 
 
+function normalizeHistoryQuery(query: HistoryLogQuery = {}) {
+  const page = Math.max(1, Math.floor(Number(query.page) || 1));
+  const pageSize = Math.max(1, Math.min(Math.floor(Number(query.pageSize) || 10), 100));
+
+  return {
+    keyword: String(query.keyword || '').trim().toLocaleLowerCase('zh-CN'),
+    project: String(query.project || '全部项目').trim() || '全部项目',
+    type: query.type || '全部类型',
+    status: query.status || '全部状态',
+    startDate: String(query.startDate || '').trim(),
+    endDate: String(query.endDate || '').trim(),
+    page,
+    pageSize,
+  };
+}
+
+
+type NormalizedHistoryQuery = ReturnType<typeof normalizeHistoryQuery>;
+
+
+function toHistoryDateBoundary(value: string, isEnd = false) {
+  if (!value) return '';
+  if (value.includes('T')) return new Date(value).toISOString();
+  return new Date(`${value}${isEnd ? 'T23:59:59.999' : 'T00:00:00.000'}`).toISOString();
+}
+
+
+function buildHistoryDateWhere(columnName: string, query: NormalizedHistoryQuery) {
+  const where: string[] = [];
+  const params: unknown[] = [];
+  if (query.startDate) {
+    where.push(`${columnName} >= ?`);
+    params.push(toHistoryDateBoundary(query.startDate));
+  }
+  if (query.endDate) {
+    where.push(`${columnName} <= ?`);
+    params.push(toHistoryDateBoundary(query.endDate, true));
+  }
+  return {
+    whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '',
+    params,
+  };
+}
+
+
+function selectRows(db: import('sql.js').Database, sql: string, params: unknown[] = []) {
+  const statement = db.prepare(sql);
+  const rows: Record<string, unknown>[] = [];
+  try {
+    statement.bind(params);
+    while (statement.step()) {
+      rows.push(statement.getAsObject());
+    }
+  } finally {
+    statement.free();
+  }
+  return rows;
+}
+
+
+function selectCount(db: import('sql.js').Database, sql: string, params: unknown[] = []) {
+  return Number(selectRows(db, sql, params)[0]?.count) || 0;
+}
+
+
+function buildHistoryWhere(
+  dateColumn: string,
+  query: NormalizedHistoryQuery,
+  options: {
+    keywordColumns: string[];
+    projectColumn?: string;
+    statusSql?: string;
+    statusParams?: unknown[];
+  },
+) {
+  const dateFilter = buildHistoryDateWhere(dateColumn, query);
+  const where = dateFilter.whereSql ? [dateFilter.whereSql.replace(/^WHERE /, '')] : [];
+  const params = [...dateFilter.params];
+
+  if (query.keyword) {
+    where.push(`(${options.keywordColumns.map((column) => `LOWER(COALESCE(${column}, '')) LIKE ?`).join(' OR ')})`);
+    const keyword = `%${query.keyword}%`;
+    params.push(...options.keywordColumns.map(() => keyword));
+  }
+  if (query.project !== '全部项目' && options.projectColumn) {
+    where.push(`COALESCE(${options.projectColumn}, '') LIKE ?`);
+    params.push(`%${query.project}%`);
+  }
+  if (query.status !== '全部状态' && options.statusSql) {
+    where.push(options.statusSql);
+    params.push(...(options.statusParams ?? []));
+  }
+
+  return {
+    whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '',
+    params,
+  };
+}
+
+
+function buildDailyReportAction(item: DailyReportRecord) {
+  const action = `${item.date} 日报${item.status === 'draft' ? '草稿保存' : '生成'}`;
+  return item.timeRange?.label ? `${action}（${item.timeRange.label}）` : action;
+}
+
+
+function formatHistoryProject(repoNames: string[], fallback = '未记录项目') {
+  return repoNames.length ? repoNames.join('、') : fallback;
+}
+
+
+function formatHistoryDuration(durationMs?: number) {
+  return durationMs == null ? '-' : `${Math.round(durationMs / 1000)}秒`;
+}
+
+
+function syncStatusToHistoryStatus(status: SyncLogRecord['status']): HistoryLogStatus {
+  if (status === 'success') return 'success';
+  if (status === 'failed') return 'failed';
+  return 'info';
+}
+
+
+function rowToDailyReportHistoryLog(row: Record<string, unknown>): HistoryLogRecord {
+  const record = rowToDailyReportRecord(row);
+  return {
+    id: `report-${record.id}`,
+    numericId: record.id,
+    time: record.updatedAt || record.generatedAt,
+    type: '日报生成',
+    project: formatHistoryProject(record.repoNames),
+    action: buildDailyReportAction(record),
+    status: record.status === 'failed' ? 'failed' : 'success',
+    duration: '-',
+    operator: record.reporterName || '未设置',
+    trigger: '手动触发',
+    file: `项目日报-${record.date}.md`,
+    detail: record.report,
+    reportRecord: record,
+  };
+}
+
+
+function rowToSyncHistoryLog(row: Record<string, unknown>): HistoryLogRecord {
+  const record = rowToSyncLogRecord(row);
+  const repoNames = parseJsonArray(row.report_repo_names_json);
+  const reporterName = String(row.report_reporter_name || '').trim();
+  const type: HistoryLogType = record.triggerType === 'scheduled' ? '同步任务' : '手动同步';
+  return {
+    id: `sync-${record.id}`,
+    numericId: record.id,
+    time: record.ranAt,
+    type,
+    project: formatHistoryProject(repoNames, '当前配置项目'),
+    action: record.message,
+    status: syncStatusToHistoryStatus(record.status),
+    duration: formatHistoryDuration(record.durationMs),
+    operator: record.triggerType === 'scheduled' ? '系统' : reporterName || '未设置',
+    trigger: record.triggerType === 'scheduled' ? '自动触发' : '手动触发',
+    detail: record.message,
+  };
+}
+
+
+function rowToErrorHistoryLog(row: Record<string, unknown>): HistoryLogRecord {
+  const record = rowToErrorLogRecord(row);
+  return {
+    id: `error-${record.id}`,
+    numericId: record.id,
+    time: record.createdAt,
+    type: '错误日志',
+    project: '系统',
+    action: record.message,
+    status: 'failed',
+    duration: '-',
+    operator: '系统',
+    trigger: record.scope,
+    detail: record.detail || record.message,
+  };
+}
+
+
 export async function getDailyReportById(id: number) {
   const db = await getDatabase();
   const statement = db.prepare('SELECT * FROM daily_reports WHERE id = ? LIMIT 1');
@@ -419,6 +606,104 @@ export async function listErrorLogs(limit = 20): Promise<ErrorLogRecord[]> {
     statement.free();
   }
   return records;
+}
+
+
+export async function queryHistoryLogs(query: HistoryLogQuery = {}): Promise<HistoryLogPage> {
+  const db = await getDatabase();
+  const normalizedQuery = normalizeHistoryQuery(query);
+  const records: HistoryLogRecord[] = [];
+  const candidateLimit = normalizedQuery.page * normalizedQuery.pageSize;
+  let total = 0;
+
+  if (normalizedQuery.type === '全部类型' || normalizedQuery.type === '日报生成') {
+    const filter = buildHistoryWhere('updated_at', normalizedQuery, {
+      keywordColumns: [
+        'date',
+        'reporter_name',
+        'repo_names_json',
+        'report',
+        "'日报生成'",
+        "'手动触发'",
+        "'项目日报-' || date || '.md'",
+        "date || CASE WHEN status = 'draft' THEN ' 日报草稿保存' ELSE ' 日报生成' END",
+      ],
+      projectColumn: 'repo_names_json',
+      statusSql: normalizedQuery.status === '成功' ? "status != 'failed'" : "status = 'failed'",
+    });
+    total += selectCount(db, `SELECT COUNT(*) AS count FROM daily_reports ${filter.whereSql}`, filter.params);
+    records.push(
+      ...selectRows(
+        db,
+        `SELECT * FROM daily_reports ${filter.whereSql} ORDER BY updated_at DESC LIMIT ?`,
+        [...filter.params, candidateLimit],
+      ).map(rowToDailyReportHistoryLog),
+    );
+  }
+
+  if (normalizedQuery.type === '全部类型' || normalizedQuery.type === '手动同步' || normalizedQuery.type === '同步任务') {
+    const triggerType = normalizedQuery.type === '手动同步' ? 'manual' : normalizedQuery.type === '同步任务' ? 'scheduled' : '';
+    const filter = buildHistoryWhere('sync_logs.ran_at', normalizedQuery, {
+      keywordColumns: [
+        'sync_logs.message',
+        'daily_reports.repo_names_json',
+        'daily_reports.reporter_name',
+        'sync_logs.trigger_type',
+        "CASE WHEN sync_logs.trigger_type = 'scheduled' THEN '同步任务' ELSE '手动同步' END",
+        "CASE WHEN sync_logs.trigger_type = 'scheduled' THEN '自动触发' ELSE '手动触发' END",
+      ],
+      projectColumn: 'daily_reports.repo_names_json',
+      statusSql: normalizedQuery.status === '成功' ? "sync_logs.status = 'success'" : "sync_logs.status = 'failed'",
+    });
+    const triggerWhere = triggerType ? `${filter.whereSql ? ' AND' : 'WHERE'} sync_logs.trigger_type = ?` : '';
+    const filterParams = triggerType ? [...filter.params, triggerType] : filter.params;
+    const fromSql = `FROM sync_logs LEFT JOIN daily_reports ON daily_reports.id = sync_logs.report_id ${filter.whereSql}${triggerWhere}`;
+    total += selectCount(db, `SELECT COUNT(*) AS count ${fromSql}`, filterParams);
+    records.push(
+      ...selectRows(
+        db,
+        `SELECT sync_logs.*, daily_reports.repo_names_json AS report_repo_names_json, daily_reports.reporter_name AS report_reporter_name
+         ${fromSql}
+         ORDER BY sync_logs.ran_at DESC LIMIT ?`,
+        [...filterParams, candidateLimit],
+      ).map(rowToSyncHistoryLog),
+    );
+  }
+
+  if (normalizedQuery.type === '全部类型' || normalizedQuery.type === '错误日志') {
+    const filter = buildHistoryWhere('created_at', normalizedQuery, {
+      keywordColumns: ['scope', 'message', 'detail', "'错误日志'", "'系统'"],
+      statusSql: normalizedQuery.status === '成功' ? '0 = 1' : '1 = 1',
+    });
+    total += selectCount(db, `SELECT COUNT(*) AS count FROM error_logs ${filter.whereSql}`, filter.params);
+    records.push(
+      ...selectRows(
+        db,
+        `SELECT * FROM error_logs ${filter.whereSql} ORDER BY created_at DESC LIMIT ?`,
+        [...filter.params, candidateLimit],
+      ).map(rowToErrorHistoryLog),
+    );
+  }
+
+  const filteredRecords = records.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+  const start = (normalizedQuery.page - 1) * normalizedQuery.pageSize;
+
+  return {
+    records: filteredRecords.slice(start, start + normalizedQuery.pageSize),
+    total,
+    page: normalizedQuery.page,
+    pageSize: normalizedQuery.pageSize,
+  };
+}
+
+
+export async function listHistoryProjects() {
+  const db = await getDatabase();
+  const names = new Set<string>();
+  for (const row of selectRows(db, 'SELECT repo_names_json FROM daily_reports')) {
+    parseJsonArray(row.repo_names_json).forEach((name) => names.add(name));
+  }
+  return Array.from(names).sort((a, b) => a.localeCompare(b, 'zh-CN'));
 }
 
 

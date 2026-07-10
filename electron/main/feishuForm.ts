@@ -20,6 +20,52 @@ import {
   resolveFeishuAuth,
 } from './feishuAuth.js';
 
+type FeishuTestFailureStage = '登录态' | '字段映射' | '项目选项' | '接口返回';
+
+const FEISHU_TEST_FAILURE_PREFIX = '飞书测试提交失败';
+
+const FEISHU_TEST_FAILURE_SUGGESTIONS: Record<FeishuTestFailureStage, string> = {
+  登录态: '请重新点击“登录飞书”，确认 Cookie、CSRF Token、提交接口地址和 shareToken 已自动同步或手动填写完整。',
+  字段映射: '请在“飞书表单字段映射”中重新解析字段，并确认日期、汇报人、明细表、项目、工时、内容字段均已选择。',
+  项目选项: '请先选择所属项目字段并刷新项目列表，再确认当前日报要发布到的飞书项目选项仍然存在。',
+  接口返回: '请查看飞书接口返回内容，确认表单权限、字段类型、网络连接和飞书服务状态是否正常。',
+};
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error || '未知错误');
+}
+
+function stripFeishuTestFailurePrefix(message: string) {
+  return message
+    .replace(/^飞书测试提交失败(?:（[^）]+）)?[：:]\s*/, '')
+    .replace(/。?建议：.+$/, '')
+    .trim();
+}
+
+function inferFeishuTestFailureStage(message: string): FeishuTestFailureStage {
+  if (/Login Required|登录态|Cookie|CSRF|csrf|_csrf_token|swp_csrf_token|401|403|shareToken|提交接口地址|接口地址格式/i.test(message)) {
+    return '登录态';
+  }
+  if (/所属项目选项|项目选项|项目列表|projectOption|options|单选|选项 ID/i.test(message)) {
+    return '项目选项';
+  }
+  if (/字段 ID|字段映射|明细表问题|日期字段|汇报人字段|工作时长字段|工作内容字段|汇报人 userId|汇报人名称|日期格式/i.test(message)) {
+    return '字段映射';
+  }
+  return '接口返回';
+}
+
+export function buildFeishuTestSubmitDiagnosticError(error: unknown) {
+  const message = getErrorMessage(error);
+  if (message.startsWith(`${FEISHU_TEST_FAILURE_PREFIX}（`)) {
+    return new Error(message);
+  }
+
+  const stage = inferFeishuTestFailureStage(message);
+  const detail = stripFeishuTestFailurePrefix(message) || message;
+  return new Error(`${FEISHU_TEST_FAILURE_PREFIX}（${stage}）：${detail}。建议：${FEISHU_TEST_FAILURE_SUGGESTIONS[stage]}`);
+}
+
 export function dateToFeishuDateValue(date: string) {
   const [year, month, day] = date.split('-').map(Number);
   if (!year || !month || !day) {
@@ -287,7 +333,7 @@ export function buildFeishuTestFormData(config: FeishuFormConfig, date: string) 
 }
 
 
-export async function testSubmitFeishuForm(payload: FeishuTestSubmitPayload): Promise<FeishuSubmitResult> {
+async function submitFeishuTestForm(payload: FeishuTestSubmitPayload): Promise<FeishuSubmitResult> {
   const formConfig = {
     ...DEFAULT_FEISHU_FORM_CONFIG,
     ...payload.config,
@@ -342,6 +388,15 @@ export async function testSubmitFeishuForm(payload: FeishuTestSubmitPayload): Pr
   }
 
   return parsed;
+}
+
+
+export async function testSubmitFeishuForm(payload: FeishuTestSubmitPayload): Promise<FeishuSubmitResult> {
+  try {
+    return await submitFeishuTestForm(payload);
+  } catch (error) {
+    throw buildFeishuTestSubmitDiagnosticError(error);
+  }
 }
 
 

@@ -8,6 +8,7 @@ import type {
   FeishuSubmissionRecordsPayload,
   FeishuTestSubmitPayload,
   GenerateReportParams,
+  HistoryLogQuery,
   JiaziFarmHarvestPayload,
   JiaziFarmPlantPayload,
   JiaziFarmQuickRipenPayload,
@@ -19,7 +20,7 @@ import type {
 import { getAutoSyncState, runAutoSync, saveConfigAndReschedule, validateAutoSync } from './autoSync.js';
 import { getCheckinWalletSnapshot, importCheckinWallet, runDailyCheckin, spendCheckinCoins } from './checkinWallet.js';
 import { loadConfig, saveConfig } from './config.js';
-import { getStorageInfo, listDailyReports, listErrorLogs, listSyncLogs, saveDailyReport } from './database.js';
+import { getStorageInfo, listDailyReports, listErrorLogs, listHistoryProjects, listSyncLogs, queryHistoryLogs, saveDailyReport } from './database.js';
 import { listFeishuFieldOptions, listFeishuProjectOptions, syncFeishuDaily, testSubmitFeishuForm } from './feishuForm.js';
 import { openFeishuLogin, openFeishuSubmissionRecords } from './feishuAuth.js';
 import {
@@ -52,6 +53,8 @@ export function registerIpcHandlers() {
   ipcMain.handle('daily-report:save', async (_event, payload: SaveDailyReportPayload) => saveDailyReport(payload));
   ipcMain.handle('sync-log:list', async (_event, limit?: number) => listSyncLogs(limit));
   ipcMain.handle('error-log:list', async (_event, limit?: number) => listErrorLogs(limit));
+  ipcMain.handle('history-log:query', async (_event, query?: HistoryLogQuery) => queryHistoryLogs(query));
+  ipcMain.handle('history-log:list-projects', async () => listHistoryProjects());
   ipcMain.handle('storage:info', async () => getStorageInfo());
   ipcMain.handle('checkin-wallet:get-snapshot', async () => getCheckinWalletSnapshot());
   ipcMain.handle('checkin-wallet:daily-checkin', async () => runDailyCheckin());
