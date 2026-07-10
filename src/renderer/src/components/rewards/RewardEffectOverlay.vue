@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import type { Component } from 'vue';
 import AiAwakenEffect from '@/components/rewards/effects/AiAwakenEffect.vue';
 import AuroraEffect from '@/components/rewards/effects/AuroraEffect.vue';
@@ -173,6 +173,215 @@ const phaseSegments = computed(() => {
   }));
 });
 
+const spatialMediumCanvas = ref<HTMLCanvasElement | null>(null);
+let spatialFrame: number | null = null;
+let spatialGl: WebGLRenderingContext | null = null;
+let spatialProgram: WebGLProgram | null = null;
+let spatialBuffer: WebGLBuffer | null = null;
+
+const SPATIAL_VERTEX_SHADER = `
+attribute vec2 aPosition;
+void main() {
+  gl_Position = vec4(aPosition, 0.0, 1.0);
+}
+`;
+
+const SPATIAL_FRAGMENT_SHADER = `
+precision highp float;
+
+uniform vec2 uResolution;
+uniform float uTime;
+uniform float uSeed;
+uniform float uIntensity;
+uniform vec3 uAccent;
+uniform vec3 uSecondary;
+
+float hash21(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32 + uSeed);
+  return fract(p.x * p.y);
+}
+
+float noise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
+    mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0)), f.x),
+    f.y
+  );
+}
+
+float fbm(vec2 p) {
+  float value = 0.0;
+  float amplitude = 0.5;
+  mat2 rotation = mat2(0.8, -0.6, 0.6, 0.8);
+  for (int i = 0; i < 5; i++) {
+    value += amplitude * noise(p);
+    p = rotation * p * 2.03 + 0.17;
+    amplitude *= 0.5;
+  }
+  return value;
+}
+
+void main() {
+  vec2 frag = gl_FragCoord.xy;
+  vec2 uv = (frag * 2.0 - uResolution.xy) / min(uResolution.x, uResolution.y);
+  float t = uTime * 0.18;
+  float radius = length(uv);
+  float angle = atan(uv.y, uv.x);
+
+  float medium = fbm(uv * 1.45 + vec2(t, -t * 0.62) + uSeed * 0.013);
+  float detail = fbm(uv * 3.1 - vec2(t * 0.42, t * 0.7));
+  float tidal = sin(radius * 16.0 - uTime * 1.75 + medium * 5.2 + uSeed) * 0.5 + 0.5;
+  float ring = exp(-abs(radius - (0.58 + sin(uTime * 0.36 + uSeed) * 0.06)) * 19.0);
+  float spectral = exp(-abs(radius - 0.92) * 8.0) * (0.55 + 0.45 * sin(angle * 3.0 - uTime));
+
+  vec2 starCell = floor((uv + 2.0) * 54.0);
+  vec2 starUv = fract((uv + 2.0) * 54.0) - 0.5;
+  float starSeed = hash21(starCell);
+  float stars = smoothstep(0.045, 0.0, length(starUv)) * step(0.965, starSeed);
+  stars *= 0.42 + 0.58 * sin(uTime * (1.0 + starSeed * 2.4) + starSeed * 19.0);
+
+  float nebula = smoothstep(0.42, 0.9, medium * 0.72 + detail * 0.38);
+  float centerMask = smoothstep(1.72, 0.08, radius);
+  vec3 color = mix(uSecondary, uAccent, medium + tidal * 0.18);
+  color *= nebula * 0.52 + ring * 0.42 + spectral * 0.22;
+  color += mix(uAccent, vec3(1.0), 0.52) * stars * 1.35;
+
+  float alpha = (nebula * 0.2 + ring * 0.12 + spectral * 0.08 + stars * 0.5) * centerMask * uIntensity;
+  gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.52));
+}
+`;
+
+function compileSpatialShader(gl: WebGLRenderingContext, type: number, source: string) {
+  const shader = gl.createShader(type);
+  if (!shader) throw new Error('Unable to create spatial medium shader');
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const message = gl.getShaderInfoLog(shader) ?? 'Unknown shader compilation error';
+    gl.deleteShader(shader);
+    throw new Error(message);
+  }
+  return shader;
+}
+
+function colorToRgb(color: string): [number, number, number] {
+  const value = color.replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(value)) return [0.38, 0.65, 0.98];
+  return [0, 2, 4].map((offset) => Number.parseInt(value.slice(offset, offset + 2), 16) / 255) as [number, number, number];
+}
+
+function resizeSpatialMedium() {
+  if (!spatialGl || !spatialMediumCanvas.value) return;
+  const canvas = spatialMediumCanvas.value;
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+  const width = Math.max(1, Math.floor(window.innerWidth * pixelRatio));
+  const height = Math.max(1, Math.floor(window.innerHeight * pixelRatio));
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  spatialGl.viewport(0, 0, width, height);
+}
+
+function stopSpatialMedium() {
+  if (spatialFrame !== null) {
+    window.cancelAnimationFrame(spatialFrame);
+    spatialFrame = null;
+  }
+  window.removeEventListener('resize', resizeSpatialMedium);
+  if (spatialGl && spatialBuffer) spatialGl.deleteBuffer(spatialBuffer);
+  if (spatialGl && spatialProgram) spatialGl.deleteProgram(spatialProgram);
+  spatialBuffer = null;
+  spatialProgram = null;
+  spatialGl = null;
+}
+
+function startSpatialMedium() {
+  stopSpatialMedium();
+  const canvas = spatialMediumCanvas.value;
+  const activeOption = option.value;
+  const activeTier = tierMeta.value;
+  if (!canvas || !activeOption || !activeTier || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  const gl = canvas.getContext('webgl', {
+    alpha: true,
+    antialias: false,
+    depth: false,
+    powerPreference: 'high-performance',
+    premultipliedAlpha: false,
+    preserveDrawingBuffer: false,
+    stencil: false,
+  });
+  if (!gl) return;
+
+  try {
+    const vertexShader = compileSpatialShader(gl, gl.VERTEX_SHADER, SPATIAL_VERTEX_SHADER);
+    const fragmentShader = compileSpatialShader(gl, gl.FRAGMENT_SHADER, SPATIAL_FRAGMENT_SHADER);
+    const program = gl.createProgram();
+    if (!program) throw new Error('Unable to create spatial medium program');
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+    gl.deleteShader(vertexShader);
+    gl.deleteShader(fragmentShader);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error(gl.getProgramInfoLog(program) ?? 'Unknown spatial medium link error');
+    }
+
+    const buffer = gl.createBuffer();
+    if (!buffer) throw new Error('Unable to create spatial medium buffer');
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    gl.useProgram(program);
+    const position = gl.getAttribLocation(program, 'aPosition');
+    gl.enableVertexAttribArray(position);
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    spatialGl = gl;
+    spatialProgram = program;
+    spatialBuffer = buffer;
+    resizeSpatialMedium();
+    window.addEventListener('resize', resizeSpatialMedium, { passive: true });
+
+    const resolutionUniform = gl.getUniformLocation(program, 'uResolution');
+    const timeUniform = gl.getUniformLocation(program, 'uTime');
+    const seedUniform = gl.getUniformLocation(program, 'uSeed');
+    const intensityUniform = gl.getUniformLocation(program, 'uIntensity');
+    const accentUniform = gl.getUniformLocation(program, 'uAccent');
+    const secondaryUniform = gl.getUniformLocation(program, 'uSecondary');
+    const accent = colorToRgb(activeOption.accent);
+    const secondary = colorToRgb(activeOption.secondary);
+    const intensity = 0.72 + (activeTier.grade - 1) * 0.26 + (activeOption.apex ? 0.18 : 0);
+    const startedAt = performance.now();
+
+    const render = (now: number) => {
+      if (!spatialGl || !spatialProgram || !spatialMediumCanvas.value) return;
+      const target = spatialMediumCanvas.value;
+      spatialGl.useProgram(spatialProgram);
+      spatialGl.uniform2f(resolutionUniform, target.width, target.height);
+      spatialGl.uniform1f(timeUniform, (now - startedAt) / 1000);
+      spatialGl.uniform1f(seedUniform, (props.seed % 997) / 97);
+      spatialGl.uniform1f(intensityUniform, intensity);
+      spatialGl.uniform3f(accentUniform, accent[0], accent[1], accent[2]);
+      spatialGl.uniform3f(secondaryUniform, secondary[0], secondary[1], secondary[2]);
+      spatialGl.clearColor(0, 0, 0, 0);
+      spatialGl.clear(spatialGl.COLOR_BUFFER_BIT);
+      spatialGl.drawArrays(spatialGl.TRIANGLES, 0, 3);
+      spatialFrame = window.requestAnimationFrame(render);
+    };
+    spatialFrame = window.requestAnimationFrame(render);
+  } catch (error) {
+    console.warn('[NEXUS] Spatial medium fallback:', error);
+    stopSpatialMedium();
+  }
+}
+
 function requestClose() {
   emit('close');
 }
@@ -185,18 +394,22 @@ function handleKeydown(event: KeyboardEvent) {
 
 watch(
   () => props.effect,
-  (effect) => {
+  async (effect) => {
     if (effect) {
       window.addEventListener('keydown', handleKeydown);
+      await nextTick();
+      if (props.effect === effect) startSpatialMedium();
       return;
     }
     window.removeEventListener('keydown', handleKeydown);
+    stopSpatialMedium();
   },
   { immediate: true }
 );
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown);
+  stopSpatialMedium();
 });
 </script>
 
@@ -213,6 +426,7 @@ onBeforeUnmount(() => {
       :aria-label="overlayLabel"
     >
       <div class="fx-backdrop" :style="{ background: option.backdrop }" />
+      <canvas ref="spatialMediumCanvas" class="fx-spatial-medium" aria-hidden="true" />
       <div class="fx-ambient-grid" />
       <div class="fx-aperture">
         <span v-for="ring in 3" :key="ring" :style="{ animationDelay: `${(ring - 1) * 180}ms` }" />
@@ -315,6 +529,7 @@ onBeforeUnmount(() => {
 }
 
 .fx-backdrop,
+.fx-spatial-medium,
 .fx-ambient-grid,
 .fx-aperture,
 .fx-camera,
@@ -335,6 +550,31 @@ onBeforeUnmount(() => {
   z-index: -4;
   opacity: 0;
   animation: fx-backdrop var(--fx-ms) ease both;
+}
+
+/* 实时 WebGL 空间介质：以统一 shader 为 47 款协议补充星尘、潮汐与光谱折射。 */
+.fx-spatial-medium {
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  mix-blend-mode: screen;
+  transform: scale(1.04);
+  filter: saturate(1.18) contrast(1.05);
+  animation: fx-spatial-medium var(--fx-ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.fx-tier-tactical .fx-spatial-medium {
+  filter: saturate(1.32) contrast(1.08);
+}
+
+.fx-tier-singularity .fx-spatial-medium {
+  filter: saturate(1.48) contrast(1.12);
+}
+
+.fx-apex .fx-spatial-medium {
+  mix-blend-mode: screen;
+  filter: saturate(1.65) contrast(1.16) brightness(1.08);
 }
 
 .fx-ambient-grid {
@@ -896,6 +1136,24 @@ onBeforeUnmount(() => {
   10%,
   84% {
     opacity: 1;
+  }
+}
+
+@keyframes fx-spatial-medium {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+  13% {
+    opacity: 0.62;
+  }
+  52% {
+    opacity: 0.92;
+    transform: scale(1);
+  }
+  84% {
+    opacity: 0.74;
   }
 }
 

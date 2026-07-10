@@ -47,6 +47,8 @@ onBeforeUnmount(cleanup);
     <canvas ref="canvasRef" class="lb-three-canvas" aria-hidden="true" />
     <div class="lb-heat-haze" aria-hidden="true" />
     <div class="lb-whiteout" aria-hidden="true" />
+    <div class="lb-annihilation-front" aria-hidden="true" />
+    <div class="lb-ground-burn" aria-hidden="true" />
     <div class="lb-scanlines" aria-hidden="true" />
     <div class="lb-vignette" aria-hidden="true" />
 
@@ -68,6 +70,11 @@ onBeforeUnmount(cleanup);
       <Radiation :size="44" :stroke-width="1.35" />
       <strong>小男孩</strong>
       <small>LITTLE BOY / THREE.JS APEX</small>
+    </div>
+
+    <div class="lb-destruction-status" aria-hidden="true">
+      <strong>TOTAL ANNIHILATION</strong>
+      <span>STRUCTURAL SURVIVAL 0% · THERMAL FRONT COMPLETE</span>
     </div>
   </div>
 </template>
@@ -102,6 +109,8 @@ onBeforeUnmount(cleanup);
 
 .lb-heat-haze,
 .lb-whiteout,
+.lb-annihilation-front,
+.lb-ground-burn,
 .lb-scanlines,
 .lb-vignette,
 .lb-hud,
@@ -109,6 +118,36 @@ onBeforeUnmount(cleanup);
 .lb-fallback-cloud {
   position: absolute;
   pointer-events: none;
+}
+
+.lb-annihilation-front {
+  left: 50%;
+  top: 70%;
+  z-index: 3;
+  width: 24vmin;
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 190, 118, 0.62);
+  border-radius: 50%;
+  box-shadow:
+    0 0 8px rgba(255, 237, 213, 0.34),
+    0 0 18px rgba(249, 115, 22, 0.3),
+    inset 0 0 12px rgba(255, 247, 237, 0.12);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.08);
+  animation: lb-annihilation-front 6.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.lb-ground-burn {
+  inset: 48% -12% -20%;
+  z-index: 3;
+  background:
+    radial-gradient(ellipse at 50% 82%, rgba(255, 237, 213, 0.28), rgba(249, 115, 22, 0.18) 18%, rgba(127, 29, 29, 0.22) 34%, rgba(2, 6, 23, 0.76) 68%, transparent 76%),
+    repeating-linear-gradient(104deg, transparent 0 38px, rgba(255, 105, 40, 0.09) 40px 42px, transparent 44px 86px);
+  mix-blend-mode: screen;
+  filter: blur(4px);
+  opacity: 0;
+  transform-origin: 50% 82%;
+  animation: lb-ground-burn 6.6s ease both;
 }
 
 .lb-heat-haze {
@@ -299,6 +338,37 @@ onBeforeUnmount(cleanup);
   white-space: nowrap;
 }
 
+.lb-destruction-status {
+  position: absolute;
+  left: 50%;
+  bottom: 11.5%;
+  z-index: 10;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  color: #fed7aa;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-align: center;
+  text-shadow: 0 0 18px rgba(249, 115, 22, 0.72);
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px);
+  animation: lb-destruction-status 6.6s ease both;
+}
+
+.lb-destruction-status strong {
+  color: #fff7ed;
+  font-size: clamp(12px, 1.5vw, 17px);
+  letter-spacing: 0.28em;
+  white-space: nowrap;
+}
+
+.lb-destruction-status span {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  white-space: nowrap;
+}
+
 .lb-fallback-cloud {
   left: 50%;
   bottom: 18%;
@@ -335,6 +405,37 @@ onBeforeUnmount(cleanup);
   22% { opacity: 0.42; transform: scale(1.02); }
   42% { opacity: 0.12; }
   100% { opacity: 0; transform: scale(1.55); }
+}
+
+@keyframes lb-annihilation-front {
+  0%, 16% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.08);
+  }
+  18% {
+    opacity: 1;
+  }
+  42% {
+    opacity: 0.12;
+    transform: translate(-50%, -50%) scale(9.5);
+  }
+  58%, 100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(13);
+  }
+}
+
+@keyframes lb-ground-burn {
+  0%, 17% { opacity: 0; transform: scale(0.62); }
+  24% { opacity: 0.42; transform: scale(1.08); }
+  52% { opacity: 0.2; transform: scale(1.22); }
+  84%, 100% { opacity: 0; transform: scale(1.34); }
+}
+
+@keyframes lb-destruction-status {
+  0%, 35% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  43%, 78% { opacity: 0.94; transform: translateX(-50%) translateY(0); }
+  92%, 100% { opacity: 0; transform: translateX(-50%) translateY(-6px); }
 }
 
 @keyframes lb-heat-haze {
@@ -403,6 +504,17 @@ onBeforeUnmount(cleanup);
     width: min(88vw, 360px);
   }
 
+  .lb-destruction-status {
+    bottom: 12.5%;
+    width: 88vw;
+  }
+
+  .lb-destruction-status span {
+    max-width: 86vw;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
   .lb-title small {
     max-width: 82vw;
     overflow-wrap: anywhere;
@@ -414,10 +526,13 @@ onBeforeUnmount(cleanup);
   .little-boy-effect,
   .lb-heat-haze,
   .lb-whiteout,
+  .lb-annihilation-front,
+  .lb-ground-burn,
   .lb-scanlines,
   .lb-hud,
   .lb-title,
   .lb-reticle,
+  .lb-destruction-status,
   .lb-fallback-cloud span {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;

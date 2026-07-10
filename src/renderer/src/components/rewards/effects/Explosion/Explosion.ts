@@ -14,6 +14,16 @@ import { DEFAULT_TIMELINE } from './types';
 import type { ExplosionContext, ExplosionModule, ExplosionOptions, ExplosionSize, ExplosionState } from './types';
 import { createRng, disposeObject, lerp, smoothstep } from './utils';
 
+interface BuildingDestructionState {
+  position: THREE.Vector3;
+  scale: THREE.Vector3;
+  rotationY: number;
+  fallX: number;
+  fallZ: number;
+  impactAt: number;
+  outward: THREE.Vector3;
+}
+
 export class Explosion {
   private readonly context: ExplosionContext;
   private readonly modules: ExplosionModule[];
@@ -23,6 +33,15 @@ export class Explosion {
   private startedAt = 0;
   private previousAt = 0;
   private disposed = false;
+  private buildings: THREE.InstancedMesh | null = null;
+  private buildingStates: BuildingDestructionState[] = [];
+  private groundMaterial: THREE.MeshStandardMaterial | null = null;
+  private gridMaterial: THREE.Material | null = null;
+  private readonly environmentTemp = new THREE.Object3D();
+  private readonly groundBaseColor = new THREE.Color(0x21140f);
+  private readonly groundScorchColor = new THREE.Color(0x090403);
+  private readonly groundBaseEmissive = new THREE.Color(0x150704);
+  private readonly groundHotEmissive = new THREE.Color(0x8f2108);
 
   constructor(options: ExplosionOptions) {
     const timeline = {
@@ -152,6 +171,7 @@ export class Explosion {
 
     this.updateState(elapsedMs, deltaMs);
     this.modules.forEach((module) => module.update(this.context));
+    this.updateEnvironment();
     this.context.renderer.toneMappingExposure = this.context.state.exposure;
     this.postProcessing.render(this.context);
 
@@ -204,8 +224,9 @@ export class Explosion {
     const fireballCool = 1 - smoothstep(timeline.cloudAt - 100, timeline.cloudAt + 500, t);
     const fireball = fireballRise * fireballCool;
     const shockwave = smoothstep(timeline.shockwaveAt, timeline.shockwaveAt + 2100, t);
-    const cloud = smoothstep(timeline.cloudAt, timeline.cloudAt + 1800, t);
-    const cap = smoothstep(timeline.capAt, timeline.capAt + 1700, t);
+    // 云柱和云冠必须在爆闪消退后立即接管画面，避免“白爆 → 黑屏”的视觉断层。
+    const cloud = smoothstep(timeline.cloudAt - 120, timeline.cloudAt + 720, t);
+    const cap = smoothstep(timeline.capAt - 520, timeline.capAt + 780, t);
     const smoke = smoothstep(timeline.smokeAt, timeline.durationMs - 700, t);
     const ash = smoothstep(timeline.ashAt, timeline.durationMs - 1000, t);
     const endFade = smoothstep(timeline.durationMs - 900, timeline.durationMs, t);
@@ -224,8 +245,8 @@ export class Explosion {
     state.heat = Math.max(flash * 0.3, fireball * 0.45, shockKick * 0.4, smoke * 0.2) * (1 - endFade);
     state.cameraShake = (flash * 2.4 + shockKick * 1.35 + fireball * 0.22) * (this.context.reducedMotion ? 0 : 1);
     // Bloom 大幅削弱：峰值从 1.58 降到 ~0.9，蘑菇云阶段保留微弱 bloom 增强发光感
-    state.bloomStrength = (0.12 + flash * 0.45 + fireball * 0.28 + shockKick * 0.1 + cloud * 0.08) * (1 - endFade);
-    const rawExposure = lerp(0.92, 1.1, flash) + fireball * 0.05 - smoke * 0.06;
+    state.bloomStrength = (0.14 + flash * 0.38 + fireball * 0.24 + shockKick * 0.1 + cloud * 0.2 + cap * 0.12) * (1 - endFade);
+    const rawExposure = lerp(0.96, 1.08, flash) + fireball * 0.04 + cloud * 0.06 - smoke * 0.04;
     state.exposure = lerp(rawExposure, 1.0, endFade);
   }
 
@@ -268,6 +289,7 @@ export class Explosion {
       emissive: 0x150704,
       emissiveIntensity: 0.18,
     });
+    this.groundMaterial = groundMaterial;
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(26, 18, 32, 18), groundMaterial);
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = !reducedMotion;
@@ -278,6 +300,7 @@ export class Explosion {
     const gridMaterial = grid.material as THREE.Material;
     gridMaterial.transparent = true;
     gridMaterial.opacity = 0.16;
+    this.gridMaterial = gridMaterial;
     world.add(grid);
 
     const count = quality === 'low' ? 70 : 128;
@@ -305,9 +328,61 @@ export class Explosion {
       temp.scale.set(0.22 + rng() * 0.32, height, 0.24 + rng() * 0.38);
       temp.updateMatrix();
       buildings.setMatrixAt(index, temp.matrix);
+      const distance = Math.hypot(x, z);
+      const outward = new THREE.Vector3(x, 0, z).normalize();
+      this.buildingStates.push({
+        position: temp.position.clone(),
+        scale: temp.scale.clone(),
+        rotationY: temp.rotation.y,
+        fallX: (rng() - 0.5) * 1.7,
+        fallZ: (rng() - 0.5) * 1.7,
+        impactAt: this.context.timeline.shockwaveAt + 120 + distance * 115 + rng() * 180,
+        outward,
+      });
       color.set(0x1b1412).lerp(new THREE.Color(0x4f2417), rng() * 0.28);
       buildings.setColorAt(index, color);
     }
+    buildings.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.buildings = buildings;
     world.add(buildings);
+  }
+
+  private updateEnvironment() {
+    const t = this.context.state.elapsedMs;
+    const { timeline, state } = this.context;
+
+    if (this.buildings) {
+      this.buildingStates.forEach((building, index) => {
+        const hit = smoothstep(building.impactAt, building.impactAt + 420, t);
+        const obliterate = smoothstep(building.impactAt + 260, building.impactAt + 1180, t);
+        const blastLift = Math.sin(Math.min(1, hit) * Math.PI) * (0.12 + building.scale.y * 0.18);
+        this.environmentTemp.position.copy(building.position).addScaledVector(building.outward, hit * hit * 1.15);
+        this.environmentTemp.position.y = Math.max(0.02, building.position.y - building.scale.y * 0.48 * obliterate + blastLift);
+        this.environmentTemp.rotation.set(
+          building.fallX * hit,
+          building.rotationY + hit * 0.45,
+          building.fallZ * hit,
+        );
+        const survival = Math.max(0.018, 1 - obliterate * obliterate * 0.985);
+        this.environmentTemp.scale.set(
+          building.scale.x * (1 + hit * 0.18) * survival,
+          building.scale.y * Math.max(0.015, 1 - obliterate * 0.99),
+          building.scale.z * (1 + hit * 0.12) * survival,
+        );
+        this.environmentTemp.updateMatrix();
+        this.buildings?.setMatrixAt(index, this.environmentTemp.matrix);
+      });
+      this.buildings.instanceMatrix.needsUpdate = true;
+    }
+
+    const scorch = smoothstep(timeline.shockwaveAt + 180, timeline.smokeAt + 1150, t);
+    if (this.groundMaterial) {
+      this.groundMaterial.color.copy(this.groundBaseColor).lerp(this.groundScorchColor, scorch);
+      this.groundMaterial.emissive.copy(this.groundBaseEmissive).lerp(this.groundHotEmissive, state.fireball * 0.48 + state.shockwave * 0.24);
+      this.groundMaterial.emissiveIntensity = 0.18 + state.fireball * 0.7 + state.shockwave * 0.26;
+    }
+    if (this.gridMaterial) {
+      this.gridMaterial.opacity = 0.16 * (1 - smoothstep(timeline.shockwaveAt, timeline.shockwaveAt + 1700, t));
+    }
   }
 }
