@@ -21,12 +21,8 @@ import type {
   GenerateReportParams,
   HistoryLogPage,
   HistoryLogQuery,
-  JiaziFarmHarvestPayload,
-  JiaziFarmPlantPayload,
-  JiaziFarmQuickRipenPayload,
-  JiaziFarmSnapshot,
-  JiaziFarmTaskPayload,
-  JiaziFarmWaterPayload,
+  TimelineQuery,
+  TimelineSnapshot,
   RepoInfo,
   ReportResult,
   SaveDailyReportPayload,
@@ -68,24 +64,10 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('checkin-wallet:import-local', payload) as Promise<CheckinWalletSnapshot>,
   spendCheckinCoins: (payload: CheckinCoinSpendPayload) =>
     ipcRenderer.invoke('checkin-wallet:spend', payload) as Promise<CheckinWalletSnapshot>,
-  getJiaziFarmSnapshot: (date?: string) =>
-    ipcRenderer.invoke('jiazi-farm:get-snapshot', date) as Promise<JiaziFarmSnapshot>,
-  claimJiaziFarmTask: (payload: JiaziFarmTaskPayload) =>
-    ipcRenderer.invoke('jiazi-farm:claim-task', payload) as Promise<JiaziFarmSnapshot>,
-  harvestJiaziFarm: (payload: JiaziFarmHarvestPayload) =>
-    ipcRenderer.invoke('jiazi-farm:harvest', payload) as Promise<JiaziFarmSnapshot>,
-  waterJiaziPlot: (payload: JiaziFarmWaterPayload) =>
-    ipcRenderer.invoke('jiazi-farm:water', payload) as Promise<JiaziFarmSnapshot>,
-  quickRipenJiaziPlot: (payload: JiaziFarmQuickRipenPayload) =>
-    ipcRenderer.invoke('jiazi-farm:quick-ripen', payload) as Promise<JiaziFarmSnapshot>,
-  plantJiaziCrop: (payload: JiaziFarmPlantPayload) =>
-    ipcRenderer.invoke('jiazi-farm:plant', payload) as Promise<JiaziFarmSnapshot>,
-  unlockJiaziCropTier: (date?: string) =>
-    ipcRenderer.invoke('jiazi-farm:unlock-crop-tier', date) as Promise<JiaziFarmSnapshot>,
-  unlockJiaziPlot: (date?: string) =>
-    ipcRenderer.invoke('jiazi-farm:unlock-plot', date) as Promise<JiaziFarmSnapshot>,
   saveDailyReport: (payload: SaveDailyReportPayload) =>
     ipcRenderer.invoke('daily-report:save', payload) as Promise<DailyReportRecord>,
+  getTimelineSnapshot: (query?: TimelineQuery) =>
+    ipcRenderer.invoke('timeline:get-snapshot', query) as Promise<TimelineSnapshot>,
   onAutoSyncUpdated: (callback: (state: AutoSyncState) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: AutoSyncState) => callback(state);
     ipcRenderer.on('auto-sync:updated', listener);

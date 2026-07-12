@@ -189,6 +189,60 @@ export interface ErrorLogRecord {
   createdAt: string;
 }
 
+export type TimelineWorkType = '功能开发' | 'Bug 修复' | '重构优化' | '性能优化' | '工程优化' | '日常开发';
+
+export interface TimelineRecord {
+  id: number;
+  reportId: number;
+  date: string;
+  title: string;
+  summary: string;
+  primaryType: TimelineWorkType;
+  workTypes: TimelineWorkType[];
+  projects: string[];
+  repoPaths: string[];
+  techTags: string[];
+  commitHashes: string[];
+  commitsCount: number;
+  filesCount: number;
+  energy: number;
+  milestone: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TimelineDayGroup {
+  date: string;
+  recordIds: number[];
+  records: TimelineRecord[];
+  projects: string[];
+  workTypes: TimelineWorkType[];
+  commitsCount: number;
+  filesCount: number;
+  itemCount: number;
+  milestone: boolean;
+}
+
+export interface TimelineQuery {
+  startDate?: string;
+  endDate?: string;
+  type?: TimelineWorkType;
+  project?: string;
+}
+
+export interface TimelineSnapshot {
+  records: TimelineRecord[];
+  days: TimelineDayGroup[];
+  total: number;
+  summary: {
+    activeDays: number;
+    totalCommits: number;
+    totalFiles: number;
+    milestones: number;
+    projects: string[];
+  };
+}
+
 export type HistoryLogStatus = 'success' | 'failed' | 'info';
 export type HistoryLogType = '日报生成' | '手动同步' | '同步任务' | '错误日志';
 export type HistoryLogStatusFilter = '全部状态' | '成功' | '失败';

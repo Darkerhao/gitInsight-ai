@@ -45,6 +45,7 @@ Thumbs.db
 .cache/
 .eslintcache
 .vite/
+.timeline-test-dist/
 
 # Misc
 *.local

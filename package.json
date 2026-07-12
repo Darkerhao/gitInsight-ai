@@ -1,6 +1,6 @@
 {
   "name": "gitinsight-ai",
-  "version": "3.6.8",
+  "version": "3.6.9",
   "author": {
     "name": "DarkerHao",
     "email": "1726348482@qq.com"
@@ -28,6 +28,7 @@
     "start": "electron .",
     "preview": "electron-vite preview",
     "typecheck": "vue-tsc --noEmit",
+    "test:timeline": "tsc --outDir .timeline-test-dist --module NodeNext --moduleResolution NodeNext --target ES2022 --types node --skipLibCheck electron/main/timeline.ts tests/timeline.test.ts && node --test .timeline-test-dist/tests/timeline.test.js && node -e \"require('fs').rmSync('.timeline-test-dist',{recursive:true,force:true})\"",
     "check": "npm run typecheck && npm run build",
     "release:tag": "node scripts/release-tag.mjs"
   },

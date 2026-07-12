@@ -1,5 +1,20 @@
 # 产品化优化修复进度
 
+## 2026-07-11
+
+- 用户确认将“时间长河”从高保真原型升级为真实数据最终版，并允许新增数据库表及兼容迁移。
+- 确认 TDD 公共测试边界：`getTimelineSnapshot(range/filter)` 与 `upsertTimelineSnapshot(reportId)`。
+- 当前进入数据链路与测试基线分析阶段。
+- 已定位日报持久化入口 `electron/main/database.ts::saveDailyReport`，日报记录含日期、仓库、正文、提交数、文件数和 rawInput，可作为成长快照来源。
+- 确认使用 Node 内置测试能力，不新增第三方测试依赖。
+- 完成 `timeline_snapshots` schema、幂等快照写入、范围/类型查询和历史日报自动补建。
+- 日报保存与编辑已自动联动成长快照；真实数据通过 IPC/preload 接入 `JiaziTimelineView.vue`。
+- 正式导航改为 `/timeline`，旧 `/farm` 自动重定向；农场 IPC/preload 入口已移除，旧数据库表保留。
+- TDD 两个公共接口测试已经转绿，进入最终质量验证阶段。
+- 最终验证通过：`npm run test:timeline`、`npm run check`、`git diff --check`；模拟数组、A/B 原型与 `jiazi-farm:` 前端/IPC 入口扫描无残留。
+- 构建仅保留第三方 `@vueuse/core` PURE 注释位置警告，不影响产物；时间长河循环依赖警告已消除。
+- 针对真实数据不显示问题完成诊断：真实数据库副本可返回 33 条 7 月记录；修复 IPC 查询后持久化和前端错误静默，旧 main/preload 未重启时会明确提示。
+
 ## 2026-06-30
 
 - 创建 `docs/productization-optimization-plan.md`，沉淀产品化优化计划。

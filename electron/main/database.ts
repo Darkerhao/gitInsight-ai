@@ -21,6 +21,7 @@ import type {
   SyncLogRecord,
 } from '../../src/shared/types.js';
 import { ensureConfigDir, getConfigPath, getDatabasePath, getSecretsPath } from './paths.js';
+import { ensureTimelineSchema, upsertTimelineSnapshot } from './timeline.js';
 
 export let sqlDatabase: import('sql.js').Database | null = null;
 
@@ -153,6 +154,7 @@ export async function getDatabase() {
   `);
   ensureDailyReportTimeRangeColumns(sqlDatabase);
   ensureJiaziFarmPlots(sqlDatabase);
+  ensureTimelineSchema(sqlDatabase);
   await persistDatabase();
   return sqlDatabase;
 }
@@ -529,8 +531,10 @@ export async function saveDailyReport(payload: SaveDailyReportPayload): Promise<
         payload.id,
       ],
     );
+    const record = (await getDailyReportById(payload.id)) as DailyReportRecord;
+    await upsertTimelineSnapshot(record.id, db);
     await persistDatabase();
-    return (await getDailyReportById(payload.id)) as DailyReportRecord;
+    return record;
   }
 
   db.run(
@@ -556,8 +560,10 @@ export async function saveDailyReport(payload: SaveDailyReportPayload): Promise<
   );
   const idResult = db.exec('SELECT last_insert_rowid() AS id');
   const id = Number(idResult[0]?.values[0]?.[0]) || 0;
+  const record = (await getDailyReportById(id)) as DailyReportRecord;
+  await upsertTimelineSnapshot(record.id, db);
   await persistDatabase();
-  return (await getDailyReportById(id)) as DailyReportRecord;
+  return record;
 }
 
 

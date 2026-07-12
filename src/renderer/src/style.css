@@ -467,6 +467,16 @@ textarea {
   scrollbar-gutter: stable;
 }
 
+.app-scroll.is-immersive {
+  overflow: hidden;
+  padding: 0;
+  scrollbar-gutter: auto;
+}
+
+.app-scroll.is-immersive::-webkit-scrollbar {
+  display: none;
+}
+
 .route-switch-enter-active,
 .route-switch-leave-active {
   transition:

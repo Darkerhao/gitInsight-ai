@@ -20,12 +20,6 @@ import type {
   GenerateReportParams,
   HistoryLogPage,
   HistoryLogQuery,
-  JiaziFarmHarvestPayload,
-  JiaziFarmPlantPayload,
-  JiaziFarmQuickRipenPayload,
-  JiaziFarmSnapshot,
-  JiaziFarmTaskPayload,
-  JiaziFarmWaterPayload,
   RepoInfo,
   ReportResult,
   SyncFeishuDailyPayload,
@@ -58,15 +52,8 @@ declare global {
       runDailyCheckin: () => Promise<CheckinResult>;
       importCheckinWallet: (payload: CheckinWalletImportPayload) => Promise<CheckinWalletSnapshot>;
       spendCheckinCoins: (payload: CheckinCoinSpendPayload) => Promise<CheckinWalletSnapshot>;
-      getJiaziFarmSnapshot: (date?: string) => Promise<JiaziFarmSnapshot>;
-      claimJiaziFarmTask: (payload: JiaziFarmTaskPayload) => Promise<JiaziFarmSnapshot>;
-      harvestJiaziFarm: (payload: JiaziFarmHarvestPayload) => Promise<JiaziFarmSnapshot>;
-      waterJiaziPlot: (payload: JiaziFarmWaterPayload) => Promise<JiaziFarmSnapshot>;
-      quickRipenJiaziPlot: (payload: JiaziFarmQuickRipenPayload) => Promise<JiaziFarmSnapshot>;
-      plantJiaziCrop: (payload: JiaziFarmPlantPayload) => Promise<JiaziFarmSnapshot>;
-      unlockJiaziCropTier: (date?: string) => Promise<JiaziFarmSnapshot>;
-      unlockJiaziPlot: (date?: string) => Promise<JiaziFarmSnapshot>;
       saveDailyReport: (payload: import('@shared/types').SaveDailyReportPayload) => Promise<import('@shared/types').DailyReportRecord>;
+      getTimelineSnapshot: (query?: import('@shared/types').TimelineQuery) => Promise<import('@shared/types').TimelineSnapshot>;
       onAutoSyncUpdated: (callback: (state: AutoSyncState) => void) => () => void;
       onCheckinWalletUpdated: (callback: (snapshot: CheckinWalletSnapshot) => void) => () => void;
       onFeishuAuthUpdated: (callback: (snapshot: FeishuAuthSnapshot) => void) => () => void;

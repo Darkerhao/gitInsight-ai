@@ -30,7 +30,7 @@ const navGroups: NavGroup[] = [
     label: '成长中心',
     icon: Sprout,
     children: [
-      { key: 'farm', label: '甲子农场', icon: Sprout, enabled: true },
+      { key: 'timeline', label: '时间长河', icon: History, enabled: true },
     ],
   },
   {

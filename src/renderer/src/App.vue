@@ -8,7 +8,7 @@ import WelcomeGate from '@/components/WelcomeGate.vue';
 import ReportConfigView from '@/views/ReportConfigView.vue';
 import ReportGenerateView from '@/views/ReportGenerateView.vue';
 import HistoryLogsView from '@/views/HistoryLogsView.vue';
-import JiaziFarmView from '@/views/JiaziFarmView.vue';
+import JiaziTimelineView from '@/views/JiaziTimelineView.vue';
 import SystemSettingsView from '@/views/SystemSettingsView.vue';
 import { navKeys } from '@/router';
 import type { NavKey } from '@/router';
@@ -38,13 +38,14 @@ const legacyNavMap: Record<string, NavKey> = {
   messages: 'history',
   help: 'system',
   about: 'system',
+  farm: 'timeline',
 };
 
 const viewMap = {
   config: ReportConfigView,
   generate: ReportGenerateView,
   history: HistoryLogsView,
-  farm: JiaziFarmView,
+  timeline: JiaziTimelineView,
   ai: ReportConfigView,
   system: SystemSettingsView,
 };
@@ -233,12 +234,12 @@ onBeforeUnmount(() => {
     <main class="app-main">
       <AppTopbar :theme-mode="themeMode" @toggle-theme="toggleThemeMode" />
 
-      <div class="app-scroll">
+      <div class="app-scroll" :class="{ 'is-immersive': activeNav === 'timeline' }">
         <Transition name="route-switch" mode="out-in">
           <component :is="activeView" :key="activeNav" :active-nav="activeNav" @navigate="handleNavigate" />
         </Transition>
 
-        <footer class="app-footer">
+        <footer v-if="activeNav !== 'timeline'" class="app-footer">
           AI日报助手{{ appVersionText }} · 让技术日报生成更简单、更智能
         </footer>
       </div>
