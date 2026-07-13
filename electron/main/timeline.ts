@@ -84,10 +84,6 @@ function extractCommitHashes(rawInputJson: unknown) {
   }
 }
 
-function calculateEnergy(commitsCount: number, filesCount: number, workTypes: TimelineWorkType[], milestone: boolean) {
-  return Math.min(100, 35 + Math.min(commitsCount, 20) * 3 + Math.min(filesCount, 20) + workTypes.length * 4 + (milestone ? 8 : 0));
-}
-
 function rowToTimelineRecord(row: ReportRow): TimelineRecord {
   return {
     id: Number(row.id) || 0,
@@ -103,7 +99,6 @@ function rowToTimelineRecord(row: ReportRow): TimelineRecord {
     commitHashes: parseArray(row.commit_hashes_json),
     commitsCount: Number(row.commits_count) || 0,
     filesCount: Number(row.files_count) || 0,
-    energy: Number(row.energy) || 0,
     milestone: Number(row.milestone) === 1,
     createdAt: String(row.created_at || ''),
     updatedAt: String(row.updated_at || ''),
@@ -130,8 +125,16 @@ export function aggregateTimelineRecords(records: TimelineRecord[]): TimelineDay
   }));
 }
 
+export async function backfillTimelineSnapshots(db: Database): Promise<void> {
+  const missingReports = db.exec(
+    `SELECT daily_reports.id FROM daily_reports
+     LEFT JOIN timeline_snapshots ON timeline_snapshots.report_id = daily_reports.id
+     WHERE timeline_snapshots.id IS NULL AND daily_reports.status != 'failed'`,
+  )[0]?.values ?? [];
+  for (const row of missingReports) await upsertTimelineSnapshot(Number(row[0]), db);
+}
+
 export async function upsertTimelineSnapshot(reportId: number, db: Database): Promise<TimelineRecord> {
-  ensureTimelineSchema(db);
   const statement = db.prepare('SELECT * FROM daily_reports WHERE id = ? LIMIT 1');
   let reportRow: ReportRow | null = null;
   try {
@@ -167,7 +170,7 @@ export async function upsertTimelineSnapshot(reportId: number, db: Database): Pr
     JSON.stringify(extractCommitHashes(reportRow.raw_input_json)),
     commitsCount,
     filesCount,
-    calculateEnergy(commitsCount, filesCount, workTypes, milestone),
+    0, /* energy: 保留列但不再计算，待未来定义明确语义后启用 */
     milestone ? 1 : 0,
     createdAt,
     now,
@@ -197,19 +200,12 @@ export async function upsertTimelineSnapshot(reportId: number, db: Database): Pr
 
 export async function getTimelineSnapshot(query: TimelineQuery | undefined, db: Database): Promise<TimelineSnapshot> {
   query ??= {};
-  ensureTimelineSchema(db);
-  const missingReports = db.exec(
-    `SELECT daily_reports.id FROM daily_reports
-     LEFT JOIN timeline_snapshots ON timeline_snapshots.report_id = daily_reports.id
-     WHERE timeline_snapshots.id IS NULL AND daily_reports.status != 'failed'`,
-  )[0]?.values ?? [];
-  for (const row of missingReports) await upsertTimelineSnapshot(Number(row[0]), db);
   const conditions: string[] = [];
   const params: Array<string | number> = [];
   if (query.startDate) { conditions.push('date >= ?'); params.push(query.startDate); }
   if (query.endDate) { conditions.push('date <= ?'); params.push(query.endDate); }
   if (query.type) { conditions.push('primary_type = ?'); params.push(query.type); }
-  if (query.project) { conditions.push('projects_json LIKE ?'); params.push(`%${query.project}%`); }
+  if (query.project) { conditions.push('projects_json LIKE ?'); params.push(`%"${query.project}"%`); }
   const statement = db.prepare(`SELECT * FROM timeline_snapshots ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY date ASC, id ASC`);
   const records: TimelineRecord[] = [];
   try {

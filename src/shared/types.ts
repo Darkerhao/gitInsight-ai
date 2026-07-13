@@ -205,7 +205,6 @@ export interface TimelineRecord {
   commitHashes: string[];
   commitsCount: number;
   filesCount: number;
-  energy: number;
   milestone: boolean;
   createdAt: string;
   updatedAt: string;

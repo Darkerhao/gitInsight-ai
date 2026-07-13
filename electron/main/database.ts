@@ -21,7 +21,7 @@ import type {
   SyncLogRecord,
 } from '../../src/shared/types.js';
 import { ensureConfigDir, getConfigPath, getDatabasePath, getSecretsPath } from './paths.js';
-import { ensureTimelineSchema, upsertTimelineSnapshot } from './timeline.js';
+import { backfillTimelineSnapshots, ensureTimelineSchema, upsertTimelineSnapshot } from './timeline.js';
 
 export let sqlDatabase: import('sql.js').Database | null = null;
 
@@ -155,6 +155,7 @@ export async function getDatabase() {
   ensureDailyReportTimeRangeColumns(sqlDatabase);
   ensureJiaziFarmPlots(sqlDatabase);
   ensureTimelineSchema(sqlDatabase);
+  await backfillTimelineSnapshots(sqlDatabase);
   await persistDatabase();
   return sqlDatabase;
 }

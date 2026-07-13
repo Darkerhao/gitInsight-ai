@@ -15,7 +15,7 @@ import type {
 import { getAutoSyncState, runAutoSync, saveConfigAndReschedule, validateAutoSync } from './autoSync.js';
 import { getCheckinWalletSnapshot, importCheckinWallet, runDailyCheckin, spendCheckinCoins } from './checkinWallet.js';
 import { loadConfig, saveConfig } from './config.js';
-import { getDatabase, getStorageInfo, listDailyReports, listErrorLogs, listHistoryProjects, listSyncLogs, persistDatabase, queryHistoryLogs, saveDailyReport } from './database.js';
+import { getDatabase, getStorageInfo, listDailyReports, listErrorLogs, listHistoryProjects, listSyncLogs, queryHistoryLogs, saveDailyReport } from './database.js';
 import { getTimelineSnapshot } from './timeline.js';
 import type { TimelineQuery } from '../../src/shared/types.js';
 import { listFeishuFieldOptions, listFeishuProjectOptions, syncFeishuDaily, testSubmitFeishuForm } from './feishuForm.js';
@@ -38,11 +38,9 @@ export function registerIpcHandlers() {
   ipcMain.handle('report:generate', async (_event, params: GenerateReportParams) => generateReport(params));
   ipcMain.handle('daily-report:list', async (_event, limit?: number) => listDailyReports(limit));
   ipcMain.handle('daily-report:save', async (_event, payload: SaveDailyReportPayload) => saveDailyReport(payload));
-  ipcMain.handle('timeline:get-snapshot', async (_event, query?: TimelineQuery) => {
-    const result = await getTimelineSnapshot(query, await getDatabase());
-    await persistDatabase();
-    return result;
-  });
+  ipcMain.handle('timeline:get-snapshot', async (_event, query?: TimelineQuery) =>
+    getTimelineSnapshot(query, await getDatabase()),
+  );
   ipcMain.handle('sync-log:list', async (_event, limit?: number) => listSyncLogs(limit));
   ipcMain.handle('error-log:list', async (_event, limit?: number) => listErrorLogs(limit));
   ipcMain.handle('history-log:query', async (_event, query?: HistoryLogQuery) => queryHistoryLogs(query));
