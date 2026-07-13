@@ -95,6 +95,13 @@ export function useTimeline() {
     return query;
   }
 
+  /* ── 查询缓存 ── */
+  const queryCache = new Map<string, TimelineSnapshot>();
+
+  function queryCacheKey(query: TimelineQuery): string {
+    return `${query.startDate ?? ''}|${query.endDate ?? ''}|${query.type ?? ''}|${query.project ?? ''}`;
+  }
+
   /* ── 数据加载 ── */
   async function loadTimeline(keepSelection = true) {
     loading.value = true;
@@ -104,7 +111,16 @@ export function useTimeline() {
       if (typeof window.api.getTimelineSnapshot !== 'function') {
         throw new Error('时间长河接口尚未加载，请完全重启应用后重试');
       }
-      snapshot.value = await window.api.getTimelineSnapshot(buildQuery());
+      const query = buildQuery();
+      const cacheKey = queryCacheKey(query);
+      const cached = queryCache.get(cacheKey);
+      if (cached) {
+        snapshot.value = cached;
+      } else {
+        const result = await window.api.getTimelineSnapshot(query);
+        queryCache.set(cacheKey, result);
+        snapshot.value = result;
+      }
       selectedId.value = records.value.some((item) => item.id === previousId) ? previousId : records.value.at(-1)?.id ?? 0;
     } catch (error) {
       snapshot.value = null;
@@ -113,6 +129,12 @@ export function useTimeline() {
     } finally {
       loading.value = false;
     }
+  }
+
+  /** 清除缓存并重新加载（用于"刷新今日轨迹"等需要强制刷新的场景） */
+  async function forceReload(keepSelection = true) {
+    queryCache.clear();
+    await loadTimeline(keepSelection);
   }
 
   /* ── 节点操作 ── */
@@ -148,6 +170,6 @@ export function useTimeline() {
     snapshot, loading, loadError, scale, activeType, selectedId,
     viewYear, viewMonth, viewLabel, isCurrentPeriod, navigatePeriod, goToToday,
     records, days, selectedRecord, selectedDay, selectedDayIndex, selectedItems, timelineWindow,
-    loadTimeline, representative, selectDay, distance, eventPosition, handleWheel,
+    loadTimeline, forceReload, representative, selectDay, distance, eventPosition, handleWheel,
   };
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Activity, Award, ChevronLeft, ChevronRight, Filter, GitCommitHorizontal, Maximize2, Minimize2, Pause, Play, RefreshCw, Sparkles, Zap } from 'lucide-vue-next';
+import { Activity, Award, ChevronLeft, ChevronRight, Filter, GitCommitHorizontal, Maximize2, Minimize2, PanelRightClose, PanelRightOpen, Pause, Play, RefreshCw, Sparkles, Zap } from 'lucide-vue-next';
 import { useTimeline, typeOptions } from '@/composables/useTimeline';
 import { usePlayback } from '@/composables/usePlayback';
 import { useFullscreen } from '@/composables/useFullscreen';
@@ -15,16 +15,18 @@ const {
   snapshot, loading, loadError, scale, activeType,
   viewLabel, isCurrentPeriod, navigatePeriod, goToToday,
   records, days, selectedRecord, selectedDay, selectedDayIndex, selectedItems, timelineWindow,
-  loadTimeline, representative, selectDay, distance, eventPosition, handleWheel,
+  forceReload, representative, selectDay, distance, eventPosition, handleWheel,
 } = useTimeline();
 
 const { isPlaying, togglePlayback } = usePlayback(days, selectedDayIndex, selectDay);
 const { isFullscreen, toggleFullscreen } = useFullscreen(timelineRoot);
 
+const detailCollapsed = ref(false);
 const isMergingToday = ref(false);
+
 function mergeToday() {
   isMergingToday.value = true;
-  void loadTimeline(false).finally(() => window.setTimeout(() => { isMergingToday.value = false; }, 2200));
+  void forceReload(false).finally(() => window.setTimeout(() => { isMergingToday.value = false; }, 2200));
 }
 
 function openReport() {
@@ -39,7 +41,7 @@ function onWheel(event: WheelEvent) {
 </script>
 
 <template>
-  <div ref="timelineRoot" class="timeline-view" :class="{ fullscreen: isFullscreen }" @wheel="onWheel">
+  <div ref="timelineRoot" class="timeline-view" :class="{ fullscreen: isFullscreen, 'detail-collapsed': detailCollapsed }" @wheel="onWheel">
     <div class="stars"><i v-for="n in 38" :key="n" :style="{ '--x': `${(n * 37) % 100}%`, '--y': `${(n * 61) % 100}%`, '--delay': `${(n % 8) * -.7}s` }" /></div>
     <header>
       <div><span class="eyebrow"><Activity :size="15" /> DEVELOPMENT CHRONICLE · {{ viewLabel }}</span><h1>时间长河</h1><p>真实日报与 Git 提交，正在形成你的年度工程轨迹。</p></div>
@@ -52,7 +54,8 @@ function onWheel(event: WheelEvent) {
         </div>
         <div class="scale-switch"><button v-for="item in [{k:'year',l:'年度'},{k:'month',l:'月度'},{k:'day',l:'单日'}]" :key="item.k" :class="{ active: scale === item.k }" @click="scale = item.k as TimelineScale">{{ item.l }}</button></div>
         <button class="play" :class="{ active: isPlaying }" @click="togglePlayback"><Pause v-if="isPlaying" :size="15" /><Play v-else :size="15" />{{ isPlaying ? '暂停' : '轨迹回放' }}</button>
-        <button class="refresh" :class="{ spinning: loading }" @click="loadTimeline()"><RefreshCw :size="16" /></button>
+        <button class="refresh" :class="{ spinning: loading }" @click="forceReload()"><RefreshCw :size="16" /></button>
+        <button class="detail-toggle" :title="detailCollapsed ? '展开详情' : '收起详情'" @click="detailCollapsed = !detailCollapsed"><PanelRightOpen v-if="detailCollapsed" :size="16" /><PanelRightClose v-else :size="16" /></button>
         <button class="fullscreen-button" :title="isFullscreen ? '退出全屏' : '全屏查看'" @click="toggleFullscreen"><Minimize2 v-if="isFullscreen" :size="16" /><Maximize2 v-else :size="16" /><span>{{ isFullscreen ? '退出全屏' : '全屏' }}</span></button>
       </div>
     </header>
@@ -60,7 +63,17 @@ function onWheel(event: WheelEvent) {
     <div class="overview" v-if="snapshot"><strong>{{ snapshot.summary.totalCommits }}</strong> 次提交 <i /> <strong>{{ snapshot.summary.activeDays }}</strong> 个活跃日 <i /> <strong>{{ snapshot.total }}</strong> 项工作 <i /> <strong>{{ snapshot.summary.projects.length }}</strong> 个活跃项目</div>
     <div class="filters"><Filter :size="14" /><button v-for="item in typeOptions" :key="item.label" :class="{ active: activeType === item.value }" @click="activeType = item.value">{{ item.label }}</button></div>
 
-    <section v-if="records.length" class="river" :class="`scale-${scale}`">
+    <!-- 骨架屏加载态 -->
+    <section v-if="loading && !snapshot" class="river skeleton">
+      <div class="river-line" />
+      <div v-for="n in 5" :key="n" class="skeleton-event">
+        <div class="skeleton-copy"><div class="skeleton-line short" /><div class="skeleton-line" /><div class="skeleton-line medium" /></div>
+        <div class="skeleton-node" />
+        <div class="skeleton-date"><div class="skeleton-line tiny" /></div>
+      </div>
+    </section>
+
+    <section v-else-if="records.length" class="river" :class="`scale-${scale}`">
       <div class="aurora" /><div class="river-line"><i v-for="n in 14" :key="n" :style="{ '--delay': `${n * -.38}s` }" /></div>
       <article v-for="day in timelineWindow" :key="day.date" class="event" :class="[`distance-${distance(day)}`, { selected: selectedDay?.date === day.date }]" :style="eventPosition(day)" tabindex="0" @click="selectDay(day)" @keydown.enter="selectDay(day)">
         <div class="copy"><span :style="{ color: tone(representative(day).primaryType) }">{{ day.workTypes.join(' / ') }} · {{ day.projects.join(' / ') || '未识别项目' }}</span><h2>{{ dayTitle(day) }}</h2><p>{{ daySummary(day) }}</p></div>
@@ -70,13 +83,13 @@ function onWheel(event: WheelEvent) {
       <div v-if="isMergingToday" class="merge"><span v-for="label in ['日报', '提交', '成果']" :key="label">{{ label }}</span><div><Sparkles :size="24" /></div><strong>真实数据正在汇入时间长河</strong></div>
     </section>
 
-    <section v-else class="empty"><Sparkles :size="34" /><h2>{{ loading ? '正在读取工程轨迹' : loadError ? '时间长河加载失败' : '这一段时间还没有成长记录' }}</h2><p>{{ loadError || '保存一篇日报后，系统会自动分析项目、工作类型、技术标签和提交证据。' }}</p><button v-if="loadError" @click="loadTimeline(false)">重新加载 <RefreshCw :size="15" /></button><button v-else @click="router.push('/generate')">去生成第一篇日报 <ChevronRight :size="15" /></button></section>
+    <section v-else class="empty"><Sparkles :size="34" /><h2>{{ loadError ? '时间长河加载失败' : '这一段时间还没有成长记录' }}</h2><p>{{ loadError || '保存一篇日报后，系统会自动分析项目、工作类型、技术标签和提交证据。' }}</p><button v-if="loadError" @click="forceReload(false)">重新加载 <RefreshCw :size="15" /></button><button v-else @click="router.push('/generate')">去生成第一篇日报 <ChevronRight :size="15" /></button></section>
 
-    <aside v-if="selectedRecord && selectedDay" class="detail" :style="{ '--detail-tone': tone(selectedRecord.primaryType) }" @wheel.stop>
+    <aside v-if="selectedRecord && selectedDay && !detailCollapsed" class="detail" :style="{ '--detail-tone': tone(selectedRecord.primaryType) }" @wheel.stop>
       <span><Award :size="17" /> {{ selectedDay.workTypes.join(' / ') }} · {{ selectedDay.date }}</span><h2>{{ dayTitle(selectedDay) }}</h2>
       <div class="detail-scroll">
         <section v-for="item in selectedItems" :key="item.id" class="detail-section"><h3>{{ displayTitle(item) }}</h3><ul><li v-for="content in detailSections(item)" :key="content">{{ content }}</li></ul></section>
-        <section v-if="selectedDay.projects.length" class="detail-section"><h3>影响范围</h3><div class="tags"><span v-for="tag in [...selectedDay.projects, ...selectedItems.flatMap(item => item.techTags)]" :key="tag">{{ tag }}</span></div></section>
+        <section v-if="selectedDay.projects.length" class="detail-section"><h3>影响范围</h3><div class="tags"><span v-for="tag in [...new Set([...selectedDay.projects, ...selectedItems.flatMap(item => item.techTags)])]" :key="tag">{{ tag }}</span></div></section>
       </div>
       <div class="metrics"><div><small>提交次数</small><strong>{{ selectedDay.commitsCount }}</strong></div><div><small>变更文件</small><strong>{{ selectedDay.filesCount }}</strong></div><div><small>工作事项</small><strong>{{ selectedDay.itemCount }}</strong></div></div>
       <button @click="openReport">查看当日日报与提交证据 <ChevronRight :size="15" /></button>
@@ -373,6 +386,46 @@ header p { margin: 0; color: #9aa9bd; font-size: 14px; }
   box-shadow: 0 0 60px rgba(80, 222, 240, .55);
 }
 .merge strong { position: absolute; margin-top: 125px; }
+
+/* ── 详情面板收起 ── */
+.detail-toggle {
+  width: 37px; height: 37px; border: 1px solid #2d3854; border-radius: 9px;
+  display: grid; place-items: center;
+  color: #77859b; background: transparent; cursor: pointer;
+}
+.detail-toggle:hover { color: #dff8ff; border-color: #4f8296; background: rgba(54, 116, 139, .16); }
+.detail-collapsed .river { right: 28px; }
+.detail-collapsed .footer { right: 28px; }
+
+/* ── 骨架屏加载态 ── */
+.skeleton { display: flex; flex-direction: column; align-items: center; gap: 18px; padding-top: 40px; }
+.skeleton .river-line { opacity: .3; }
+.skeleton-event {
+  display: grid; grid-template-columns: 1fr 82px 1fr; align-items: center;
+  width: 100%; max-width: 700px;
+}
+.skeleton-copy { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; padding-right: 34px; }
+.skeleton-event:nth-child(even) .skeleton-copy { align-items: flex-start; grid-column: 3; padding: 0 0 0 34px; }
+.skeleton-event:nth-child(even) .skeleton-node { grid-column: 2; grid-row: 1; }
+.skeleton-event:nth-child(even) .skeleton-date { grid-column: 1; grid-row: 1; text-align: right; padding-right: 34px; }
+.skeleton-line {
+  height: 12px; width: 180px; border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .08), rgba(255, 255, 255, .04));
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+.skeleton-line.short { width: 100px; }
+.skeleton-line.medium { width: 140px; }
+.skeleton-line.tiny { width: 60px; }
+.skeleton-node {
+  width: 56px; height: 56px; border-radius: 50%; justify-self: center;
+  border: 1px solid rgba(255, 255, 255, .08);
+  background: linear-gradient(90deg, rgba(255, 255, 255, .03), rgba(255, 255, 255, .07), rgba(255, 255, 255, .03));
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+.skeleton-date { padding-left: 34px; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 /* ── 全屏适配 ── */
 .timeline-view:fullscreen { width: 100vw; height: 100vh; }
