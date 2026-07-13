@@ -6,13 +6,23 @@ export function usePlayback(days: Ref<TimelineDayGroup[]>, selectedDayIndex: Ref
   const isPlaying = ref(false);
   let playbackTimer: number | undefined;
 
-  function togglePlayback() {
-    isPlaying.value = !isPlaying.value;
+  function stopPlayback() {
+    isPlaying.value = false;
     window.clearInterval(playbackTimer);
-    if (!isPlaying.value || !days.value.length) return;
+    playbackTimer = undefined;
+  }
+
+  function togglePlayback() {
+    if (isPlaying.value) { stopPlayback(); return; }
+    if (!days.value.length) return;
+    isPlaying.value = true;
     playbackTimer = window.setInterval(() => {
       const index = selectedDayIndex.value;
-      selectDay(days.value[(index + 1) % days.value.length]);
+      if (index >= days.value.length - 1) {
+        stopPlayback();
+        return;
+      }
+      selectDay(days.value[index + 1]);
     }, 1800);
   }
 

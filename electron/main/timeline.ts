@@ -3,12 +3,12 @@ import type { TimelineDayGroup, TimelineQuery, TimelineRecord, TimelineSnapshot,
 
 type ReportRow = Record<string, unknown>;
 
-const TYPE_RULES: Array<{ type: TimelineWorkType; keywords: string[] }> = [
-  { type: 'Bug 修复', keywords: ['修复', '异常', '错误', '崩溃', 'bug', 'fix', '问题'] },
-  { type: '性能优化', keywords: ['性能', '提速', '缓存', '耗时', '内存', '优化加载'] },
-  { type: '重构优化', keywords: ['重构', '收敛', '抽取', '解耦', '类型治理', 'refactor'] },
-  { type: '工程优化', keywords: ['构建', '测试', '配置', '脚本', '工程', '诊断', '类型检查'] },
-  { type: '功能开发', keywords: ['新增', '增加', '实现', '支持', '上线', '开发', 'feat', '完成'] },
+const TYPE_RULES: Array<{ type: TimelineWorkType; keywords: string[]; weight: number }> = [
+  { type: 'Bug 修复', keywords: ['修复', '异常', '错误', '崩溃', 'bug', 'fix', '问题'], weight: 3 },
+  { type: '性能优化', keywords: ['性能', '提速', '缓存', '耗时', '内存', '优化加载'], weight: 3 },
+  { type: '重构优化', keywords: ['重构', '收敛', '抽取', '解耦', '类型治理', 'refactor'], weight: 3 },
+  { type: '工程优化', keywords: ['构建', '测试', '配置', '脚本', '工程', '诊断', '类型检查'], weight: 2 },
+  { type: '功能开发', keywords: ['新增', '增加', '实现', '支持', '上线', '开发', 'feat'], weight: 2 },
 ];
 
 export function ensureTimelineSchema(db: Database) {
@@ -54,10 +54,15 @@ function normalizeText(value: unknown) {
 
 function detectWorkTypes(text: string): TimelineWorkType[] {
   const normalized = text.toLowerCase();
-  const matches = TYPE_RULES.filter((rule) => rule.keywords.some((keyword) => normalized.includes(keyword.toLowerCase()))).map(
-    (rule) => rule.type,
-  );
-  return matches.length ? matches : ['日常开发'];
+  const scores = new Map<TimelineWorkType, number>();
+  for (const rule of TYPE_RULES) {
+    const hits = rule.keywords.filter((keyword) => normalized.includes(keyword.toLowerCase())).length;
+    if (hits > 0) scores.set(rule.type, hits * rule.weight);
+  }
+  if (!scores.size) return ['日常开发'];
+  return Array.from(scores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([type]) => type);
 }
 
 function extractTitle(report: string, primaryType: TimelineWorkType) {
@@ -78,7 +83,9 @@ function extractCommitHashes(rawInputJson: unknown) {
   if (typeof rawInputJson !== 'string') return [];
   try {
     const raw = JSON.parse(rawInputJson) as { gitLogs?: string };
-    return Array.from(raw.gitLogs?.matchAll(/\b[0-9a-f]{6,40}\b/gi) ?? [], (match) => match[0]).slice(0, 50);
+    if (!raw.gitLogs) return [];
+    // git log 格式: __COMMIT__<40-hex-hash>\t...  — 只提取紧跟标记的完整 hash
+    return Array.from(raw.gitLogs.matchAll(/__COMMIT__([0-9a-f]{40})\b/gi) ?? [], (match) => match[1]).slice(0, 50);
   } catch {
     return [];
   }

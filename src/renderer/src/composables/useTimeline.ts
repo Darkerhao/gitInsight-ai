@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import type { TimelineDayGroup, TimelineQuery, TimelineRecord, TimelineSnapshot, TimelineWorkType } from '@shared/types';
 
@@ -11,6 +11,7 @@ export const typeOptions: Array<{ label: string; value: TimelineWorkType | '' }>
   { label: '重构优化', value: '重构优化' },
   { label: '性能优化', value: '性能优化' },
   { label: '工程优化', value: '工程优化' },
+  { label: '日常开发', value: '日常开发' },
 ];
 
 export function useTimeline() {
@@ -21,6 +22,42 @@ export function useTimeline() {
   const activeType = ref<TimelineWorkType | ''>('');
   const selectedId = ref(0);
 
+  /* ── 月份 / 年份导航 ── */
+  const now = new Date();
+  const viewYear = ref(now.getFullYear());
+  const viewMonth = ref(now.getMonth() + 1);
+
+  const viewLabel = computed(() => {
+    if (scale.value === 'year') return `${viewYear.value} 年`;
+    return `${viewYear.value} 年 ${viewMonth.value} 月`;
+  });
+
+  const isCurrentPeriod = computed(() => {
+    const today = new Date();
+    if (scale.value === 'year') return viewYear.value === today.getFullYear();
+    return viewYear.value === today.getFullYear() && viewMonth.value === today.getMonth() + 1;
+  });
+
+  function navigatePeriod(delta: number) {
+    if (scale.value === 'year') {
+      viewYear.value += delta;
+    } else {
+      let m = viewMonth.value + delta;
+      let y = viewYear.value;
+      while (m < 1) { m += 12; y--; }
+      while (m > 12) { m -= 12; y++; }
+      viewYear.value = y;
+      viewMonth.value = m;
+    }
+  }
+
+  function goToToday() {
+    const today = new Date();
+    viewYear.value = today.getFullYear();
+    viewMonth.value = today.getMonth() + 1;
+  }
+
+  /* ── 派生数据 ── */
   const records = computed(() => snapshot.value?.records ?? []);
   const days = computed(() => snapshot.value?.days ?? []);
   const selectedRecord = computed(() => records.value.find((item) => item.id === selectedId.value) ?? records.value.at(-1) ?? null);
@@ -37,19 +74,19 @@ export function useTimeline() {
     return days.value.slice(Math.max(0, focusIndex - 3), Math.min(days.value.length, focusIndex + 4));
   });
 
+  /* ── 查询构建 ── */
   function buildQuery(): TimelineQuery {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const monthStr = String(month).padStart(2, '0');
     const query: TimelineQuery = {};
+    const y = viewYear.value;
+    const m = viewMonth.value;
+    const monthStr = String(m).padStart(2, '0');
     if (scale.value === 'year') {
-      query.startDate = `${year}-01-01`;
-      query.endDate = `${year}-12-31`;
+      query.startDate = `${y}-01-01`;
+      query.endDate = `${y}-12-31`;
     } else if (scale.value === 'month') {
-      const lastDay = new Date(year, month, 0).getDate();
-      query.startDate = `${year}-${monthStr}-01`;
-      query.endDate = `${year}-${monthStr}-${lastDay}`;
+      const lastDay = new Date(y, m, 0).getDate();
+      query.startDate = `${y}-${monthStr}-01`;
+      query.endDate = `${y}-${monthStr}-${lastDay}`;
     } else if (selectedRecord.value) {
       query.startDate = selectedRecord.value.date;
       query.endDate = selectedRecord.value.date;
@@ -58,6 +95,7 @@ export function useTimeline() {
     return query;
   }
 
+  /* ── 数据加载 ── */
   async function loadTimeline(keepSelection = true) {
     loading.value = true;
     loadError.value = '';
@@ -77,6 +115,7 @@ export function useTimeline() {
     }
   }
 
+  /* ── 节点操作 ── */
   function representative(day: TimelineDayGroup) { return day.records.at(-1) as TimelineRecord; }
   function selectDay(day: TimelineDayGroup) { selectedId.value = representative(day).id; }
 
@@ -92,17 +131,22 @@ export function useTimeline() {
   }
 
   function handleWheel(event: WheelEvent) {
-    if (!days.value.length) return;
+    if (!days.value.length) {
+      // 无数据时不阻止默认滚轮行为（.prevent 在模板上，这里通过无操作让用户知道无内容）
+      return;
+    }
     const current = Math.max(0, selectedDayIndex.value);
     const next = Math.max(0, Math.min(days.value.length - 1, current + (event.deltaY > 0 ? 1 : -1)));
     selectDay(days.value[next]);
   }
 
-  watch([scale, activeType], () => void loadTimeline(false));
+  /* ── 自动触发加载 ── */
+  watch([scale, activeType, viewYear, viewMonth], () => void loadTimeline(false));
   onMounted(() => void loadTimeline(false));
 
   return {
     snapshot, loading, loadError, scale, activeType, selectedId,
+    viewYear, viewMonth, viewLabel, isCurrentPeriod, navigatePeriod, goToToday,
     records, days, selectedRecord, selectedDay, selectedDayIndex, selectedItems, timelineWindow,
     loadTimeline, representative, selectDay, distance, eventPosition, handleWheel,
   };

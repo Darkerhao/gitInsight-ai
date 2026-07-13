@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Activity, Award, ChevronRight, Filter, GitCommitHorizontal, Maximize2, Minimize2, Pause, Play, RefreshCw, Sparkles, Zap } from 'lucide-vue-next';
+import { Activity, Award, ChevronLeft, ChevronRight, Filter, GitCommitHorizontal, Maximize2, Minimize2, Pause, Play, RefreshCw, Sparkles, Zap } from 'lucide-vue-next';
 import { useTimeline, typeOptions } from '@/composables/useTimeline';
 import { usePlayback } from '@/composables/usePlayback';
 import { useFullscreen } from '@/composables/useFullscreen';
@@ -13,14 +13,13 @@ const timelineRoot = ref<HTMLElement | null>(null);
 
 const {
   snapshot, loading, loadError, scale, activeType,
+  viewLabel, isCurrentPeriod, navigatePeriod, goToToday,
   records, days, selectedRecord, selectedDay, selectedDayIndex, selectedItems, timelineWindow,
   loadTimeline, representative, selectDay, distance, eventPosition, handleWheel,
 } = useTimeline();
 
 const { isPlaying, togglePlayback } = usePlayback(days, selectedDayIndex, selectDay);
 const { isFullscreen, toggleFullscreen } = useFullscreen(timelineRoot);
-
-const year = computed(() => new Date().getFullYear());
 
 const isMergingToday = ref(false);
 function mergeToday() {
@@ -32,14 +31,25 @@ function openReport() {
   if (!selectedRecord.value) return;
   void router.push({ path: '/history', query: { id: selectedRecord.value.reportId } });
 }
+
+function onWheel(event: WheelEvent) {
+  if (records.value.length) event.preventDefault();
+  handleWheel(event);
+}
 </script>
 
 <template>
-  <div ref="timelineRoot" class="timeline-view" :class="{ fullscreen: isFullscreen }" @wheel.prevent="handleWheel">
+  <div ref="timelineRoot" class="timeline-view" :class="{ fullscreen: isFullscreen }" @wheel="onWheel">
     <div class="stars"><i v-for="n in 38" :key="n" :style="{ '--x': `${(n * 37) % 100}%`, '--y': `${(n * 61) % 100}%`, '--delay': `${(n % 8) * -.7}s` }" /></div>
     <header>
-      <div><span class="eyebrow"><Activity :size="15" /> DEVELOPMENT CHRONICLE · {{ year }}</span><h1>时间长河</h1><p>真实日报与 Git 提交，正在形成你的年度工程轨迹。</p></div>
+      <div><span class="eyebrow"><Activity :size="15" /> DEVELOPMENT CHRONICLE · {{ viewLabel }}</span><h1>时间长河</h1><p>真实日报与 Git 提交，正在形成你的年度工程轨迹。</p></div>
       <div class="actions">
+        <div class="period-nav" v-if="scale !== 'day'">
+          <button @click="navigatePeriod(-1)" title="上一期"><ChevronLeft :size="15" /></button>
+          <span>{{ viewLabel }}</span>
+          <button @click="navigatePeriod(1)" title="下一期"><ChevronRight :size="15" /></button>
+          <button v-if="!isCurrentPeriod" class="go-today" @click="goToToday">回到今天</button>
+        </div>
         <div class="scale-switch"><button v-for="item in [{k:'year',l:'年度'},{k:'month',l:'月度'},{k:'day',l:'单日'}]" :key="item.k" :class="{ active: scale === item.k }" @click="scale = item.k as TimelineScale">{{ item.l }}</button></div>
         <button class="play" :class="{ active: isPlaying }" @click="togglePlayback"><Pause v-if="isPlaying" :size="15" /><Play v-else :size="15" />{{ isPlaying ? '暂停' : '轨迹回放' }}</button>
         <button class="refresh" :class="{ spinning: loading }" @click="loadTimeline()"><RefreshCw :size="16" /></button>
@@ -110,6 +120,24 @@ header { position: relative; z-index: 4; display: flex; justify-content: space-b
 h1 { margin: 7px 0 4px; font-size: 38px; letter-spacing: .06em; }
 header p { margin: 0; color: #9aa9bd; font-size: 14px; }
 .actions { display: flex; align-items: flex-start; gap: 9px; }
+
+/* ── 月份/年份导航 ── */
+.period-nav {
+  display: flex; align-items: center; gap: 4px;
+  padding: 3px; border: 1px solid #26304a; border-radius: 10px; background: #0b1020;
+}
+.period-nav button {
+  width: 30px; height: 30px; border: 0; border-radius: 7px;
+  display: grid; place-items: center;
+  color: #77859b; background: transparent; cursor: pointer;
+}
+.period-nav button:hover { color: #dff8ff; background: rgba(54, 116, 139, .16); }
+.period-nav span { padding: 0 6px; color: #b4c6da; font-size: 12px; white-space: nowrap; }
+.period-nav .go-today {
+  width: auto; padding: 0 10px; margin-left: 2px;
+  border: 1px solid #3d4a6a; border-radius: 7px;
+  color: #72e7f4; font-size: 11px;
+}
 
 /* ── 视图切换 & 操作按钮 ── */
 .scale-switch { display: flex; padding: 3px; border: 1px solid #26304a; border-radius: 10px; background: #0b1020; }
