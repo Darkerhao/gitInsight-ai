@@ -1,4 +1,4 @@
-import type { AppConfig, ReportTimeRange } from '../../src/shared/types.js';
+import type { AppConfig, ReportTimeRange, StructuredReportMetadata } from '../../src/shared/types.js';
 
 type AiRuntimeConfig = {
   aiBaseUrl: string;
@@ -258,3 +258,64 @@ ${rawInput.diff}
   return content.trim();
 }
 
+
+const STRUCTURED_EXTRACT_PROMPT = `你是一个工作日报结构化分析助手。请将以下日报内容提取为 JSON 格式。
+
+规则：
+1. title：用一句话概括当天最核心的工作（不超过30字），不要使用"今日工作内容"等通用标题。
+2. workItems：每条工作事项包含 module（模块名）、description（工作描述）、workType（从以下六选一：功能开发、Bug 修复、重构优化、性能优化、工程优化、日常开发）。
+3. achievements：工作成果列表，每条是一个独立成果描述。
+4. techTags：涉及的技术栈标签（如 Vue、TypeScript、Electron 等），只提取实际出现的。
+5. risks：风险或待确认项，没有则返回空数组。
+6. tomorrowPlan：明日计划列表，没有则返回空数组。
+7. milestone：布尔值，如果当天有上线、发布、完成重要功能等里程碑事件则为 true。
+
+只输出合法 JSON，不要包含任何解释文字或 markdown 标记。
+
+日报内容：
+`;
+
+/**
+ * 从已生成的日报文本中提取结构化元数据。
+ * 这是一次轻量 AI 调用（输入短、temperature 0），失败时返回 null 不影响主流程。
+ */
+export async function callAiStructuredExtract(
+  config: AiRuntimeConfig,
+  reportText: string,
+): Promise<StructuredReportMetadata | null> {
+  try {
+    const chatCompletionsUrl = getChatCompletionsUrl(config.aiBaseUrl);
+    const response = await fetchAi(chatCompletionsUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.aiApiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.aiModel,
+        messages: [
+          { role: 'system', content: '你是一个 JSON 数据提取助手，只输出合法 JSON。' },
+          { role: 'user', content: STRUCTURED_EXTRACT_PROMPT + reportText },
+        ],
+        temperature: 0,
+      }),
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const content = (data?.choices?.[0]?.message?.content ?? '').trim();
+    if (!content) return null;
+
+    // 兼容模型输出 ```json ... ``` 包裹的情况
+    const jsonStr = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed = JSON.parse(jsonStr) as StructuredReportMetadata;
+
+    // 基础校验
+    if (!parsed.title || !Array.isArray(parsed.workItems)) return null;
+    return parsed;
+  } catch {
+    // 结构化提取失败不影响主流程，静默降级
+    return null;
+  }
+}

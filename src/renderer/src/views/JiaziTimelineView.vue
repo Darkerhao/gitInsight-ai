@@ -132,7 +132,7 @@ header { position: relative; z-index: 4; display: flex; justify-content: space-b
 .eyebrow { display: flex; align-items: center; gap: 8px; color: #75dce9; font-size: 12px; letter-spacing: .18em; }
 h1 { margin: 7px 0 4px; font-size: 38px; letter-spacing: .06em; }
 header p { margin: 0; color: #9aa9bd; font-size: 14px; }
-.actions { display: flex; align-items: flex-start; gap: 9px; }
+.actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 
 /* ── 月份/年份导航 ── */
 .period-nav {
@@ -446,21 +446,56 @@ header p { margin: 0; color: #9aa9bd; font-size: 14px; }
 }
 
 /* ── 响应式 ── */
-@media (max-width: 1280px) {
+
+/* 中等屏：缩小间距和详情面板 */
+@media (max-width: 1440px) {
   .timeline-view { padding-left: 28px; padding-right: 28px; }
-  .river { left: 1%; right: 370px; }
-  .detail { right: 18px; width: 340px; }
-  .event { grid-template-columns: minmax(220px, 1fr) 76px minmax(220px, 1fr); }
-  .copy h2, .copy p { max-width: 330px; }
-  .footer { right: 370px; }
+  .river { left: 2%; right: clamp(360px, 26vw, 420px); }
+  .detail { right: 18px; width: clamp(340px, 24vw, 400px); }
+  .event { grid-template-columns: minmax(200px, 1fr) 76px minmax(200px, 1fr); }
+  .copy h2, .copy p { max-width: 320px; }
+  .footer { right: clamp(360px, 26vw, 420px); }
 }
+
+/* 小屏：操作栏折行、文字进一步收窄 */
+@media (max-width: 1280px) {
+  header { flex-wrap: wrap; gap: 10px; }
+  .actions { flex-wrap: wrap; gap: 6px; }
+  h1 { font-size: 30px; }
+  .river { left: 1%; right: 340px; }
+  .detail { right: 14px; width: 320px; }
+  .event { grid-template-columns: minmax(160px, 1fr) 70px minmax(160px, 1fr); }
+  .copy { padding-right: 20px; }
+  .event:nth-child(even) .copy { padding-left: 20px; }
+  .copy span { font-size: 10px; }
+  .copy h2 { max-width: 260px; font-size: 14px; -webkit-line-clamp: 1; line-clamp: 1; }
+  .copy p { max-width: 260px; font-size: 12px; -webkit-line-clamp: 1; line-clamp: 1; }
+  .node { width: 52px; height: 52px; }
+  .node strong { font-size: 14px; }
+  .node small { font-size: 8px; }
+  .footer { right: 340px; }
+  .overview { flex-wrap: wrap; font-size: 12px; }
+  .filters { flex-wrap: wrap; }
+  .play span { display: none; }
+  .fullscreen-button span { display: none; }
+}
+
+/* 窄屏：详情面板覆盖式抽屉、时间轴全宽、左右交替改单侧 */
 @media (max-width: 1024px) {
   .river { right: 28px; }
-  .detail { z-index: 12; right: 18px; width: min(420px, calc(100% - 36px)); box-shadow: 0 24px 80px rgba(0, 0, 0, .62); }
-  .copy h2, .copy p { max-width: 300px; }
-  .overview { font-size: 12px; }
+  .detail {
+    z-index: 12; right: 0; top: 0; bottom: 0; width: min(420px, 85vw);
+    border-radius: 0; border-left: 2px solid var(--detail-tone, #795abd);
+    box-shadow: -12px 0 60px rgba(0, 0, 0, .7);
+  }
+  .event { grid-template-columns: minmax(140px, 1fr) 64px minmax(140px, 1fr); }
+  .copy h2 { max-width: 220px; font-size: 13px; }
+  .copy p { max-width: 220px; display: none; }
   .footer { right: 28px; }
+  .period-nav span { font-size: 11px; }
+  .scale-switch button { padding: 6px 9px; font-size: 11px; }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .stars i, .river-line > i, .node b, .merge span { animation: none !important; }
   .event { transition: none; }

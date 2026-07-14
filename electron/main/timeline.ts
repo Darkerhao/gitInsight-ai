@@ -1,5 +1,5 @@
 import type { Database } from 'sql.js';
-import type { TimelineDayGroup, TimelineQuery, TimelineRecord, TimelineSnapshot, TimelineWorkType } from '../../src/shared/types.js';
+import type { StructuredReportMetadata, TimelineDayGroup, TimelineQuery, TimelineRecord, TimelineSnapshot, TimelineWorkType } from '../../src/shared/types.js';
 
 type ReportRow = Record<string, unknown>;
 
@@ -141,6 +141,21 @@ export async function backfillTimelineSnapshots(db: Database): Promise<void> {
   for (const row of missingReports) await upsertTimelineSnapshot(Number(row[0]), db);
 }
 
+function parseStructuredJson(value: unknown): StructuredReportMetadata | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const parsed = JSON.parse(value) as StructuredReportMetadata;
+    if (parsed && typeof parsed.title === 'string' && Array.isArray(parsed.workItems)) return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function deduplicateWorkTypes(types: TimelineWorkType[]): TimelineWorkType[] {
+  return Array.from(new Set(types.filter((t): t is TimelineWorkType => typeof t === 'string' && t.length > 0)));
+}
+
 export async function upsertTimelineSnapshot(reportId: number, db: Database): Promise<TimelineRecord> {
   const statement = db.prepare('SELECT * FROM daily_reports WHERE id = ? LIMIT 1');
   let reportRow: ReportRow | null = null;
@@ -154,26 +169,36 @@ export async function upsertTimelineSnapshot(reportId: number, db: Database): Pr
 
   const report = normalizeText(reportRow.report);
   const rawText = `${report}\n${normalizeText(reportRow.raw_input_json)}`;
-  const workTypes = detectWorkTypes(report);
-  const primaryType = workTypes[0];
   const projects = parseArray(reportRow.repo_names_json);
   const repoPaths = parseArray(reportRow.repo_paths_json);
   const commitsCount = Number(reportRow.commits_count) || 0;
   const filesCount = Number(reportRow.files_count) || 0;
-  const milestone = /上线|发布|完成|突破|里程碑/.test(report) || commitsCount >= 10;
+
+  // 优先使用 AI 结构化数据，fallback 到正则/关键词匹配
+  const structured = parseStructuredJson(reportRow.structured_json);
+  const workTypes = structured
+    ? deduplicateWorkTypes(structured.workItems.map((item: { workType: TimelineWorkType }) => item.workType))
+    : detectWorkTypes(report);
+  const primaryType = workTypes[0];
+  const title = structured?.title || extractTitle(report, primaryType);
+  const techTags = structured?.techTags?.length ? structured.techTags : extractTechTags(rawText);
+  const milestone = structured
+    ? structured.milestone
+    : /上线|发布|完成|突破|里程碑/.test(report) || commitsCount >= 10;
+
   const now = new Date().toISOString();
   const existing = db.exec(`SELECT created_at FROM timeline_snapshots WHERE report_id = ${Number(reportId)}`)[0]?.values[0];
   const createdAt = String(existing?.[0] || now);
   const values = [
     reportId,
     String(reportRow.date || ''),
-    extractTitle(report, primaryType),
+    title,
     report.slice(0, 500),
     primaryType,
     JSON.stringify(workTypes),
     JSON.stringify(projects),
     JSON.stringify(repoPaths),
-    JSON.stringify(extractTechTags(rawText)),
+    JSON.stringify(techTags),
     JSON.stringify(extractCommitHashes(reportRow.raw_input_json)),
     commitsCount,
     filesCount,

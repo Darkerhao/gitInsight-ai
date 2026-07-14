@@ -153,6 +153,7 @@ export interface ReportResult {
     files: string;
     diff: string;
   };
+  structuredJson?: StructuredReportMetadata;
 }
 
 export interface DailyReportRecord {
@@ -190,6 +191,23 @@ export interface ErrorLogRecord {
 }
 
 export type TimelineWorkType = '功能开发' | 'Bug 修复' | '重构优化' | '性能优化' | '工程优化' | '日常开发';
+
+/** AI 结构化提取结果 — 由日报生成后的二次 AI 调用产出，存入 daily_reports.structured_json */
+export interface StructuredWorkItem {
+  module: string;
+  description: string;
+  workType: TimelineWorkType;
+}
+
+export interface StructuredReportMetadata {
+  title: string;
+  workItems: StructuredWorkItem[];
+  achievements: string[];
+  techTags: string[];
+  risks: string[];
+  tomorrowPlan: string[];
+  milestone: boolean;
+}
 
 export interface TimelineRecord {
   id: number;
@@ -312,6 +330,7 @@ export interface SaveDailyReportPayload {
   filesCount: number;
   generatedAt?: string;
   rawInput?: ReportResult['rawInput'];
+  structuredJson?: StructuredReportMetadata;
 }
 
 export interface SyncFeishuDailyPayload {

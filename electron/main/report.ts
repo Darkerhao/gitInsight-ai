@@ -1,6 +1,6 @@
 import { basename } from 'node:path';
-import type { CommitEntry, GenerateReportParams, ReportResult, ReportTimeRange } from '../../src/shared/types.js';
-import { callAiReport, resolveAiConfig } from './aiClient.js';
+import type { CommitEntry, GenerateReportParams, ReportResult, ReportTimeRange, StructuredReportMetadata } from '../../src/shared/types.js';
+import { callAiReport, callAiStructuredExtract, resolveAiConfig } from './aiClient.js';
 import { loadConfig } from './config.js';
 import { recordGeneratedReport } from './database.js';
 import { nextDateString, normalizeDateTimeValue, parseLocalDateTimeMs, formatDateTimeForDisplay, type NormalizedReportTimeRange } from './dateUtils.js';
@@ -309,7 +309,14 @@ export async function generateReport(params: GenerateReportParams): Promise<Repo
     repos.map((item) => item.name),
   );
 
-  const result = { report, commits, repos, generatedAt, timeRange, rawInput };
+  // 二次 AI 调用：从日报文本中提取结构化元数据（失败不影响主流程）
+  let structuredJson: StructuredReportMetadata | undefined;
+  if (aiConfig.aiApiKey) {
+    const extracted = await callAiStructuredExtract(aiConfig, report);
+    if (extracted) structuredJson = extracted;
+  }
+
+  const result = { report, commits, repos, generatedAt, timeRange, rawInput, structuredJson };
   const record = await recordGeneratedReport(params, result);
   return { ...result, historyId: record.id };
 }

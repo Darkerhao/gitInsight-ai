@@ -184,6 +184,7 @@ export function ensureDailyReportTimeRangeColumns(db: import('sql.js').Database)
   if (!columns.has('start_datetime')) db.run('ALTER TABLE daily_reports ADD COLUMN start_datetime TEXT');
   if (!columns.has('end_datetime')) db.run('ALTER TABLE daily_reports ADD COLUMN end_datetime TEXT');
   if (!columns.has('time_range_label')) db.run('ALTER TABLE daily_reports ADD COLUMN time_range_label TEXT');
+  if (!columns.has('structured_json')) db.run('ALTER TABLE daily_reports ADD COLUMN structured_json TEXT');
 }
 
 
@@ -499,6 +500,7 @@ export async function saveDailyReport(payload: SaveDailyReportPayload): Promise<
   const repoNamesJson = JSON.stringify(payload.repoNames);
   const repoPathsJson = JSON.stringify(payload.repoPaths);
   const rawInputJson = payload.rawInput ? JSON.stringify(payload.rawInput) : null;
+  const structuredJson = payload.structuredJson ? JSON.stringify(payload.structuredJson) : null;
   const timeRange = payload.timeRange?.startDateTime && payload.timeRange.endDateTime ? payload.timeRange : null;
   const startDateTime = timeRange?.startDateTime ?? null;
   const endDateTime = timeRange?.endDateTime ?? null;
@@ -512,7 +514,8 @@ export async function saveDailyReport(payload: SaveDailyReportPayload): Promise<
            start_datetime = COALESCE(?, start_datetime),
            end_datetime = COALESCE(?, end_datetime),
            time_range_label = COALESCE(?, time_range_label),
-           raw_input_json = COALESCE(?, raw_input_json)
+           raw_input_json = COALESCE(?, raw_input_json),
+           structured_json = COALESCE(?, structured_json)
        WHERE id = ?`,
       [
         payload.date,
@@ -529,6 +532,7 @@ export async function saveDailyReport(payload: SaveDailyReportPayload): Promise<
         endDateTime,
         timeRangeLabel,
         rawInputJson,
+        structuredJson,
         payload.id,
       ],
     );
@@ -540,8 +544,8 @@ export async function saveDailyReport(payload: SaveDailyReportPayload): Promise<
 
   db.run(
     `INSERT INTO daily_reports
-      (date, start_datetime, end_datetime, time_range_label, reporter_name, repo_names_json, repo_paths_json, report, status, commits_count, files_count, generated_at, updated_at, raw_input_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (date, start_datetime, end_datetime, time_range_label, reporter_name, repo_names_json, repo_paths_json, report, status, commits_count, files_count, generated_at, updated_at, raw_input_json, structured_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       payload.date,
       startDateTime,
@@ -557,6 +561,7 @@ export async function saveDailyReport(payload: SaveDailyReportPayload): Promise<
       generatedAt,
       now,
       rawInputJson,
+      structuredJson,
     ],
   );
   const idResult = db.exec('SELECT last_insert_rowid() AS id');
@@ -765,6 +770,7 @@ export async function recordGeneratedReport(params: GenerateReportParams, result
     generatedAt: result.generatedAt,
     timeRange: result.timeRange,
     rawInput: result.rawInput,
+    structuredJson: result.structuredJson,
   });
 }
 
