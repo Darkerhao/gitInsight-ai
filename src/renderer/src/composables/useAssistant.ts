@@ -109,6 +109,7 @@ function createAssistant() {
     date: today,
     startDateTime: buildDateTime(today, '00:00'),
     endDateTime: buildDateTime(tomorrow, '00:00'),
+    manualWorkContent: '',
   });
 
   function getProjectWorkHours(optionId: string) {
@@ -136,6 +137,7 @@ function createAssistant() {
   }
 
   function loadDailyReportDraft(record: DailyReportRecord) {
+    form.manualWorkContent = record.manualWorkContent ?? '';
     const recordRepos = record.repoPaths.map((path, index) => {
       const existingRepo = repos.value.find((repo) => repo.path === path);
       return existingRepo ?? { path, name: record.repoNames[index] || path };

@@ -46,6 +46,7 @@ interface ProjectReportDraft {
 const props = defineProps<{
   drafts: ProjectReportDraft[];
   activeDraftKey: string;
+  manualWorkContent: string;
   status: string;
   setupReady: boolean;
   readinessDetail: string;
@@ -61,6 +62,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:active-draft-key', value: string): void;
   (e: 'update-draft-report', key: string, value: string): void;
+  (e: 'update:manual-work-content', value: string): void;
   (e: 'generate-all'): void;
   (e: 'generate-current'): void;
   (e: 'save-current'): void;
@@ -110,6 +112,20 @@ function getTabStatusType(item: ProjectReportDraft) {
     <div class="step-title">
       <span>2</span>
       <strong>生成与编辑</strong>
+    </div>
+
+    <div class="field manual-work-field">
+      <label>补充工作内容（可选）</label>
+      <el-input
+        :model-value="manualWorkContent"
+        type="textarea"
+        :rows="4"
+        :maxlength="2000"
+        show-word-limit
+        resize="vertical"
+        placeholder="填写 Git 提交中无法体现的工作，每行一项。例如：完成教师发展平台网页测试；上线课程管理功能；参与需求评审。"
+        @update:model-value="(value: string) => emit('update:manual-work-content', value)"
+      />
     </div>
 
     <div class="generation-toolbar">

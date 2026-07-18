@@ -58,3 +58,15 @@
 - 完成飞书提交记录入口：主进程新增 `openFeishuSubmissionRecords()`，通过 `feishu:open-submission-records` 暴露给渲染层，复用飞书登录窗口和 `persist:feishu` 会话，打开表单页后自动尝试点击“我的提交记录/提交记录”。
 - `ReportGenerateView.vue` 在“发布研发日报到飞书”按钮下方新增“查看日报提交记录”按钮；缺少飞书表单地址或 shareToken 时提示并跳转配置页。
 - 验证通过：`npm run typecheck`、`npm run build`、`git diff --check`。构建仍输出第三方 `@vueuse/core` PURE 注释警告，属于既有依赖警告。
+
+## 2026-07-18
+
+- 用户要求日报生成支持手动补充 Git 提交无法体现的网页测试、功能上线、会议协作等工作。
+- 已恢复工作区，确认现有未提交修改属于仓库显示名称功能并予以保留。
+- 已扩展 `GenerateReportParams`、`ReportResult.rawInput` 和历史记录字段，补充内容会进入 AI Prompt 与日报持久化。
+- 已调整无提交分支：存在补充内容时仍继续 AI/本地模板生成。
+- 已在生成范围卡片加入多行补充内容输入，单项目重新生成和批量生成都会携带该内容。
+- 当前进入类型检查、测试、构建和界面验证阶段。
+- 已将输入框从第 1 步调整到截图标注的第 2 步“生成与编辑”区域，位于生成按钮之前。
+- 三轮验证完成：`npm test` 7 个测试通过，`npm run typecheck` 通过，`npm run build` 通过，`git diff --check` 通过。
+- 尝试使用本地浏览器预览时被浏览器安全策略阻止访问 `127.0.0.1`；已关闭临时服务，没有尝试替代地址或绕过策略。生产构建和静态模板结构检查正常。

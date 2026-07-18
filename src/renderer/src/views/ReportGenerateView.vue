@@ -347,6 +347,10 @@ function handleReportDateChange(value: string) {
   resetPublishStateAfterRangeChange(previousDate, previousStartDateTime, previousEndDateTime);
 }
 
+function handleManualWorkContentChange(value: string) {
+  form.manualWorkContent = value;
+}
+
 function resetPublishStateAfterRangeChange(previousDate: string, previousStartDateTime: string, previousEndDateTime: string) {
   const changed = previousDate !== form.date || previousStartDateTime !== form.startDateTime || previousEndDateTime !== form.endDateTime;
   if (!changed) return;
@@ -429,6 +433,7 @@ async function generateDraft(draftKey: string, options: { updateStatus?: boolean
       ...reportRange,
       reporterName: config.reporterName,
       aiProfileId: config.activeAiProfileId,
+      manualWorkContent: form.manualWorkContent.trim() || undefined,
     });
 
     const latestDraft = getDraftByKey(draftKey);
@@ -467,7 +472,9 @@ async function handleGenerateCurrent() {
     if (success) {
       activeDraftKey.value = draftKey;
       ElMessage.success(`${latestDraft?.repo.name ?? draft.repo.name} 日报已生成`);
-      if (!latestDraft?.lastReportResult?.commits.length) ElMessage.warning('当前项目未匹配到可用于生成日报的提交记录');
+      if (!latestDraft?.lastReportResult?.commits.length && !form.manualWorkContent.trim()) {
+        ElMessage.warning('当前项目未匹配到可用于生成日报的提交记录');
+      }
     } else {
       ElMessage.error(latestDraft?.generateMessage || '生成失败');
     }
@@ -906,6 +913,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
         <ReportEditorCard
           :drafts="editorDrafts"
           :active-draft-key="activeDraftKey"
+          :manual-work-content="form.manualWorkContent"
           :status="status"
           :setup-ready="setupReady"
           :readiness-detail="readinessDetail"
@@ -917,6 +925,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
           :active-has-last-report-result="activeHasLastReportResult"
           :can-save-all="hasAnyDirtyReport"
           @update:active-draft-key="handleUpdateActiveDraftKey"
+          @update:manual-work-content="handleManualWorkContentChange"
           @update-draft-report="updateDraftReport"
           @generate-all="handleGenerateAll"
           @generate-current="handleGenerateCurrent"

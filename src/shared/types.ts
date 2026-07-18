@@ -105,6 +105,7 @@ export interface AppConfig {
   selectedRepoPaths: string[];
   ignoredRepoPaths: string[];
   pinnedRepoPaths: string[];
+  repoDisplayNames: Record<string, string>;
   reporterName: string;
   aiBaseUrl: string;
   aiApiKey: string;
@@ -124,6 +125,8 @@ export interface GenerateReportParams {
   endDateTime?: string;
   reporterName: string;
   aiProfileId?: string;
+  /** 用户补充的非 Git 工作内容，例如网页测试、上线、会议或联调。 */
+  manualWorkContent?: string;
 }
 
 export interface ReportTimeRange {
@@ -152,6 +155,7 @@ export interface ReportResult {
     gitLogs: string;
     files: string;
     diff: string;
+    manualWorkContent?: string;
   };
   structuredJson?: StructuredReportMetadata;
 }
@@ -169,6 +173,7 @@ export interface DailyReportRecord {
   filesCount: number;
   generatedAt: string;
   updatedAt: string;
+  manualWorkContent?: string;
 }
 
 export interface SyncLogRecord {

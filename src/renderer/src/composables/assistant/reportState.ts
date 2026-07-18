@@ -8,7 +8,7 @@ type ReportRangeForm = { startDateTime: string; endDateTime: string };
 
 type ReportStateContext = {
   config: AppConfig;
-  form: { date: string; startDateTime: string; endDateTime: string };
+  form: { date: string; startDateTime: string; endDateTime: string; manualWorkContent: string };
   loading: Ref<boolean>;
   pushing: Ref<boolean>;
   report: Ref<string>;
@@ -68,6 +68,7 @@ export function toPlainRawInput(rawInput?: ReportResult['rawInput']): ReportResu
     gitLogs: rawInput.gitLogs,
     files: rawInput.files,
     diff: rawInput.diff,
+    ...(rawInput.manualWorkContent ? { manualWorkContent: rawInput.manualWorkContent } : {}),
   };
 }
 
@@ -155,13 +156,14 @@ export function createReportState(ctx: ReportStateContext) {
         ...reportRange,
         reporterName: config.reporterName,
         aiProfileId: config.activeAiProfileId,
+        manualWorkContent: form.manualWorkContent.trim() || undefined,
       });
       lastReportResult.value = result;
       currentReportId.value = result.historyId ?? null;
       report.value = result.report;
       status.value = `已汇总 ${result.repos.length} 个仓库，生成 ${result.commits.length} 条记录`;
       await refreshLocalData();
-      if (!result.commits.length) {
+      if (!result.commits.length && !form.manualWorkContent.trim()) {
         ElMessage.warning('未匹配到可用于生成日报的提交记录');
         return;
       }

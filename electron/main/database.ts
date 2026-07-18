@@ -179,6 +179,19 @@ export function parseJsonArray(value: unknown) {
 }
 
 
+export function parseManualWorkContent(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  try {
+    const parsed = JSON.parse(value) as { manualWorkContent?: unknown };
+    return typeof parsed.manualWorkContent === 'string' && parsed.manualWorkContent.trim()
+      ? parsed.manualWorkContent.trim()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+
 export function ensureDailyReportTimeRangeColumns(db: import('sql.js').Database) {
   const columns = new Set((db.exec('PRAGMA table_info(daily_reports)')[0]?.values ?? []).map((row) => String(row[1])));
   if (!columns.has('start_datetime')) db.run('ALTER TABLE daily_reports ADD COLUMN start_datetime TEXT');
@@ -256,6 +269,7 @@ export function rowToDailyReportRecord(row: Record<string, unknown>): DailyRepor
     filesCount: Number(row.files_count) || 0,
     generatedAt: String(row.generated_at || ''),
     updatedAt: String(row.updated_at || ''),
+    manualWorkContent: parseManualWorkContent(row.raw_input_json),
   };
 }
 

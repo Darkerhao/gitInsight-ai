@@ -196,18 +196,49 @@ function ensureReportWorkItemModuleLabels(report: string, commits: CommitEntry[]
 }
 
 
-export function fallbackReport(repoNames: string[], date: string, reporterName: string, commits: CommitEntry[], timeRange: ReportTimeRange) {
-  const workItems = commits.slice(0, 3).map((commit) => {
+function normalizeManualWorkItems(content: string) {
+  return content
+    .split(/\r?\n/)
+    .map((item) => item.replace(/^\s*(?:[-*]|\d+[.)、])\s*/, '').trim())
+    .filter(Boolean);
+}
+
+
+function getManualWorkModuleName(content: string) {
+  if (/(测试|验收|回归|验证)/.test(content)) return '质量保障 / 网页测试';
+  if (/(上线|发布|部署|发版)/.test(content)) return '发布交付 / 功能上线';
+  if (/(会议|评审|沟通|对齐)/.test(content)) return '协作沟通 / 方案评审';
+  if (/(联调|接口)/.test(content)) return '协作联调 / 接口验证';
+  return '非代码工作 / 工作补充';
+}
+
+
+export function fallbackReport(
+  repoNames: string[],
+  date: string,
+  reporterName: string,
+  commits: CommitEntry[],
+  timeRange: ReportTimeRange,
+  manualWorkContent = '',
+) {
+  const manualWorkItems = normalizeManualWorkItems(manualWorkContent);
+  const commitWorkItems = commits.slice(0, 3).map((commit) => {
     const moduleName = getCommitModuleName(commit, repoNames);
     const topic = stripConventionalCommitPrefix(commit.message) || moduleName;
     return `【${moduleName}】完成${topic}相关优化，提升对应页面或功能的数据展示与交互稳定性。`;
   });
+  const workItems = [
+    ...manualWorkItems.map((item) => `【${getManualWorkModuleName(item)}】${item.replace(/[。；;]+$/, '')}。`),
+    ...commitWorkItems,
+  ];
   const moduleNames = [...new Set(commits.map((commit) => getCommitModuleName(commit, repoNames)))].slice(0, 3).join('、');
   const resultItems = commits.length
     ? [
         `${moduleNames || repoNames.join('、') || '当前项目'}相关展示与交互路径已完成整理，便于后续回归验证。`,
       ]
-    : ['完成日报基础信息整理，当前时间段暂无可用研发记录。'];
+    : manualWorkItems.length
+      ? [`已完成 ${manualWorkItems.length} 项非代码工作并纳入日报，确保测试、发布及协作事项可追踪。`]
+      : ['完成日报基础信息整理，当前时间段暂无可用研发记录。'];
   const planItems = commits.length
     ? commits.slice(0, 2).map((commit) => {
         const topic = stripConventionalCommitPrefix(commit.message) || getCommitModuleName(commit, repoNames);
@@ -261,9 +292,10 @@ export async function generateReport(params: GenerateReportParams): Promise<Repo
       .map((item, index) => `## ${repos[index]?.name ?? `项目${index + 1}`}\n${item.diff || '该时间段无代码变更摘要'}`)
       .join('\n\n')
       .slice(0, 12000),
+    ...(params.manualWorkContent?.trim() ? { manualWorkContent: params.manualWorkContent.trim() } : {}),
   };
 
-  if (!commits.length) {
+  if (!commits.length && !rawInput.manualWorkContent) {
     const matchedTip = allCommits.length
       ? `所选时间段存在 ${allCommits.length} 条提交记录，但没有匹配到汇报人“${params.reporterName}”的提交。`
       : '所选时间段未采集到代码提交记录。';
@@ -295,11 +327,11 @@ export async function generateReport(params: GenerateReportParams): Promise<Repo
     try {
       report = await callAiReport(aiConfig, rawInput, timeRange);
     } catch (error) {
-      report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange);
+      report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange, rawInput.manualWorkContent);
       report = `${report}\n\nAI提示：${error instanceof Error ? error.message : '调用失败'}`;
     }
   } else {
-    report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange);
+    report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange, rawInput.manualWorkContent);
     const profileLabel = aiConfig.aiProfileName ? `“${aiConfig.aiProfileName}”` : '当前 AI 配置';
     report = `${report}\n\nAI提示：请先在 AI 设置中为${profileLabel}配置 OpenAI 兼容接口与 API Key。`;
   }

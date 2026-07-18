@@ -2402,6 +2402,11 @@ textarea {
   gap: 14px;
 }
 
+.report-generate-view .manual-work-field .el-textarea__inner {
+  min-height: 104px;
+  line-height: 1.6;
+}
+
 .generation-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

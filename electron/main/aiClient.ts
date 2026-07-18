@@ -178,10 +178,14 @@ export async function buildAiErrorMessage(config: AiRuntimeConfig, response: Res
 }
 
 
-export async function callAiReport(config: AiRuntimeConfig, rawInput: { gitLogs: string; files: string; diff: string }, timeRange: ReportTimeRange) {
+export async function callAiReport(
+  config: AiRuntimeConfig,
+  rawInput: { gitLogs: string; files: string; diff: string; manualWorkContent?: string },
+  timeRange: ReportTimeRange,
+) {
   const prompt = `你是一名资深软件研发工程师。
 
-请根据以下Git提交记录、修改文件和代码变更内容，总结所选时间段内的工作内容。
+请根据以下 Git 提交记录、修改文件、代码变更内容以及用户补充的非 Git 工作，总结所选时间段内的工作内容。
 
 要求：
 1. 不要出现commit、git等技术词汇。
@@ -189,9 +193,9 @@ export async function callAiReport(config: AiRuntimeConfig, rawInput: { gitLogs:
 3. 每条正文描述控制在25-70字，模块标签不计入字数。
 4. 按实际功能归纳。
 5. 相同模块合并总结。
-6. 根据改动量输出1-3条工作内容，小变更1条即可，不要为了凑条数拆分同一问题。
+6. 通常根据工作量输出1-3条工作内容；用户补充多项工作时应合理合并，但不得遗漏已明确提供的事项。
 7. 自动生成1-2条明日计划。
-8. 只能依据提供的Git数据、修改文件和代码变更总结，禁止补写未出现的工作内容。
+8. 只能依据提供的Git数据、修改文件、代码变更和“用户补充的非 Git 工作内容”总结，禁止补写未出现的工作内容；用户补充内容必须被视为已确认事实。
 9. “今日工作内容”每一条必须以轻量模块标签开头，格式为“【一级模块 / 具体功能】”。只有区分同名功能或定位必须依赖场景时，才使用“【一级模块 / 页面或场景 / 具体功能】”。
 10. 模块标签优先从业务模块、页面、组件、接口、路由、配置项、字段语义或文件路径中归纳；无法确定完整层级时至少输出最具体的页面或功能名称，不要写“相关模块”。
 11. 不要省略模块标签，不要输出“模块/功能：”这类说明文字，不要只输出问题描述或优化描述。
@@ -205,6 +209,9 @@ ${timeRange.label}
 
 Git数据：
 ${rawInput.gitLogs}
+
+用户补充的非 Git 工作内容（这是用户明确完成的工作，请优先纳入日报，不要臆造未提供的细节）：
+${rawInput.manualWorkContent || '无'}
 
 修改文件：
 ${rawInput.files}

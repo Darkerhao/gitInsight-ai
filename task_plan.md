@@ -75,3 +75,13 @@
 | 2. 主进程跳转能力 | complete | 新增 `feishu:open-submission-records` IPC，复用 `persist:feishu` 登录态打开飞书表单并自动点击“我的提交记录” |
 | 3. 页面入口 | complete | 在发布按钮下方新增“查看日报提交记录”按钮，缺少飞书连接配置时引导到配置页 |
 | 4. 质量验证 | complete | `npm run typecheck`、`npm run build`、`git diff --check` 均通过 |
+
+## 2026-07-18 非 Git 工作内容补充任务
+
+| 阶段 | 状态 | 内容 |
+| --- | --- | --- |
+| 1. 链路定位 | complete | 已定位生成页、IPC、AI Prompt、日报持久化与飞书发布链路 |
+| 2. 输入与生成 | complete | 已增加可选的补充工作内容输入，并传入单项目/批量 AI 生成 |
+| 3. 无提交降级 | complete | 已支持无 Git 提交时仅依据补充内容生成，本地模板同样保留补充事项 |
+| 4. 历史与发布 | complete | 补充内容写入 `raw_input_json`，历史加载可恢复，飞书发布使用生成后的完整正文 |
+| 5. 质量验证 | complete | 三轮验证完成：测试、类型检查、生产构建、diff 检查和模板结构检查均通过；本地浏览器预览被安全策略阻止，未绕过 |
