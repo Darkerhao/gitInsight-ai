@@ -12,6 +12,11 @@ import type { ProjectReportDraft } from '@/composables/useAssistant';
 import { countResultFiles, getReportRangePayloadFromForm, resolveReportTimeRange, toPlainRawInput } from '@/composables/assistant/reportState';
 import { normalizeProjectWorkHours, normalizeWorkHours } from '@/composables/assistant/normalizers';
 import type { DailyReportRecord, RepoInfo } from '@shared/types';
+import {
+  getRepoDisplayName,
+  getRepoPathKey,
+  MAX_REPO_DISPLAY_NAME_LENGTH,
+} from '@shared/repositoryName';
 
 type DateShortcut = 'today' | 'yesterday' | 'rolling' | 'custom';
 type GenerationCheckAction = '' | 'config' | 'ai';
@@ -57,18 +62,23 @@ const {
   isRepoSelected,
   isRepoPinned,
   toggleRepoPin,
+  renameRepo,
   applyFullDayReportRange,
 } = assistant;
 
 const dateShortcut = ref<DateShortcut>('today');
 const workHourPresets = [1, 2, 4, 6, 7, 7.5, 8, 10];
 
-const selectedRepoNames = computed(() => selectedRepos.value.map((repo) => repo.name));
+function displayRepoName(repo: RepoInfo) {
+  return getRepoDisplayName(repo, config.repoDisplayNames);
+}
+
+const selectedRepoNames = computed(() => selectedRepos.value.map(displayRepoName));
 const selectedRepoNamesText = computed(() => selectedRepoNames.value.join('、'));
 
 const selectedRepoSummary = computed(() => {
   if (!selectedRepos.value.length) return '请选择要生成日报的仓库';
-  if (selectedRepos.value.length === 1) return selectedRepos.value[0].name;
+  if (selectedRepos.value.length === 1) return displayRepoName(selectedRepos.value[0]);
   return `已选择 ${selectedRepos.value.length} 个仓库`;
 });
 
@@ -520,7 +530,7 @@ async function saveDraft(draft: ProjectReportDraft, options: { silent?: boolean;
     id: draft.reportId ?? undefined,
     date: form.date,
     reporterName: config.reporterName,
-    repoNames: result?.repos.map((item) => item.name) ?? [draft.repo.name],
+    repoNames: result?.repos.map((item) => getRepoDisplayName(item, config.repoDisplayNames)) ?? [draft.repo.name],
     repoPaths: result?.repos.map((item) => item.path) ?? [draft.repo.path],
     report: content,
     status: result?.commits.length ? 'success' : 'draft',
@@ -816,9 +826,27 @@ async function handleToggleRepo(path: string) {
   toggleRepo(path);
 }
 
-async function confirmRemoveRepo(item: RepoInfo) {
+async function promptRenameRepo(item: RepoInfo) {
   try {
-    await ElMessageBox.confirm(`确定从列表中移除「${item.name}」吗？这不会删除本地仓库文件。`, '移除仓库', {
+    const { value } = await ElMessageBox.prompt('设置便于识别的显示名称；留空并确认可恢复仓库原名。', '重命名仓库', {
+      confirmButtonText: '保存',
+      cancelButtonText: '取消',
+      inputValue: config.repoDisplayNames[getRepoPathKey(item.path)] ?? '',
+      inputPlaceholder: item.name,
+      inputValidator: (value: string) =>
+        value.trim().length <= MAX_REPO_DISPLAY_NAME_LENGTH || `显示名称不能超过 ${MAX_REPO_DISPLAY_NAME_LENGTH} 个字符`,
+    });
+    await renameRepo(item.path, String(value ?? ''));
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return;
+    ElMessage.error(error instanceof Error ? error.message : '重命名仓库失败');
+  }
+}
+
+async function confirmRemoveRepo(item: RepoInfo) {
+  const repoName = displayRepoName(item);
+  try {
+    await ElMessageBox.confirm(`确定从列表中移除「${repoName}」吗？这不会删除本地仓库文件。`, '移除仓库', {
       confirmButtonText: '移除',
       cancelButtonText: '取消',
       type: 'warning',
@@ -858,6 +886,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
           :selected-repos="selectedRepos"
           :selected-repo-paths="selectedRepoPaths"
           :sorted-repos="sortedRepos"
+          :repo-display-names="config.repoDisplayNames"
           :ai-profile-options="aiProfileOptions"
           :date-shortcut="dateShortcut"
           :is-repo-selected="isRepoSelected"
@@ -870,6 +899,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
           @set-date-shortcut="setDateShortcut"
           @toggle-repo="handleToggleRepo"
           @toggle-repo-pin="toggleRepoPin"
+          @rename-repo="promptRenameRepo"
           @remove-repo="confirmRemoveRepo"
         />
 

@@ -9,6 +9,7 @@ import {
   DEFAULT_FEISHU_FORM_CONFIG,
 } from '../../src/shared/types.js';
 import type { AiProfile, AppConfig, AutoSyncConfig, AutoSyncStatus } from '../../src/shared/types.js';
+import { normalizeRepoDisplayNames } from '../../src/shared/repositoryName.js';
 import { ensureConfigDir, getConfigPath, getSecretsPath } from './paths.js';
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -17,6 +18,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   selectedRepoPaths: [],
   ignoredRepoPaths: [],
   pinnedRepoPaths: [],
+  repoDisplayNames: {},
   reporterName: '',
   aiBaseUrl: 'https://api.openai.com/v1',
   aiApiKey: '',
@@ -193,6 +195,7 @@ export function normalizeConfig(config?: Partial<AppConfig>): AppConfig {
     selectedRepoPaths: normalizeRepoPaths(config?.selectedRepoPaths).filter((item) => !ignoredRepoPathSet.has(item.toLocaleLowerCase())),
     ignoredRepoPaths,
     pinnedRepoPaths: normalizeRepoPaths(config?.pinnedRepoPaths).filter((item) => !ignoredRepoPathSet.has(item.toLocaleLowerCase())),
+    repoDisplayNames: normalizeRepoDisplayNames(config?.repoDisplayNames),
     aiBaseUrl: activeAiProfile.baseUrl,
     aiApiKey: activeAiProfile.apiKey,
     aiModel: activeAiProfile.model,

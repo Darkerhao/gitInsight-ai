@@ -3,6 +3,7 @@ import type { Ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { DEFAULT_AI_PROFILE, DEFAULT_AUTO_SYNC_CONFIG } from '@shared/types';
 import type { AiProfile, AppConfig } from '@shared/types';
+import { normalizeRepoDisplayNames } from '@shared/repositoryName';
 import {
   mergeCurrentOption,
   normalizeAutoSyncTimeWindowMode,
@@ -114,11 +115,13 @@ export function createConfigState(ctx: ConfigStateContext) {
     const normalizedPinnedRepoPaths = normalizeRepoSelections(config.pinnedRepoPaths ?? []).filter(
       (path) => !ignoredRepoKeys.has(getRepoKey(path)),
     );
+    const normalizedRepoDisplayNames = normalizeRepoDisplayNames(config.repoDisplayNames ?? {});
 
     selectedRepoPaths.value = normalizedSelectedRepoPaths;
     config.selectedRepoPaths = normalizedSelectedRepoPaths;
     config.ignoredRepoPaths = normalizedIgnoredRepoPaths;
     config.pinnedRepoPaths = normalizedPinnedRepoPaths;
+    config.repoDisplayNames = normalizedRepoDisplayNames;
 
     const aiProfiles = getAiProfilePayloads();
     const activeProfile = aiProfiles.find((profile) => profile.id === config.activeAiProfileId) ?? aiProfiles[0] ?? DEFAULT_AI_PROFILE;
@@ -129,6 +132,7 @@ export function createConfigState(ctx: ConfigStateContext) {
       selectedRepoPaths: normalizedSelectedRepoPaths,
       ignoredRepoPaths: normalizedIgnoredRepoPaths,
       pinnedRepoPaths: normalizedPinnedRepoPaths,
+      repoDisplayNames: normalizedRepoDisplayNames,
       reporterName: toPlainString(config.reporterName),
       aiBaseUrl: toPlainString(activeProfile.baseUrl),
       aiApiKey: toPlainString(activeProfile.apiKey),
@@ -183,6 +187,7 @@ export function createConfigState(ctx: ConfigStateContext) {
       selectedRepoPaths: normalizeRepoSelections(selectedRepoPaths.value),
       ignoredRepoPaths: normalizeRepoSelections(config.ignoredRepoPaths ?? []),
       pinnedRepoPaths: normalizeRepoSelections(config.pinnedRepoPaths ?? []),
+      repoDisplayNames: normalizeRepoDisplayNames(config.repoDisplayNames ?? {}),
       reporterName: toPlainString(config.reporterName),
       aiBaseUrl: toPlainString(activeProfile.baseUrl),
       aiApiKey: toPlainString(activeProfile.apiKey),

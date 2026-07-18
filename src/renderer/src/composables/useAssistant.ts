@@ -34,6 +34,7 @@ import {
 } from './assistant/normalizers';
 import { createRepoState } from './assistant/repoState';
 import { createReportState } from './assistant/reportState';
+import { normalizeRepoDisplayNames } from '@shared/repositoryName';
 
 export type DraftGenerateStatus = 'idle' | 'generating' | 'success' | 'failed';
 export type DraftPublishStatus = 'idle' | 'publishing' | 'success' | 'failed';
@@ -91,6 +92,7 @@ function createAssistant() {
     selectedRepoPaths: [],
     ignoredRepoPaths: [],
     pinnedRepoPaths: [],
+    repoDisplayNames: {},
     reporterName: '',
     aiBaseUrl: 'https://api.openai.com/v1',
     aiApiKey: '',
@@ -265,6 +267,7 @@ function createAssistant() {
     selectedRepoPaths.value = normalizeRepoSelections(config.selectedRepoPaths ?? []);
     config.ignoredRepoPaths = normalizeRepoSelections(config.ignoredRepoPaths ?? []);
     config.pinnedRepoPaths = normalizeRepoSelections(config.pinnedRepoPaths ?? []);
+    config.repoDisplayNames = normalizeRepoDisplayNames(config.repoDisplayNames);
     config.aiBaseUrlOptions = normalizeOptions(config.aiBaseUrlOptions.length ? config.aiBaseUrlOptions : [...DEFAULT_AI_BASE_URL_OPTIONS]);
     config.aiModelOptions = normalizeOptions(config.aiModelOptions.length ? config.aiModelOptions : [...DEFAULT_AI_MODEL_OPTIONS]);
     if (!config.aiProfiles.length) {
@@ -400,6 +403,8 @@ function createAssistant() {
     toggleRepo: repoState.toggleRepo,
     isRepoSelected: repoState.isRepoSelected,
     isRepoPinned: repoState.isRepoPinned,
+    getRepoDisplayName: repoState.getRepoDisplayName,
+    renameRepo: repoState.renameRepo,
     toggleRepoPin: repoState.toggleRepoPin,
     removeRepo: repoState.removeRepo,
     init,

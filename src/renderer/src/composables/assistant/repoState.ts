@@ -2,6 +2,11 @@ import { computed } from 'vue';
 import type { Ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import type { AppConfig, RepoInfo } from '@shared/types';
+import {
+  getRepoDisplayName as resolveRepoDisplayName,
+  normalizeRepoDisplayNames,
+  setRepoDisplayName,
+} from '@shared/repositoryName';
 import { normalizeRepoSelections, normalizeWorkspaceDirs } from './normalizers';
 
 type RepoStateContext = {
@@ -20,6 +25,10 @@ export function createRepoState(ctx: RepoStateContext) {
     return path.trim().toLocaleLowerCase();
   }
 
+  function getRepoDisplayName(repo: RepoInfo) {
+    return resolveRepoDisplayName(repo, config.repoDisplayNames ?? {});
+  }
+
 
   function getWorkspaceDirs() {
     const workspaceDirs = normalizeWorkspaceDirs([...config.workspaceDirs, config.workspaceDir]);
@@ -33,7 +42,7 @@ export function createRepoState(ctx: RepoStateContext) {
     for (const repo of [...currentRepos, ...nextRepos]) {
       repoMap.set(getRepoKey(repo.path), repo);
     }
-    return Array.from(repoMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+    return Array.from(repoMap.values()).sort((a, b) => getRepoDisplayName(a).localeCompare(getRepoDisplayName(b), 'zh-Hans-CN'));
   }
 
 
@@ -51,7 +60,7 @@ export function createRepoState(ctx: RepoStateContext) {
       if (pinnedA !== undefined && pinnedB !== undefined) return pinnedA - pinnedB;
       if (pinnedA !== undefined) return -1;
       if (pinnedB !== undefined) return 1;
-      return a.name.localeCompare(b.name, 'zh-Hans-CN');
+      return getRepoDisplayName(a).localeCompare(getRepoDisplayName(b), 'zh-Hans-CN');
     });
   }
 
@@ -69,7 +78,14 @@ export function createRepoState(ctx: RepoStateContext) {
 
   const selectedRepoKeys = computed(() => new Set(normalizeRepoSelections(selectedRepoPaths.value).map(getRepoKey)));
 
-  const selectedRepos = computed(() => sortedRepos.value.filter((item) => selectedRepoKeys.value.has(getRepoKey(item.path))));
+  const selectedRepos = computed(() =>
+    sortedRepos.value
+      .filter((item) => selectedRepoKeys.value.has(getRepoKey(item.path)))
+      .map((item) => ({
+        ...item,
+        name: getRepoDisplayName(item),
+      })),
+  );
 
   function isRepoSelected(path: string) {
     return selectedRepoKeys.value.has(getRepoKey(path));
@@ -176,6 +192,15 @@ export function createRepoState(ctx: RepoStateContext) {
   }
 
 
+  async function renameRepo(path: string, displayName: string) {
+    const repo = repos.value.find((item) => getRepoKey(item.path) === getRepoKey(path));
+    const repoPath = repo?.path ?? path;
+    config.repoDisplayNames = setRepoDisplayName(config.repoDisplayNames ?? {}, repoPath, displayName);
+    await persistConfig();
+    ElMessage.success(displayName.trim() ? '仓库显示名称已更新' : '已恢复仓库原名');
+  }
+
+
   async function removeRepo(path: string) {
     const repo = repos.value.find((item) => getRepoKey(item.path) === getRepoKey(path));
     const repoPath = repo?.path ?? path;
@@ -185,6 +210,8 @@ export function createRepoState(ctx: RepoStateContext) {
     config.selectedRepoPaths = normalizeRepoSelections(selectedRepoPaths.value);
     config.ignoredRepoPaths = normalizeRepoSelections([...(config.ignoredRepoPaths ?? []), repoPath]);
     config.pinnedRepoPaths = normalizeRepoSelections(config.pinnedRepoPaths ?? []).filter((item) => getRepoKey(item) !== repoKey);
+    config.repoDisplayNames = normalizeRepoDisplayNames(config.repoDisplayNames ?? {});
+    delete config.repoDisplayNames[repoKey];
     config.workspaceDirs = normalizeWorkspaceDirs((config.workspaceDirs ?? []).filter((item) => getRepoKey(item) !== repoKey));
     if (getRepoKey(config.workspaceDir) === repoKey) {
       config.workspaceDir = config.workspaceDirs[0] ?? '';
@@ -206,12 +233,14 @@ export function createRepoState(ctx: RepoStateContext) {
     sortedRepos,
     selectedRepos,
     isRepoSelected,
+    getRepoDisplayName,
     chooseWorkspace,
     refreshRepos,
     saveRepoSelection,
     toggleRepo,
     isRepoPinned,
     toggleRepoPin,
+    renameRepo,
     removeRepo,
   };
 }

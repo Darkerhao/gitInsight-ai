@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { CheckCircle2, Clock3, FolderGit2, ListChecks, Pin, Plus, Search, Trash2 } from 'lucide-vue-next';
+import { CheckCircle2, Clock3, FolderGit2, ListChecks, Pencil, Pin, Plus, Search, Trash2 } from 'lucide-vue-next';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import type { RepoInfo } from '@shared/types';
+import {
+  getRepoDisplayName as resolveRepoDisplayName,
+  matchesRepoKeyword,
+} from '@shared/repositoryName';
 
 type DateShortcut = 'today' | 'yesterday' | 'rolling' | 'custom';
 type SetupStatus = 'success' | 'pending';
@@ -33,6 +37,7 @@ const props = defineProps<{
   selectedRepos: RepoInfo[];
   selectedRepoPaths: string[];
   sortedRepos: RepoInfo[];
+  repoDisplayNames: Record<string, string>;
   aiProfileOptions: AiProfileOption[];
   dateShortcut: DateShortcut;
   isRepoSelected: (path: string) => boolean;
@@ -48,15 +53,21 @@ const emit = defineEmits<{
   (e: 'set-date-shortcut', value: DateShortcut): void;
   (e: 'toggle-repo', value: string): void;
   (e: 'toggle-repo-pin', value: string): void;
+  (e: 'rename-repo', value: RepoInfo): void;
   (e: 'remove-repo', value: RepoInfo): void;
 }>();
 
 const repoKeyword = ref('');
-const filteredRepos = computed(() => {
-  const keyword = repoKeyword.value.trim().toLocaleLowerCase();
-  if (!keyword) return props.sortedRepos;
-  return props.sortedRepos.filter((repo) => `${repo.name} ${repo.path}`.toLocaleLowerCase().includes(keyword));
-});
+const filteredRepos = computed(() => props.sortedRepos.filter((repo) => matchesRepoKeyword(repo, props.repoDisplayNames, repoKeyword.value)));
+
+function displayName(repo: RepoInfo) {
+  return resolveRepoDisplayName(repo, props.repoDisplayNames);
+}
+
+function repoMeta(repo: RepoInfo) {
+  const name = displayName(repo);
+  return name === repo.name ? repo.path : `${repo.name} · ${repo.path}`;
+}
 
 function handleAiProfileChange(value: string) {
   emit('select-ai-profile', value);
@@ -100,7 +111,7 @@ function handleAiProfileChange(value: string) {
     <div class="field-grid">
       <div class="field field-span-3 repo-picker-field">
         <label>选择仓库</label>
-        <el-popover placement="bottom-start" trigger="click" :width="620" popper-class="repo-picker-popper">
+        <el-popover placement="bottom-start" trigger="click" :width="760" popper-class="repo-picker-popper">
           <template #reference>
             <el-button class="repo-picker-trigger">
               <div class="repo-picker-trigger-copy">
@@ -120,7 +131,7 @@ function handleAiProfileChange(value: string) {
               <el-button :icon="Plus" type="primary" plain @click="emit('choose-workspace')">添加仓库</el-button>
             </div>
 
-            <el-input v-model="repoKeyword" :prefix-icon="Search" clearable placeholder="搜索仓库名称或路径" />
+            <el-input v-model="repoKeyword" :prefix-icon="Search" clearable placeholder="搜索显示名称、仓库原名或路径" />
 
             <div class="repo-picker-list">
               <el-button v-if="!sortedRepos.length" class="repo-picker-empty" plain @click="emit('choose-workspace')">
@@ -138,8 +149,8 @@ function handleAiProfileChange(value: string) {
                     <CheckCircle2 v-if="isRepoSelected(repo.path)" :size="16" />
                   </span>
                   <span class="repo-picker-copy">
-                    <strong>{{ repo.name }}</strong>
-                    <small>{{ repo.path }}</small>
+                    <strong>{{ displayName(repo) }}</strong>
+                    <small>{{ repoMeta(repo) }}</small>
                   </span>
                 </el-button>
 
@@ -147,7 +158,7 @@ function handleAiProfileChange(value: string) {
                   <el-button
                     class="repo-picker-icon"
                     :class="{ active: isRepoPinned(repo.path) }"
-                    :aria-label="isRepoPinned(repo.path) ? `取消置顶 ${repo.name}` : `置顶 ${repo.name}`"
+                    :aria-label="isRepoPinned(repo.path) ? `取消置顶 ${displayName(repo)}` : `置顶 ${displayName(repo)}`"
                     :aria-pressed="isRepoPinned(repo.path)"
                     plain
                     @click.stop="emit('toggle-repo-pin', repo.path)"
@@ -156,8 +167,14 @@ function handleAiProfileChange(value: string) {
                   </el-button>
                 </el-tooltip>
 
+                <el-tooltip content="重命名仓库" placement="top">
+                  <el-button class="repo-picker-icon" :aria-label="`重命名 ${displayName(repo)}`" plain @click.stop="emit('rename-repo', repo)">
+                    <Pencil :size="15" />
+                  </el-button>
+                </el-tooltip>
+
                 <el-tooltip content="从列表移除" placement="top">
-                  <el-button class="repo-picker-icon danger" :aria-label="`移除 ${repo.name}`" plain @click.stop="emit('remove-repo', repo)">
+                  <el-button class="repo-picker-icon danger" :aria-label="`移除 ${displayName(repo)}`" plain @click.stop="emit('remove-repo', repo)">
                     <Trash2 :size="15" />
                   </el-button>
                 </el-tooltip>
