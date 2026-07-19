@@ -38,6 +38,59 @@ export function normalizeProjectWorkHours(value: unknown) {
   );
 }
 
+export interface ProjectWorkHourInput {
+  key: string;
+  commitsCount: number;
+  filesCount: number;
+}
+
+export interface ProjectWorkHourAllocation extends ProjectWorkHourInput {
+  weight: number;
+  workHours: number;
+}
+
+export function allocateProjectWorkHours(
+  items: ProjectWorkHourInput[],
+  totalHours: unknown,
+  step = 0.5,
+): ProjectWorkHourAllocation[] {
+  if (!items.length) return [];
+
+  const normalizedStep = Number.isFinite(step) && step > 0 ? step : 0.5;
+  const targetUnits = Math.max(items.length, Math.round(normalizeWorkHours(totalHours) / normalizedStep));
+  const remainingUnits = targetUnits - items.length;
+  const weightedItems = items.map((item, index) => ({
+    ...item,
+    index,
+    commitsCount: Math.max(0, Math.floor(Number(item.commitsCount) || 0)),
+    filesCount: Math.max(0, Math.floor(Number(item.filesCount) || 0)),
+    weight: Math.max(0.25, (Number(item.commitsCount) || 0) + (Number(item.filesCount) || 0) * 0.35),
+  }));
+  const totalWeight = weightedItems.reduce((sum, item) => sum + item.weight, 0);
+  const units = weightedItems.map((item) => {
+    const exactExtraUnits = remainingUnits * (item.weight / totalWeight);
+    const extraUnits = Math.floor(exactExtraUnits);
+    return {
+      ...item,
+      units: 1 + extraUnits,
+      remainder: exactExtraUnits - extraUnits,
+    };
+  });
+
+  const undistributedUnits = targetUnits - units.reduce((sum, item) => sum + item.units, 0);
+  const remainderOrder = [...units].sort((left, right) => right.remainder - left.remainder || left.index - right.index);
+  for (let index = 0; index < undistributedUnits; index += 1) {
+    remainderOrder[index % remainderOrder.length].units += 1;
+  }
+
+  return units
+    .sort((left, right) => left.index - right.index)
+    .map(({ index: _index, remainder: _remainder, units: itemUnits, ...item }) => ({
+      ...item,
+      workHours: Number((itemUnits * normalizedStep).toFixed(2)),
+    }));
+}
+
 export function normalizeTimeValue(value: unknown) {
   if (typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
     return value;

@@ -10,7 +10,7 @@ import ReportSetupCard from '@/components/report-generate/ReportSetupCard.vue';
 import { useAssistant } from '@/composables/useAssistant';
 import type { ProjectReportDraft } from '@/composables/useAssistant';
 import { countResultFiles, getReportRangePayloadFromForm, resolveReportTimeRange, toPlainRawInput } from '@/composables/assistant/reportState';
-import { normalizeProjectWorkHours, normalizeWorkHours } from '@/composables/assistant/normalizers';
+import { allocateProjectWorkHours, normalizeProjectWorkHours, normalizeWorkHours } from '@/composables/assistant/normalizers';
 import type { DailyReportRecord, RepoInfo } from '@shared/types';
 import {
   getRepoDisplayName,
@@ -146,6 +146,9 @@ const activePublishDraft = computed(() => {
     hasReport: draft.report.trim().length > 0,
     projectOptionId: draft.projectOptionId,
     workHours: draft.workHours,
+    workHoursSource: draft.workHoursSource,
+    commitsCount: draft.lastReportResult?.commits.length ?? 0,
+    filesCount: countResultFiles(draft.lastReportResult),
     publishStatus: draft.publishStatus,
     publishMessage: draft.publishMessage,
   };
@@ -158,6 +161,9 @@ const publishDraftItems = computed(() =>
     hasReport: draft.report.trim().length > 0,
     projectOptionId: draft.projectOptionId,
     workHours: draft.workHours,
+    workHoursSource: draft.workHoursSource,
+    commitsCount: draft.lastReportResult?.commits.length ?? 0,
+    filesCount: countResultFiles(draft.lastReportResult),
     publishStatus: draft.publishStatus,
     publishMessage: draft.publishMessage,
   })),
@@ -335,6 +341,61 @@ function setDateShortcut(value: DateShortcut) {
   resetPublishStateAfterRangeChange(previousDate, previousStartDateTime, previousEndDateTime);
 }
 
+function recalculateProjectWorkHours(options: { force?: boolean } = {}) {
+  const reportRange = getReportRangePayload();
+  if (!reportRange) return { estimatedCount: 0, totalHours: 0 };
+
+  const candidates = projectDrafts.value.filter((draft) => {
+    const result = draft.lastReportResult;
+    return Boolean(
+      result?.commits.length
+      && result.timeRange.startDateTime === reportRange.startDateTime
+      && result.timeRange.endDateTime === reportRange.endDateTime,
+    );
+  });
+  const lockedDrafts = options.force ? [] : candidates.filter((draft) => draft.workHoursSource === 'manual');
+  const allocatableDrafts = options.force ? candidates : candidates.filter((draft) => draft.workHoursSource !== 'manual');
+  if (!allocatableDrafts.length) {
+    return {
+      estimatedCount: 0,
+      totalHours: lockedDrafts.reduce((sum, draft) => sum + draft.workHours, 0),
+    };
+  }
+
+  const lockedHours = lockedDrafts.reduce((sum, draft) => sum + draft.workHours, 0);
+  const totalHours = normalizeWorkHours(config.feishuForm.defaultWorkHours);
+  const distributableHours = Math.max(allocatableDrafts.length * 0.5, totalHours - lockedHours);
+  const allocations = allocateProjectWorkHours(
+    allocatableDrafts.map((draft) => ({
+      key: draft.key,
+      commitsCount: draft.lastReportResult?.commits.length ?? 0,
+      filesCount: countResultFiles(draft.lastReportResult),
+    })),
+    distributableHours,
+  );
+
+  for (const allocation of allocations) {
+    const draft = getDraftByKey(allocation.key);
+    if (!draft) continue;
+    draft.workHours = allocation.workHours;
+    draft.workHoursSource = 'estimated';
+  }
+
+  return {
+    estimatedCount: allocations.length,
+    totalHours: Number((lockedHours + allocations.reduce((sum, item) => sum + item.workHours, 0)).toFixed(1)),
+  };
+}
+
+function handleRecalculateProjectWorkHours() {
+  const result = recalculateProjectWorkHours({ force: true });
+  if (!result.estimatedCount) {
+    ElMessage.warning('当前提交范围内没有可用于计算工时的项目提交记录');
+    return;
+  }
+  ElMessage.success(`已按提交活跃度重新分配 ${result.estimatedCount} 个项目工时，合计 ${result.totalHours.toFixed(1)} 小时`);
+}
+
 function handleReportDateChange(value: string) {
   const previousDate = form.date;
   const previousStartDateTime = form.startDateTime;
@@ -470,8 +531,10 @@ async function handleGenerateCurrent() {
     await refreshLocalData();
     const latestDraft = getDraftByKey(draftKey);
     if (success) {
+      const allocation = recalculateProjectWorkHours();
       activeDraftKey.value = draftKey;
-      ElMessage.success(`${latestDraft?.repo.name ?? draft.repo.name} 日报已生成`);
+      const allocationMessage = allocation.estimatedCount ? `，已自动分配项目工时` : '';
+      ElMessage.success(`${latestDraft?.repo.name ?? draft.repo.name} 日报已生成${allocationMessage}`);
       if (!latestDraft?.lastReportResult?.commits.length && !form.manualWorkContent.trim()) {
         ElMessage.warning('当前项目未匹配到可用于生成日报的提交记录');
       }
@@ -513,12 +576,14 @@ async function handleGenerateAll() {
     if (!activeDraft.value?.report.trim() && firstSuccessfulDraftKey) {
       activeDraftKey.value = firstSuccessfulDraftKey;
     }
+    const allocation = recalculateProjectWorkHours();
     if (failedCount) {
       status.value = `已生成 ${successCount} 个项目，${failedCount} 个项目失败`;
       ElMessage.warning(`已生成 ${successCount} 个项目，${failedCount} 个项目失败`);
     } else {
       status.value = `已生成 ${successCount} 个项目日报`;
-      ElMessage.success(`已生成 ${successCount} 个项目日报`);
+      const allocationMessage = allocation.estimatedCount ? `，并自动分配 ${allocation.estimatedCount} 个项目工时` : '';
+      ElMessage.success(`已生成 ${successCount} 个项目日报${allocationMessage}`);
     }
   } finally {
     loading.value = false;
@@ -627,7 +692,9 @@ function handleUpdateDraftProject(key: string, optionId: string) {
   const draft = projectDrafts.value.find((item) => item.key === key);
   if (!draft) return;
   draft.projectOptionId = optionId;
-  draft.workHours = getProjectWorkHours(optionId);
+  if (draft.workHoursSource === 'default') {
+    draft.workHours = getProjectWorkHours(optionId);
+  }
   draft.publishStatus = 'idle';
   draft.publishMessage = '';
 }
@@ -637,6 +704,7 @@ function handleUpdateDraftHours(key: string, value: number | undefined) {
   if (!draft) return;
   const hours = normalizeWorkHours(value, draft.workHours);
   draft.workHours = hours;
+  draft.workHoursSource = 'manual';
   if (draft.projectOptionId) {
     config.feishuForm.projectWorkHours = {
       ...normalizeProjectWorkHours(config.feishuForm.projectWorkHours),
@@ -960,6 +1028,7 @@ async function confirmRemoveRepo(item: RepoInfo) {
         @update-draft-project="handleUpdateDraftProject"
         @update-draft-hours="handleUpdateDraftHours"
         @commit-draft-hours="handleCommitDraftHours"
+        @recalculate-hours="handleRecalculateProjectWorkHours"
         @publish-current="publishActiveReport"
         @publish-all="publishAllReports"
         @open-submission-records="handleOpenFeishuSubmissionRecords"

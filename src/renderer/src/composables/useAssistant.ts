@@ -38,6 +38,7 @@ import { normalizeRepoDisplayNames } from '@shared/repositoryName';
 
 export type DraftGenerateStatus = 'idle' | 'generating' | 'success' | 'failed';
 export type DraftPublishStatus = 'idle' | 'publishing' | 'success' | 'failed';
+export type DraftWorkHoursSource = 'default' | 'estimated' | 'manual';
 
 export interface ProjectReportDraft {
   key: string;
@@ -47,6 +48,7 @@ export interface ProjectReportDraft {
   lastReportResult: ReportResult | null;
   projectOptionId: string;
   workHours: number;
+  workHoursSource: DraftWorkHoursSource;
   generateStatus: DraftGenerateStatus;
   generateMessage: string;
   publishStatus: DraftPublishStatus;
@@ -127,6 +129,7 @@ function createAssistant() {
       lastReportResult: null,
       projectOptionId,
       workHours: getProjectWorkHours(projectOptionId),
+      workHoursSource: 'default',
       generateStatus: 'idle',
       generateMessage: '',
       publishStatus: 'idle',

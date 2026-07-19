@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { CalendarDays, ExternalLink, Send } from 'lucide-vue-next';
+import { Calculator, CalendarDays, ExternalLink, Send } from 'lucide-vue-next';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import type { DailyReportRecord, FeishuProjectOption } from '@shared/types';
 
 type DateShortcut = 'today' | 'yesterday' | 'rolling' | 'custom';
 type RecordStatus = 'success' | 'failed' | 'pending';
 type DraftPublishStatus = 'idle' | 'publishing' | 'success' | 'failed';
+type DraftWorkHoursSource = 'default' | 'estimated' | 'manual';
 
 interface ProjectPublishDraft {
   key: string;
@@ -14,6 +15,9 @@ interface ProjectPublishDraft {
   hasReport: boolean;
   projectOptionId: string;
   workHours: number;
+  workHoursSource: DraftWorkHoursSource;
+  commitsCount: number;
+  filesCount: number;
   publishStatus: DraftPublishStatus;
   publishMessage: string;
 }
@@ -42,6 +46,7 @@ const emit = defineEmits<{
   (e: 'update-draft-project', key: string, value: string): void;
   (e: 'update-draft-hours', key: string, value: number | undefined): void;
   (e: 'commit-draft-hours', key: string, value: number | undefined): void;
+  (e: 'recalculate-hours'): void;
   (e: 'report-date-change', value: string): void;
   (e: 'set-date-shortcut', value: DateShortcut): void;
   (e: 'publish-current'): void;
@@ -62,6 +67,34 @@ const activeWorkHours = computed({
     if (props.activeDraft) emit('update-draft-hours', props.activeDraft.key, typeof value === 'number' ? value : undefined);
   },
 });
+
+const canRecalculateHours = computed(() => props.drafts.some((item) => item.commitsCount > 0));
+const generatedWorkHoursTotal = computed(() =>
+  props.drafts
+    .filter((item) => item.hasReport)
+    .reduce((sum, item) => sum + Number(item.workHours || 0), 0),
+);
+
+function getWorkHoursSourceLabel(source: DraftWorkHoursSource) {
+  if (source === 'estimated') return '自动分配';
+  if (source === 'manual') return '手动调整';
+  return '默认工时';
+}
+
+function getWorkHoursSourceType(source: DraftWorkHoursSource) {
+  if (source === 'estimated') return 'success';
+  if (source === 'manual') return 'warning';
+  return 'info';
+}
+
+function getWorkHoursEvidence(item?: ProjectPublishDraft) {
+  if (!item) return '生成日报后可按提交活跃度自动分配';
+  if (item.workHoursSource === 'estimated') {
+    return `依据 ${item.commitsCount} 次提交、${item.filesCount} 个影响文件自动分配，可继续手动调整`;
+  }
+  if (item.workHoursSource === 'manual') return '当前工时已手动调整，重新生成时会优先保留';
+  return item.commitsCount ? '当前使用默认工时，可点击重新计算按提交占比分配' : '当前提交范围内暂无可计算记录';
+}
 
 const publishStatusTitle = computed(() => {
   const draft = props.activeDraft;
@@ -186,7 +219,12 @@ function applyPresetHours(key: string, value: number) {
           </el-select>
         </div>
         <div class="field">
-          <label>工作时长</label>
+          <div class="work-hour-label">
+            <label>工作时长</label>
+            <el-tag v-if="activeDraft" :type="getWorkHoursSourceType(activeDraft.workHoursSource)" size="small" effect="plain">
+              {{ getWorkHoursSourceLabel(activeDraft.workHoursSource) }}
+            </el-tag>
+          </div>
           <div class="hour-field">
             <el-input-number
               v-model="activeWorkHours"
@@ -214,6 +252,7 @@ function applyPresetHours(key: string, value: number) {
               {{ hours }}h
             </el-button>
           </div>
+          <small class="field-hint">{{ getWorkHoursEvidence(activeDraft) }}</small>
         </div>
 
         <div class="current-publish-action">
@@ -230,7 +269,19 @@ function applyPresetHours(key: string, value: number) {
               <strong>批量发布项目</strong>
               <span>发布全部时会按下方每个项目的目标和工时逐条提交</span>
             </div>
-            <small>{{ publishableCount }}/{{ totalDraftCount }}</small>
+            <div class="batch-publish-head-actions">
+              <small>{{ publishableCount }}/{{ totalDraftCount }} · {{ generatedWorkHoursTotal.toFixed(1) }}h</small>
+              <el-tooltip content="覆盖手动工时并按当前提交记录重新分配" placement="top">
+                <el-button
+                  :icon="Calculator"
+                  :disabled="!canRecalculateHours"
+                  plain
+                  size="small"
+                  aria-label="重新计算项目工时"
+                  @click="emit('recalculate-hours')"
+                />
+              </el-tooltip>
+            </div>
           </div>
 
           <div class="batch-publish-list">
@@ -278,6 +329,9 @@ function applyPresetHours(key: string, value: number) {
                 />
                 <span>小时</span>
               </div>
+              <small class="batch-hour-source">
+                {{ getWorkHoursSourceLabel(item.workHoursSource) }} · {{ item.commitsCount }} 次提交 / {{ item.filesCount }} 个文件
+              </small>
             </div>
           </div>
 

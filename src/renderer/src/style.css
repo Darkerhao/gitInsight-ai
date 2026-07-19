@@ -2085,6 +2085,18 @@ textarea {
   padding-right: 2px;
 }
 
+.batch-publish-head-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.batch-publish-head-actions .el-button {
+  margin-left: 0;
+}
+
 .batch-publish-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -2155,6 +2167,12 @@ textarea {
 
 .current-publish-action {
   padding-top: 4px;
+}
+
+.batch-hour-source {
+  color: var(--c-text-faint);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .current-publish-btn.el-button {
@@ -2300,6 +2318,17 @@ textarea {
 /* ============ 日报生成页 ============ */
 .report-generate-view {
   --report-aside-width: clamp(370px, 20vw, 400px);
+}
+
+.work-hour-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.work-hour-label label {
+  min-width: 0;
 }
 
 .report-generate-view .content-grid.has-right-panel {
