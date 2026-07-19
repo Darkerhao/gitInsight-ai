@@ -72,6 +72,18 @@ function repoMeta(repo: RepoInfo) {
 function handleAiProfileChange(value: string) {
   emit('select-ai-profile', value);
 }
+
+function handleReportDateChange(value: string | null) {
+  if (value) emit('report-date-change', value);
+}
+
+function handleStartDateTimeChange(value: string | null) {
+  if (value) emit('start-date-time-change', value);
+}
+
+function handleEndDateTimeChange(value: string | null) {
+  if (value) emit('end-date-time-change', value);
+}
 </script>
 
 <template>
@@ -207,7 +219,7 @@ function handleAiProfileChange(value: string) {
           type="date"
           value-format="YYYY-MM-DD"
           :clearable="false"
-          @change="(value: string) => emit('report-date-change', value)"
+          @update:model-value="handleReportDateChange"
         />
       </div>
       <div class="field">
@@ -219,7 +231,7 @@ function handleAiProfileChange(value: string) {
           value-format="YYYY-MM-DDTHH:mm:ss"
           :clearable="false"
           placeholder="开始时间"
-          @change="(value: string) => emit('start-date-time-change', value)"
+          @update:model-value="handleStartDateTimeChange"
         />
       </div>
       <div class="field">
@@ -231,7 +243,7 @@ function handleAiProfileChange(value: string) {
           value-format="YYYY-MM-DDTHH:mm:ss"
           :clearable="false"
           placeholder="结束时间"
-          @change="(value: string) => emit('end-date-time-change', value)"
+          @update:model-value="handleEndDateTimeChange"
         />
       </div>
     </div>

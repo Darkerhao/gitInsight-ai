@@ -133,6 +133,10 @@ function applyPresetHours(key: string, value: number) {
   emit('update-draft-hours', key, value);
   emit('commit-draft-hours', key, value);
 }
+
+function handleReportDateChange(value: string | null) {
+  if (value) emit('report-date-change', value);
+}
 </script>
 
 <template>
@@ -178,7 +182,7 @@ function applyPresetHours(key: string, value: number) {
             value-format="YYYY-MM-DD"
             :clearable="false"
             placeholder="选择发布日期"
-            @change="(value: string) => emit('report-date-change', value)"
+            @update:model-value="handleReportDateChange"
           />
           <div class="publish-date-shortcuts">
             <el-button
