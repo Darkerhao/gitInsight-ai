@@ -1,4 +1,10 @@
-import type { AppConfig, ReportTimeRange, StructuredReportMetadata } from '../../src/shared/types.js';
+import type {
+  AiConnectionTestPayload,
+  AiConnectionTestResult,
+  AppConfig,
+  ReportTimeRange,
+  StructuredReportMetadata,
+} from '../../src/shared/types.js';
 
 type AiRuntimeConfig = {
   aiBaseUrl: string;
@@ -123,6 +129,112 @@ export function getModelsUrl(aiBaseUrl: string) {
   return baseUrl.endsWith('/chat/completions') ? baseUrl.replace(/\/chat\/completions$/, '/models') : `${baseUrl}/models`;
 }
 
+async function readAiJsonResponse(response: Response, url: string) {
+  const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+  const responseText = await response.text();
+  if (contentType.includes('text/html') || /^\s*(?:<!doctype\s+html|<html\b)/i.test(responseText)) {
+    throw new Error(`请求地址 ${url} 返回了 HTML 页面而不是 JSON。请填写服务商的 API Base URL，而不是官网首页、登录页或控制台地址。`);
+  }
+  try {
+    return JSON.parse(responseText) as unknown;
+  } catch {
+    throw new Error(`请求地址 ${url} 已响应，但返回内容不是有效 JSON。请确认接口格式与 API 地址配置正确。`);
+  }
+}
+
+export async function testAiConnection(payload: AiConnectionTestPayload): Promise<AiConnectionTestResult> {
+  const baseUrl = normalizeAiBaseUrl(payload.baseUrl);
+  const apiKey = payload.apiKey.trim();
+  const model = payload.model.trim();
+  const startedAt = Date.now();
+
+  if (!baseUrl || !apiKey || !model) {
+    return {
+      success: false,
+      message: '请先填写接口地址、API Key 和模型名称。',
+      latencyMs: 0,
+    };
+  }
+
+  const config: AiRuntimeConfig = {
+    aiBaseUrl: baseUrl,
+    aiApiKey: apiKey,
+    aiModel: model,
+  };
+  const chatCompletionsUrl = getChatCompletionsUrl(baseUrl);
+  try {
+    const response = await fetchAi(chatCompletionsUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: 'ping' }],
+        temperature: 0,
+        max_tokens: 1,
+        stream: false,
+      }),
+    });
+    const latencyMs = Date.now() - startedAt;
+    let responseText = '';
+    try {
+      responseText = await response.clone().text();
+    } catch {
+      responseText = '';
+    }
+
+    const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+    if (contentType.includes('text/html') || /^\s*(?:<!doctype\s+html|<html\b)/i.test(responseText)) {
+      return {
+        success: false,
+        message: `请求地址 ${chatCompletionsUrl} 返回了 HTML 页面而不是 JSON。当前接口可能是网站首页、登录页或缺少 API 路径；请按服务商文档填写正确的 OpenAI 兼容 API Base URL（常见格式会包含 /v1）。`,
+        latencyMs,
+      };
+    }
+
+    if (!response.ok) {
+      return {
+        success: false,
+        message: await buildAiErrorMessage(config, response, responseText || (await response.text())),
+        latencyMs,
+      };
+    }
+
+    try {
+      const data = (responseText ? JSON.parse(responseText) : await readAiJsonResponse(response, chatCompletionsUrl)) as {
+        choices?: Array<{ message?: { content?: unknown } }>;
+      };
+      if (!Array.isArray(data.choices) || data.choices.length === 0) {
+        return {
+          success: false,
+          message: '接口已响应，但返回格式不是有效的 Chat Completions 结果。',
+          latencyMs,
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : '接口返回内容无法解析，请确认 OpenAI 兼容接口地址配置正确。',
+        latencyMs,
+      };
+    }
+
+    return {
+      success: true,
+      message: `连接成功，模型 ${model} 已响应。`,
+      latencyMs,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'AI 接口连接失败，请检查网络和配置。',
+      latencyMs: Date.now() - startedAt,
+    };
+  }
+}
+
 
 export function parseAiError(detail: string) {
   if (!detail) return '';
@@ -167,6 +279,9 @@ export async function fetchAvailableModels(config: AiRuntimeConfig) {
 
 export async function buildAiErrorMessage(config: AiRuntimeConfig, response: Response, detail: string) {
   const parsedDetail = parseAiError(detail);
+  if ([408, 504, 524].includes(response.status)) {
+    return `AI 接口上游响应超时（${response.status}）。服务商可能正在排队或模型处理时间过长，请稍后重试、确认模型名称，或更换可用的 API 节点。${parsedDetail ? ` 原始错误：${parsedDetail.slice(0, 300)}` : ''}`;
+  }
   if (isUnsupportedModelError(response.status, detail)) {
     const models = await fetchAvailableModels(config);
     const modelTips = models.length
@@ -234,7 +349,6 @@ ${rawInput.diff}
 1. 回归验证或风险收敛计划`;
 
   const chatCompletionsUrl = getChatCompletionsUrl(config.aiBaseUrl);
-
   const response = await fetchAi(chatCompletionsUrl, {
     method: 'POST',
     headers: {
@@ -256,9 +370,11 @@ ${rawInput.diff}
     throw new Error(await buildAiErrorMessage(config, response, detail));
   }
 
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content ?? '';
-  if (!content) {
+  const data = (await readAiJsonResponse(response, chatCompletionsUrl)) as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+  };
+  const content = data.choices?.[0]?.message?.content;
+  if (typeof content !== 'string' || !content.trim()) {
     throw new Error('AI接口未返回有效内容');
   }
 
@@ -310,8 +426,11 @@ export async function callAiStructuredExtract(
 
     if (!response.ok) return null;
 
-    const data = await response.json();
-    const content = (data?.choices?.[0]?.message?.content ?? '').trim();
+    const data = (await readAiJsonResponse(response, chatCompletionsUrl)) as {
+      choices?: Array<{ message?: { content?: unknown } }>;
+    };
+    const rawContent = data.choices?.[0]?.message?.content;
+    const content = typeof rawContent === 'string' ? rawContent.trim() : '';
     if (!content) return null;
 
     // 兼容模型输出 ```json ... ``` 包裹的情况

@@ -88,6 +88,18 @@ export interface AiProfile {
   enabled: boolean;
 }
 
+export interface AiConnectionTestPayload {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+export interface AiConnectionTestResult {
+  success: boolean;
+  message: string;
+  latencyMs: number;
+}
+
 export const DEFAULT_AI_PROFILE_ID = 'default';
 
 export const DEFAULT_AI_PROFILE: AiProfile = {

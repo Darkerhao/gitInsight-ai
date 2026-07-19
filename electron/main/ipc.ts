@@ -1,6 +1,7 @@
 import { dialog, ipcMain } from 'electron';
 import type {
   AppConfig,
+  AiConnectionTestPayload,
   CheckinCoinSpendPayload,
   CheckinWalletImportPayload,
   FeishuLoginPayload,
@@ -23,10 +24,12 @@ import { openFeishuLogin, openFeishuSubmissionRecords } from './feishuAuth.js';
 import { generateReport } from './report.js';
 import { scanRepositories } from './repoScan.js';
 import { getMainWindow } from './windows.js';
+import { testAiConnection } from './aiClient.js';
 
 export function registerIpcHandlers() {
   ipcMain.handle('app:load-config', async () => loadConfig());
   ipcMain.handle('app:save-config', async (_event, config: AppConfig) => saveConfigAndReschedule(config));
+  ipcMain.handle('ai:test-connection', async (_event, payload: AiConnectionTestPayload) => testAiConnection(payload));
   ipcMain.handle('dialog:select-directory', async () => {
     const mainWindow = getMainWindow();
     const result = mainWindow

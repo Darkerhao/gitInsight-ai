@@ -2,6 +2,8 @@
 
 import type {
   AppConfig,
+  AiConnectionTestPayload,
+  AiConnectionTestResult,
   AutoSyncRunResult,
   AutoSyncState,
   AutoSyncValidationResult,
@@ -30,6 +32,7 @@ declare global {
     api: {
       loadConfig: () => Promise<AppConfig>;
       saveConfig: (config: AppConfig) => Promise<AppConfig>;
+      testAiConnection: (payload: AiConnectionTestPayload) => Promise<AiConnectionTestResult>;
       selectDirectory: () => Promise<string | null>;
       scanRepositories: (workspaceDir: string) => Promise<RepoInfo[]>;
       generateReport: (params: GenerateReportParams) => Promise<ReportResult>;

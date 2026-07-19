@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
   AppConfig,
+  AiConnectionTestPayload,
+  AiConnectionTestResult,
   AutoSyncRunResult,
   AutoSyncState,
   AutoSyncValidationResult,
@@ -34,6 +36,8 @@ import type {
 contextBridge.exposeInMainWorld('api', {
   loadConfig: () => ipcRenderer.invoke('app:load-config') as Promise<AppConfig>,
   saveConfig: (config: AppConfig) => ipcRenderer.invoke('app:save-config', config) as Promise<AppConfig>,
+  testAiConnection: (payload: AiConnectionTestPayload) =>
+    ipcRenderer.invoke('ai:test-connection', payload) as Promise<AiConnectionTestResult>,
   selectDirectory: () => ipcRenderer.invoke('dialog:select-directory') as Promise<string | null>,
   scanRepositories: (workspaceDir: string) => ipcRenderer.invoke('repo:scan', workspaceDir) as Promise<RepoInfo[]>,
   generateReport: (params: GenerateReportParams) => ipcRenderer.invoke('report:generate', params) as Promise<ReportResult>,

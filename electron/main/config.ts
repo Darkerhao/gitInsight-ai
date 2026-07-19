@@ -155,7 +155,6 @@ export function normalizeAiProfiles(options: unknown, config?: Partial<AppConfig
         : legacyProfile.baseUrl;
       const apiKey = typeof rawProfile.apiKey === 'string' ? rawProfile.apiKey.trim() : '';
       const model = typeof rawProfile.model === 'string' && rawProfile.model.trim() ? rawProfile.model.trim() : legacyProfile.model;
-
       return {
         id,
         name,

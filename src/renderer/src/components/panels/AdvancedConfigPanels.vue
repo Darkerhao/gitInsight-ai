@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { CheckCircle2, ClipboardList, LogIn, Plus, RefreshCw, TestTube2, Trash2, UserRound } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
+import { CheckCircle2, CircleAlert, ClipboardList, LogIn, Plus, RefreshCw, TestTube2, Trash2, UserRound } from 'lucide-vue-next';
+import type { AiConnectionTestResult } from '@shared/types';
 import { useAssistant } from '@/composables/useAssistant';
 import SectionTitle from '@/components/common/SectionTitle.vue';
 
@@ -54,6 +55,16 @@ const isAiOnly = computed(() => props.mode === 'ai');
 const sectionTitle = computed(() => (isAiOnly.value ? 'AI 配置管理' : 'AI 接入与飞书连接'));
 const sectionSubtitle = computed(() => (isAiOnly.value ? '维护统一模型连接信息' : '维护模型、授权凭据和表单字段映射'));
 const canRemoveAiProfile = computed(() => config.aiProfiles.length > 1);
+const aiConnectionTesting = ref(false);
+const aiConnectionTestResult = ref<AiConnectionTestResult | null>(null);
+const aiConnectionSignature = computed(() =>
+  [activeAiProfile.value.id, activeAiProfile.value.baseUrl, activeAiProfile.value.apiKey, activeAiProfile.value.model]
+    .map((value) => String(value ?? ''))
+    .join('\u0000'),
+);
+watch(aiConnectionSignature, () => {
+  aiConnectionTestResult.value = null;
+});
 const feishuAuthReady = computed(() =>
   Boolean(
     config.feishuForm.endpoint.trim() &&
@@ -144,6 +155,43 @@ function handleAiProfileChange(value: string) {
   selectAiProfile(value);
 }
 
+async function runAiConnectionTest() {
+  if (aiConnectionTesting.value) return;
+
+  const payload = {
+    baseUrl: activeAiProfile.value.baseUrl.trim(),
+    apiKey: activeAiProfile.value.apiKey.trim(),
+    model: activeAiProfile.value.model.trim(),
+  };
+  const requestSignature = aiConnectionSignature.value;
+  if (!payload.baseUrl || !payload.apiKey || !payload.model) {
+    aiConnectionTestResult.value = {
+      success: false,
+      message: '请先填写接口地址、API Key 和模型名称。',
+      latencyMs: 0,
+    };
+    return;
+  }
+
+  aiConnectionTesting.value = true;
+  try {
+    const result = await window.api.testAiConnection(payload);
+    if (requestSignature === aiConnectionSignature.value) {
+      aiConnectionTestResult.value = result;
+    }
+  } catch (error) {
+    if (requestSignature === aiConnectionSignature.value) {
+      aiConnectionTestResult.value = {
+        success: false,
+        message: error instanceof Error ? error.message : 'AI 接口连接失败，请检查网络和配置。',
+        latencyMs: 0,
+      };
+    }
+  } finally {
+    aiConnectionTesting.value = false;
+  }
+}
+
 function openAdvancedPanel(name: string) {
   activePanels.value = Array.from(new Set([...activePanels.value, name]));
 }
@@ -185,14 +233,19 @@ function runFeishuGuideAction(action: FeishuGuideAction, panel: string) {
       </aside>
 
       <section class="ai-profile-editor">
-        <div class="field-helper-row">
+        <div class="field-helper-row ai-profile-helper-row">
           <div>
             <strong>{{ activeAiProfile.name || '未命名配置' }}</strong>
-            <span>生成日报时会默认使用当前选中的 AI 配置，也可以在生成页临时切换。</span>
+            <span>生成日报时会默认使用当前选中的 AI 配置，也可以在生成页临时切换。测试连接使用当前表单值，不会自动保存。</span>
           </div>
-          <el-button :icon="Trash2" type="danger" plain :disabled="!canRemoveAiProfile" @click="removeAiProfile(activeAiProfile.id)">
-            删除配置
-          </el-button>
+          <div class="ai-profile-actions">
+            <el-button :icon="TestTube2" type="primary" plain :loading="aiConnectionTesting" @click="runAiConnectionTest">
+              测试连接
+            </el-button>
+            <el-button :icon="Trash2" type="danger" plain :disabled="!canRemoveAiProfile" @click="removeAiProfile(activeAiProfile.id)">
+              删除配置
+            </el-button>
+          </div>
         </div>
 
         <div class="field-grid">
@@ -247,6 +300,25 @@ function runFeishuGuideAction(action: FeishuGuideAction, panel: string) {
             <label>API Key</label>
             <el-input v-model="activeAiProfile.apiKey" type="password" show-password placeholder="API Key" />
           </div>
+        </div>
+
+        <div
+          v-if="aiConnectionTestResult"
+          class="ai-connection-test-result"
+          :class="aiConnectionTestResult.success ? 'success' : 'error'"
+          role="status"
+          aria-live="polite"
+        >
+          <CheckCircle2 v-if="aiConnectionTestResult.success" :size="18" />
+          <CircleAlert v-else :size="18" />
+          <div class="ai-connection-test-copy">
+            <strong>{{ aiConnectionTestResult.success ? '连接成功' : '连接失败' }}</strong>
+            <span>{{ aiConnectionTestResult.message }}</span>
+            <small v-if="!aiConnectionTestResult.success && /HTML 页面|不是有效 JSON/.test(aiConnectionTestResult.message)">
+              提示：接口地址通常填写服务商提供的 API Base URL，例如 https://api.example.com/v1，而不是官网首页。
+            </small>
+          </div>
+          <small v-if="aiConnectionTestResult.latencyMs > 0">{{ aiConnectionTestResult.latencyMs }} ms</small>
         </div>
       </section>
     </div>
