@@ -135,11 +135,9 @@ const scene: SceneFn = (api) => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .quantum-flicker-effect {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
+  @include effect-stage(hidden);
 }
 
 .quantum-stack {

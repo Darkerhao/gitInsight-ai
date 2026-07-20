@@ -1,0 +1,522 @@
+@use 'tools' as *;
+
+/* ============ 欢迎动画 · 现代大门 ============ */
+.welcome-gate {
+  --gate-frame-x: 30px;
+  --gate-frame-top: 46px;
+  --gate-frame-bottom: 24px;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow: hidden;
+  pointer-events: none;
+  background: #f4f6fb;
+  opacity: 1;
+  perspective: 1600px;
+  transition: opacity 0.34s ease;
+}
+
+.welcome-gate.leaving {
+  opacity: 0;
+}
+
+.gate-backdrop {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 46%, rgba(59, 108, 246, 0.07), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f4f7fc 58%, #edf2fa 100%);
+}
+
+.gate-portal {
+  position: absolute;
+  inset: 22px 28px 20px;
+  overflow: hidden;
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.64), transparent 24%, transparent 76%, rgba(255, 255, 255, 0.64)),
+    linear-gradient(180deg, #f9fbff 0%, #edf3fb 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(203, 213, 225, 0.82),
+    inset 0 22px 50px rgba(255, 255, 255, 0.72),
+    0 30px 90px rgba(31, 41, 55, 0.12);
+  transform-style: preserve-3d;
+}
+
+.gate-portal::before {
+  content: '';
+  position: absolute;
+  inset: var(--gate-frame-top) var(--gate-frame-x) var(--gate-frame-bottom);
+  z-index: 0;
+  background:
+    linear-gradient(90deg, rgba(226, 232, 240, 0.28), transparent 18%, transparent 82%, rgba(226, 232, 240, 0.28)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(239, 245, 253, 0.54));
+  opacity: 1;
+}
+
+.gate-frame {
+  position: absolute;
+  z-index: 6;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(226, 232, 240, 0.94)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.42), transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(148, 163, 184, 0.2),
+    0 10px 24px rgba(31, 41, 55, 0.1);
+}
+
+.gate-frame-top {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--gate-frame-top);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.gate-frame-top::after {
+  content: '';
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(59, 108, 246, 0.52), transparent);
+}
+
+.gate-frame-left,
+.gate-frame-right {
+  top: 0;
+  bottom: 0;
+  width: var(--gate-frame-x);
+}
+
+.gate-frame-left {
+  left: 0;
+  border-right: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.gate-frame-right {
+  right: 0;
+  border-left: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.gate-frame-bottom {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--gate-frame-bottom);
+  border-top: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.gate-seam {
+  position: absolute;
+  top: var(--gate-frame-top);
+  bottom: var(--gate-frame-bottom);
+  left: 50%;
+  z-index: 5;
+  width: 8px;
+  transform: translateX(-50%);
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.94), transparent),
+    linear-gradient(180deg, transparent, rgba(59, 108, 246, 0.32), transparent);
+  filter: blur(0);
+  opacity: 0.48;
+  animation: gate-seam-glow 1.25s ease 0.65s forwards;
+}
+
+.gate-seam::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: rgba(100, 116, 139, 0.32);
+  box-shadow: 0 0 10px rgba(59, 108, 246, 0.22);
+}
+
+.gate-leaf {
+  position: absolute;
+  top: var(--gate-frame-top);
+  bottom: var(--gate-frame-bottom);
+  z-index: 3;
+  width: calc(50% - var(--gate-frame-x));
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, transparent 0 18%, rgba(59, 108, 246, 0.045) 18% 18.4%, transparent 18.4% 100%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.82), transparent 16%, transparent 84%, rgba(203, 213, 225, 0.35)),
+    linear-gradient(180deg, #ffffff 0%, #f6f9ff 42%, #e9eff8 100%);
+  border: 1px solid rgba(203, 213, 225, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.94),
+    inset 0 -24px 42px rgba(148, 163, 184, 0.12),
+    0 20px 44px rgba(31, 41, 55, 0.1);
+  transform: translateX(0) rotateY(0);
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.gate-leaf::before {
+  content: '';
+  position: absolute;
+  inset: 16px;
+  z-index: 0;
+  border: 1px solid rgba(203, 213, 225, 0.72);
+  border-radius: 8px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.76),
+    inset 0 16px 28px rgba(255, 255, 255, 0.7);
+}
+
+.gate-leaf::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 0;
+  width: 34px;
+  background: linear-gradient(90deg, rgba(59, 108, 246, 0.08), transparent);
+}
+
+.gate-leaf-left {
+  left: var(--gate-frame-x);
+  border-right-color: rgba(100, 116, 139, 0.34);
+  border-radius: 0 6px 6px 0;
+  transform-origin: left center;
+  animation: gate-open-left 1.32s cubic-bezier(0.76, 0, 0.24, 1) 1.18s forwards;
+}
+
+.gate-leaf-left::after {
+  right: 0;
+}
+
+.gate-leaf-right {
+  right: var(--gate-frame-x);
+  border-left-color: rgba(100, 116, 139, 0.34);
+  border-radius: 6px 0 0 6px;
+  transform-origin: right center;
+  animation: gate-open-right 1.32s cubic-bezier(0.76, 0, 0.24, 1) 1.18s forwards;
+}
+
+.gate-leaf-right::after {
+  left: 0;
+  transform: rotate(180deg);
+}
+
+.gate-panel {
+  position: absolute;
+  left: 9%;
+  right: 9%;
+  z-index: 1;
+  overflow: hidden;
+  border: 1px solid rgba(203, 213, 225, 0.7);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(235, 241, 250, 0.4)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.6), transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -10px 22px rgba(148, 163, 184, 0.12);
+}
+
+.gate-panel::before {
+  content: '';
+  position: absolute;
+  inset: 14px 16px auto;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(59, 108, 246, 0.3), transparent 72%);
+}
+
+.gate-panel::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 46px;
+  height: 46px;
+  border-right: 1px solid rgba(59, 108, 246, 0.2);
+  border-bottom: 1px solid rgba(59, 108, 246, 0.2);
+  border-radius: 0 0 8px 0;
+}
+
+.gate-panel-upper {
+  top: 9%;
+  height: 34%;
+}
+
+.gate-panel-lower {
+  top: 50%;
+  bottom: 10%;
+}
+
+.gate-handle {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: 10px;
+  height: 76px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #7ea0ff, var(--c-primary));
+  box-shadow:
+    0 0 0 6px rgba(59, 108, 246, 0.1),
+    0 12px 24px rgba(59, 108, 246, 0.24);
+  transform: translateY(-50%);
+}
+
+.gate-handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: -1;
+  width: 30px;
+  height: 98px;
+  border: 1px solid rgba(59, 108, 246, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.56);
+  transform: translate(-50%, -50%);
+}
+
+.gate-leaf-left .gate-handle {
+  right: 24px;
+}
+
+.gate-leaf-right .gate-handle {
+  left: 24px;
+}
+
+.gate-door-ornament {
+  position: absolute;
+  top: 26px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 32%;
+}
+
+.gate-door-ornament span {
+  display: block;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(59, 108, 246, 0.42), rgba(59, 108, 246, 0.08));
+}
+
+.gate-door-ornament span:nth-child(1) {
+  width: 72%;
+}
+
+.gate-door-ornament span:nth-child(2) {
+  width: 100%;
+}
+
+.gate-door-ornament span:nth-child(3) {
+  width: 48%;
+}
+
+.gate-leaf-left .gate-door-ornament {
+  left: 30px;
+}
+
+.gate-leaf-right .gate-door-ornament {
+  right: 30px;
+  align-items: flex-end;
+}
+
+.gate-leaf-right .gate-door-ornament span {
+  background: linear-gradient(270deg, rgba(59, 108, 246, 0.42), rgba(59, 108, 246, 0.08));
+}
+
+.gate-door-badge {
+  position: absolute;
+  top: 15%;
+  z-index: 2;
+  min-width: 44px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(59, 108, 246, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 10px 20px rgba(59, 108, 246, 0.08);
+  color: rgba(59, 108, 246, 0.78);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 28px;
+  text-align: center;
+}
+
+.gate-leaf-left .gate-door-badge {
+  right: 70px;
+}
+
+.gate-leaf-right .gate-door-badge {
+  left: 70px;
+}
+
+@keyframes gate-open-left {
+  to {
+    transform: translateX(-96%) rotateY(18deg);
+  }
+}
+
+@keyframes gate-open-right {
+  to {
+    transform: translateX(96%) rotateY(-18deg);
+  }
+}
+
+@keyframes gate-seam-glow {
+  0% {
+    width: 4px;
+    opacity: 0.36;
+  }
+  45% {
+    width: 8px;
+    opacity: 0.52;
+  }
+  100% {
+    width: 12px;
+    opacity: 0.24;
+  }
+}
+
+/* 中央品牌：淡入上浮，门开前轻微淡出 */
+.gate-brand {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  animation:
+    gate-brand-in 0.5s ease 0.1s both,
+    gate-brand-out 0.42s ease 1.08s forwards;
+}
+
+.gate-logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, #3b6cf6, #5a86ff),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent);
+  color: #fff;
+  font-size: 38px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  box-shadow:
+    0 0 0 10px rgba(59, 108, 246, 0.08),
+    0 16px 34px rgba(59, 108, 246, 0.34);
+}
+
+.gate-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--c-text);
+  letter-spacing: 0;
+}
+
+.gate-subtitle {
+  font-size: 13px;
+  color: var(--c-text-faint);
+  letter-spacing: 0;
+}
+
+@keyframes gate-brand-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gate-brand-out {
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@include breakpoint-down('mobile') {
+  .welcome-gate {
+    --gate-frame-x: 18px;
+    --gate-frame-top: 38px;
+    --gate-frame-bottom: 18px;
+  }
+
+  .gate-portal {
+    inset: 12px;
+  }
+
+  .gate-handle {
+    height: 62px;
+  }
+
+  .gate-door-ornament {
+    top: 20px;
+    width: 26%;
+  }
+
+  .gate-leaf-left .gate-handle {
+    right: 16px;
+  }
+
+  .gate-leaf-right .gate-handle {
+    left: 16px;
+  }
+
+  .gate-leaf-left .gate-door-ornament {
+    left: 18px;
+  }
+
+  .gate-leaf-right .gate-door-ornament {
+    right: 18px;
+  }
+
+  .gate-leaf-left .gate-door-badge {
+    right: 54px;
+  }
+
+  .gate-leaf-right .gate-door-badge {
+    left: 54px;
+  }
+}
+
+/* 尊重系统「减少动态效果」偏好：直接跳过门动画 */
+@include reduced-motion {
+  .gate-seam,
+  .gate-leaf,
+  .gate-brand {
+    animation: none;
+  }
+
+  .gate-seam {
+    opacity: 0;
+  }
+
+  .gate-leaf-left {
+    transform: translateX(-96%);
+  }
+
+  .gate-leaf-right {
+    transform: translateX(96%);
+  }
+
+  .gate-brand {
+    opacity: 0;
+  }
+}

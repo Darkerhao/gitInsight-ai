@@ -123,11 +123,9 @@ const scene: SceneFn = (api) => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .energy-shield-effect {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
+  @include effect-stage(hidden);
   animation: shield-camera 5.4s ease both;
 }
 

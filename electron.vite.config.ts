@@ -35,6 +35,14 @@ export default defineConfig({
   renderer: {
     define: editionDefines,
     plugins: [vue()],
+    css: {
+      preprocessorOptions: {
+        scss: {
+          api: 'modern-compiler',
+          additionalData: `@use "@/styles/tools" as *;`,
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': resolve('src/renderer/src'),

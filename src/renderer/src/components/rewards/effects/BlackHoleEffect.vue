@@ -137,11 +137,9 @@ const scene: SceneFn = (api) => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .black-hole-effect {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
+  @include effect-stage(hidden);
   animation: bh-camera 6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 

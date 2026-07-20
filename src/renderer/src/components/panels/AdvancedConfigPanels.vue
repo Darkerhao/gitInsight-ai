@@ -210,7 +210,9 @@ function runFeishuGuideAction(action: FeishuGuideAction, panel: string) {
   <div class="config-block">
     <SectionTitle :title="sectionTitle" :subtitle="sectionSubtitle">
       <template #extra>
-        <el-button v-if="isAiOnly" :icon="Plus" type="primary" plain @click="createAiProfile">新增配置</el-button>
+        <el-button v-if="isAiOnly" class="ai-config-action-btn" :icon="Plus" type="primary" plain @click="createAiProfile">
+          新增配置
+        </el-button>
       </template>
     </SectionTitle>
 
@@ -239,10 +241,10 @@ function runFeishuGuideAction(action: FeishuGuideAction, panel: string) {
             <span>生成日报时会默认使用当前选中的 AI 配置，也可以在生成页临时切换。测试连接使用当前表单值，不会自动保存。</span>
           </div>
           <div class="ai-profile-actions">
-            <el-button :icon="TestTube2" type="primary" plain :loading="aiConnectionTesting" @click="runAiConnectionTest">
+            <el-button class="ai-config-action-btn" :icon="TestTube2" type="primary" plain :loading="aiConnectionTesting" @click="runAiConnectionTest">
               测试连接
             </el-button>
-            <el-button :icon="Trash2" type="danger" plain :disabled="!canRemoveAiProfile" @click="removeAiProfile(activeAiProfile.id)">
+            <el-button class="ai-config-action-btn" :icon="Trash2" type="danger" plain :disabled="!canRemoveAiProfile" @click="removeAiProfile(activeAiProfile.id)">
               删除配置
             </el-button>
           </div>

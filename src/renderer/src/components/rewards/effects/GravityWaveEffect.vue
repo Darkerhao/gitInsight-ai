@@ -121,11 +121,9 @@ const scene: SceneFn = (api) => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .gravity-wave-effect {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
+  @include effect-stage(hidden);
   animation: gw-camera 6.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 

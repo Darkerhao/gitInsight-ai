@@ -32,7 +32,7 @@ onBeforeUnmount(() => {
   <canvas ref="canvasRef" class="reward-particle-canvas" />
 </template>
 
-<style>
+<style lang="scss">
 .reward-particle-canvas {
   position: absolute;
   inset: 0;

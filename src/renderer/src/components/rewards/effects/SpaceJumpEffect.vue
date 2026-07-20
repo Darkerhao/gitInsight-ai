@@ -96,11 +96,9 @@ const scene: SceneFn = (api) => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .space-jump-effect {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
+  @include effect-stage(hidden);
   animation: space-camera 5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 

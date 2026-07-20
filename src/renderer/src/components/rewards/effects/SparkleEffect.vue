@@ -106,10 +106,9 @@ const scene: SceneFn = (api) => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .sparkle-effect {
-  position: absolute;
-  inset: 0;
+  @include effect-stage;
   background:
     linear-gradient(120deg, transparent 0 34%, rgba(255, 255, 255, 0.22) 45%, transparent 56%),
     linear-gradient(120deg, transparent 18%, rgba(251, 191, 36, 0.2) 48%, transparent 78%);

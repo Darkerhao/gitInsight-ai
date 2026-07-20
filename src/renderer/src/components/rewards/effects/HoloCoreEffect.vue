@@ -107,10 +107,9 @@ const scene: SceneFn = (api) => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .holo-core-effect {
-  position: absolute;
-  inset: 0;
+  @include effect-stage;
   display: grid;
   place-items: center;
 }

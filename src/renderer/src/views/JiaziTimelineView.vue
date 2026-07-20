@@ -100,7 +100,7 @@ function onWheel(event: WheelEvent) {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 /* ── 基础布局 ── */
 .timeline-view {
   position: relative;

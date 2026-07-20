@@ -1,0 +1,436 @@
+@use 'tools' as *;
+
+:root {
+  color-scheme: light;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  /* 设计令牌 */
+  --c-primary: #3b6cf6;
+  --c-primary-hover: #2f5be0;
+  --c-primary-soft: #eaf0ff;
+  --c-page-bg: #f4f6fb;
+  --c-surface: #ffffff;
+  --c-surface-muted: #fbfcff;
+  --c-surface-inset: #eef2f8;
+  --c-border: #eef0f4;
+  --c-border-strong: #e3e7ef;
+  --c-text: #1f2937;
+  --c-text-muted: #6b7280;
+  --c-text-faint: #9aa3b2;
+
+  --tone-blue: #3b6cf6;
+  --tone-blue-bg: #eef3ff;
+  --tone-green: #16a34a;
+  --tone-green-bg: #e9f9ef;
+  --tone-amber: #d98a09;
+  --tone-amber-bg: #fdf3e2;
+  --tone-red: #ef4444;
+  --tone-red-bg: #fdecec;
+
+  --radius-card: 8px;
+  --radius-block: 8px;
+  --shadow-card: 0 1px 3px rgba(17, 24, 39, 0.04), 0 8px 24px rgba(17, 24, 39, 0.04);
+  --app-header-height: 72px;
+  --scrollbar-track: rgba(226, 232, 240, 0.45);
+  --scrollbar-thumb: rgba(148, 163, 184, 0.75);
+  --scrollbar-thumb-hover: rgba(100, 116, 139, 0.9);
+  --theme-transition-x: 100vw;
+  --theme-transition-y: 0;
+  --theme-transition-radius: 150vmax;
+
+  /* Element Plus 主题覆盖 */
+  --el-color-primary: #3b6cf6;
+  --el-color-primary-light-3: #6f93f8;
+  --el-color-primary-light-5: #9bb4fa;
+  --el-color-primary-light-7: #c7d5fc;
+  --el-color-primary-light-8: #dbe4fd;
+  --el-color-primary-light-9: #eef3ff;
+  --el-color-primary-dark-2: #2f5be0;
+  --el-border-radius-base: 10px;
+
+  background: var(--c-page-bg);
+  color: var(--c-text);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --c-primary: #7aa2ff;
+  --c-primary-hover: #9ab8ff;
+  --c-primary-soft: rgba(122, 162, 255, 0.16);
+  --c-page-bg: #0f141d;
+  --c-surface: #161d29;
+  --c-surface-muted: #111824;
+  --c-surface-inset: #202a39;
+  --c-border: #283244;
+  --c-border-strong: #3a465b;
+  --c-text: #e7edf7;
+  --c-text-muted: #a7b2c3;
+  --c-text-faint: #748196;
+
+  --tone-blue: #7aa2ff;
+  --tone-blue-bg: rgba(122, 162, 255, 0.16);
+  --tone-green: #4ade80;
+  --tone-green-bg: rgba(74, 222, 128, 0.13);
+  --tone-amber: #fbbf24;
+  --tone-amber-bg: rgba(251, 191, 36, 0.14);
+  --tone-red: #fb7185;
+  --tone-red-bg: rgba(251, 113, 133, 0.14);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 14px 34px rgba(0, 0, 0, 0.22);
+  --scrollbar-track: rgba(10, 15, 23, 0.92);
+  --scrollbar-thumb: rgba(74, 86, 108, 0.96);
+  --scrollbar-thumb-hover: rgba(101, 116, 145, 0.98);
+
+  --el-bg-color: var(--c-surface);
+  --el-bg-color-overlay: #1b2432;
+  --el-fill-color-blank: var(--c-surface);
+  --el-fill-color-light: #202a39;
+  --el-fill-color-lighter: #253146;
+  --el-border-color: var(--c-border);
+  --el-border-color-light: var(--c-border);
+  --el-border-color-lighter: #242d3d;
+  --el-text-color-primary: var(--c-text);
+  --el-text-color-regular: var(--c-text-muted);
+  --el-text-color-secondary: var(--c-text-faint);
+  --el-color-primary: var(--c-primary);
+  --el-color-primary-light-3: #8dacff;
+  --el-color-primary-light-5: #6f8ee0;
+  --el-color-primary-light-7: rgba(122, 162, 255, 0.32);
+  --el-color-primary-light-8: rgba(122, 162, 255, 0.24);
+  --el-color-primary-light-9: var(--c-primary-soft);
+  --el-color-primary-dark-2: var(--c-primary-hover);
+
+  background: var(--c-page-bg);
+  color: var(--c-text);
+}
+
+:root[data-theme='dark'] .topbar,
+:root[data-theme='dark'] .sidebar,
+:root[data-theme='dark'] .surface-card {
+  box-shadow: var(--shadow-card);
+}
+
+:root[data-theme='dark'] .sidebar-menu.el-menu {
+  --el-menu-hover-bg-color: rgba(122, 162, 255, 0.12);
+}
+
+:root[data-theme='dark'] .sidebar-menu .el-sub-menu__title:hover,
+:root[data-theme='dark'] .sidebar-menu .el-menu-item:hover,
+:root[data-theme='dark'] .sidebar-menu .el-menu-item.is-disabled:hover,
+:root[data-theme='dark'] .topbar-user,
+:root[data-theme='dark'] .project-empty,
+:root[data-theme='dark'] .repo-picker-empty.el-button,
+:root[data-theme='dark'] .about-kv-row,
+:root[data-theme='dark'] .about-feature-list div,
+:root[data-theme='dark'] .message-detail-text,
+:root[data-theme='dark'] .sidebar-menu.el-menu--horizontal > .el-sub-menu > .el-sub-menu__title,
+:root[data-theme='dark'] .sidebar-menu.el-menu--horizontal > .el-menu-item {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme='dark'] .project-card,
+:root[data-theme='dark'] .repo-picker-trigger.el-button,
+:root[data-theme='dark'] .repo-picker-item,
+:root[data-theme='dark'] .segmented-action.el-button,
+:root[data-theme='dark'] .generation-check-card.el-button,
+:root[data-theme='dark'] .metric-card,
+:root[data-theme='dark'] .about-action-btn,
+:root[data-theme='dark'] .help-list-item,
+:root[data-theme='dark'] .help-module-card,
+:root[data-theme='dark'] .message-card,
+:root[data-theme='dark'] .help-check-card,
+:root[data-theme='dark'] .help-faq-item {
+  background: var(--c-surface);
+}
+
+:root[data-theme='dark'] .project-card.pinned:not(.active),
+:root[data-theme='dark'] .repo-picker-item.pinned:not(.active),
+:root[data-theme='dark'] .generation-check-card.el-button.optional:not(.ready) {
+  background: var(--tone-amber-bg);
+}
+
+:root[data-theme='dark'] .generation-check-card.el-button.ready {
+  background: var(--tone-green-bg);
+}
+
+:root[data-theme='dark'] .generation-check-card.el-button.warning,
+:root[data-theme='dark'] .help-check-card.danger {
+  background: var(--tone-red-bg);
+}
+
+:root[data-theme='dark'] .page-header h1,
+:root[data-theme='dark'] .metric-card strong {
+  color: var(--c-text);
+}
+
+:root[data-theme='dark'] .notice-line,
+:root[data-theme='dark'] .help-collapse .el-collapse-item__wrap {
+  background: linear-gradient(90deg, rgba(74, 222, 128, 0.1), rgba(122, 162, 255, 0.1));
+}
+
+:root[data-theme='dark'] .generation-loading-overlay {
+  background:
+    linear-gradient(135deg, rgba(8, 13, 24, 0.94), rgba(13, 24, 40, 0.9)),
+    repeating-linear-gradient(90deg, rgba(122, 162, 255, 0.08) 0 1px, transparent 1px 72px);
+}
+
+:root[data-theme='dark'] .generation-loading-copy,
+:root[data-theme='dark'] .loading-game-panel,
+:root[data-theme='dark'] .loading-game-chip,
+:root[data-theme='dark'] .report-preview,
+:root[data-theme='dark'] .report-mode-row,
+:root[data-theme='dark'] .role-select-card-item,
+:root[data-theme='dark'] .data-list-item,
+:root[data-theme='dark'] .empty-state,
+:root[data-theme='dark'] .publish-hint,
+:root[data-theme='dark'] .operation-card.el-button,
+:root[data-theme='dark'] .repo-center-item,
+:root[data-theme='dark'] .repo-center-empty,
+:root[data-theme='dark'] .feishu-guide-card,
+:root[data-theme='dark'] .feishu-guide-step,
+:root[data-theme='dark'] .field-helper-row,
+:root[data-theme='dark'] .auto-sync-main,
+:root[data-theme='dark'] .auto-sync-toggle-card,
+:root[data-theme='dark'] .auto-sync-field,
+:root[data-theme='dark'] .status-cell,
+:root[data-theme='dark'] .settings-note-item,
+:root[data-theme='dark'] .help-card,
+:root[data-theme='dark'] .quick-action-grid button,
+:root[data-theme='dark'] .usage-guide-btn,
+:root[data-theme='dark'] .help-collapse .el-collapse-item__header,
+:root[data-theme='dark'] .message-card.unread {
+  background: var(--c-surface-muted);
+}
+
+:root[data-theme='dark'] .generation-loading-copy,
+:root[data-theme='dark'] .loading-game-panel {
+  border-color: rgba(122, 162, 255, 0.22);
+  box-shadow: 0 26px 90px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+:root[data-theme='dark'] .loading-pipeline span,
+:root[data-theme='dark'] .loading-game-score {
+  background: rgba(122, 162, 255, 0.14);
+}
+
+:root[data-theme='dark'] .repo-picker-trigger.el-button:hover,
+:root[data-theme='dark'] .repo-picker-trigger.el-button:focus-visible,
+:root[data-theme='dark'] .operation-card.el-button:hover,
+:root[data-theme='dark'] .role-select-card-item.active,
+:root[data-theme='dark'] .report-mode-switch button.active,
+:root[data-theme='dark'] .hour-preset-btn.el-button,
+:root[data-theme='dark'] .preview-area .el-textarea__inner,
+:root[data-theme='dark'] .editable-report .el-textarea__inner,
+:root[data-theme='dark'] .concise-report .el-textarea__inner {
+  background: var(--c-surface-inset);
+}
+
+:root[data-theme='dark'] .advanced-collapse .el-collapse-item {
+  border-color: var(--c-border-strong);
+}
+
+:root[data-theme='dark'] .advanced-collapse .el-collapse-item__wrap {
+  border-top-color: var(--c-border-strong);
+  background: var(--c-surface-muted);
+}
+
+:root[data-theme='dark'] .advanced-collapse .el-collapse-item__content {
+  background: var(--c-surface-muted);
+}
+
+:root[data-theme='dark'] .advanced-collapse .field-grid {
+  border-radius: var(--radius-block);
+}
+
+:root[data-theme='dark'] .loading-game-board {
+  border-color: var(--c-border-strong);
+  background:
+    linear-gradient(rgba(122, 162, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(122, 162, 255, 0.12) 1px, transparent 1px),
+    var(--c-surface-muted);
+  background-size: 28px 28px;
+}
+
+:root[data-theme='dark'] .report-mode-switch {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme='dark'] .operation-card.el-button.is-warning:hover,
+:root[data-theme='dark'] .repo-center-item.pinned:not(.active) {
+  background: var(--tone-amber-bg);
+}
+
+:root[data-theme='dark'] .report-preview pre,
+:root[data-theme='dark'] .editable-report .el-textarea__inner,
+:root[data-theme='dark'] .concise-report .el-textarea__inner,
+:root[data-theme='dark'] .repo-stat strong {
+  color: var(--c-text);
+}
+
+:root[data-theme='dark'] .editable-report .el-textarea__inner,
+:root[data-theme='dark'] .concise-report .el-textarea__inner,
+:root[data-theme='dark'] .preview-area .el-textarea__inner {
+  box-shadow: inset 0 0 0 1px var(--c-border-strong);
+}
+
+:root[data-theme='dark'] .log-table,
+:root[data-theme='dark'] .dashboard-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: var(--c-surface-inset);
+  --el-table-row-hover-bg-color: rgba(122, 162, 255, 0.12);
+  --el-table-current-row-bg-color: rgba(122, 162, 255, 0.16);
+  --el-table-text-color: var(--c-text);
+  --el-table-header-text-color: var(--c-text-muted);
+  --el-table-border-color: var(--c-border);
+  --el-table-expanded-cell-bg-color: var(--c-surface-muted);
+}
+
+:root[data-theme='dark'] .el-table,
+:root[data-theme='dark'] .el-table tr,
+:root[data-theme='dark'] .el-table th.el-table__cell,
+:root[data-theme='dark'] .el-table td.el-table__cell {
+  background-color: transparent;
+}
+
+:root[data-theme='dark'] .el-table th.el-table__cell {
+  background-color: var(--c-surface-inset);
+}
+
+:root[data-theme='dark'] .el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell {
+  background-color: rgba(122, 162, 255, 0.12);
+}
+
+:root[data-theme='dark'] .settings-descriptions.el-descriptions {
+  --el-descriptions-item-bordered-label-background: var(--c-surface-inset);
+}
+
+:root[data-theme='dark'] .settings-descriptions .el-descriptions__body {
+  background: var(--c-surface-muted);
+}
+
+:root[data-theme='dark'] .settings-descriptions .el-descriptions__label {
+  background: var(--c-surface-inset);
+}
+
+:root[data-theme='dark'] .settings-descriptions .el-descriptions__content {
+  background: var(--c-surface-muted);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  background: var(--c-page-bg);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+:root[data-theme-transition]::view-transition-new(root) {
+  animation: theme-reveal 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+:root[data-theme-transition]::view-transition-old(root) {
+  animation: theme-old-soften 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.theme-transition-fallback,
+.theme-transition-fallback *,
+.theme-transition-fallback *::before,
+.theme-transition-fallback *::after {
+  transition:
+    background-color 360ms ease,
+    border-color 360ms ease,
+    box-shadow 360ms ease,
+    color 360ms ease,
+    fill 360ms ease,
+    stroke 360ms ease;
+}
+
+@keyframes theme-reveal {
+  from {
+    clip-path: circle(0 at var(--theme-transition-x) var(--theme-transition-y));
+  }
+  to {
+    clip-path: circle(var(--theme-transition-radius) at var(--theme-transition-x) var(--theme-transition-y));
+  }
+}
+
+@keyframes theme-old-soften {
+  from {
+    filter: brightness(1);
+  }
+  to {
+    filter: brightness(0.96);
+  }
+}
+
+@include reduced-motion {
+  :root[data-theme-transition]::view-transition-new(root),
+  :root[data-theme-transition]::view-transition-old(root) {
+    animation-duration: 1ms;
+  }
+
+  .theme-transition-fallback,
+  .theme-transition-fallback *,
+  .theme-transition-fallback *::before,
+  .theme-transition-fallback *::after {
+    transition-duration: 1ms;
+  }
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  min-height: 40px;
+  border: 2px solid var(--scrollbar-track);
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
+}

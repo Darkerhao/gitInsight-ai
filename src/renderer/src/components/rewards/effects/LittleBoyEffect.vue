@@ -79,11 +79,9 @@ onBeforeUnmount(cleanup);
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .little-boy-effect {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
+  @include effect-stage(hidden);
   background:
     radial-gradient(circle at 50% 66%, rgba(255, 247, 237, 0.18), transparent 28%),
     radial-gradient(circle at 50% 24%, rgba(14, 165, 233, 0.08), transparent 36%),

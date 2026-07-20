@@ -1,0 +1,46 @@
+@use 'sass:map';
+
+$breakpoints: (
+  'wide': 1380px,
+  'desktop': 1180px,
+  'tablet': 920px,
+  'mobile': 720px,
+);
+
+@mixin viewport-down($size) {
+  @media (max-width: $size) {
+    @content;
+  }
+}
+
+@mixin breakpoint-down($name) {
+  @include viewport-down(map.get($breakpoints, $name)) {
+    @content;
+  }
+}
+
+@mixin reduced-motion {
+  @media (prefers-reduced-motion: reduce) {
+    @content;
+  }
+}
+
+@mixin effect-stage($overflow: null) {
+  position: absolute;
+  inset: 0;
+
+  @if $overflow {
+    overflow: $overflow;
+  }
+}
+
+@mixin focus-ring($color: var(--c-primary)) {
+  outline: 3px solid color-mix(in srgb, #{$color} 24%, transparent);
+  outline-offset: 2px;
+}
+
+@mixin text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

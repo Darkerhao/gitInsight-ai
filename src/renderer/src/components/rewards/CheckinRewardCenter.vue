@@ -399,7 +399,7 @@ onBeforeUnmount(() => {
   <RewardEffectOverlay :effect="activeEffect" :seed="effectSeed" @close="stopEffect" />
 </template>
 
-<style>
+<style lang="scss">
 .topbar-coin-btn.el-button {
   min-height: 34px;
   border-color: rgba(217, 119, 6, 0.22);

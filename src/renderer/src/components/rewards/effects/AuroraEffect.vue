@@ -104,10 +104,9 @@ const scene: SceneFn = (api) => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .aurora-effect {
-  position: absolute;
-  inset: 0;
+  @include effect-stage;
 }
 
 .aurora-core {

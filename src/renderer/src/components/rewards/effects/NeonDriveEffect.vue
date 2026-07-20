@@ -103,11 +103,9 @@ const scene: SceneFn = (api) => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .neon-drive-effect {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
+  @include effect-stage(hidden);
   background:
     linear-gradient(180deg, transparent 0 52%, rgba(244, 114, 182, 0.12) 52% 100%),
     radial-gradient(circle at 50% 76%, rgba(34, 211, 238, 0.2), transparent 38%);

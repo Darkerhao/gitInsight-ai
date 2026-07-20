@@ -731,7 +731,7 @@ onBeforeUnmount(() => {
   </section>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .ai-welcome {
   --opening-progress: 0;
   position: fixed;

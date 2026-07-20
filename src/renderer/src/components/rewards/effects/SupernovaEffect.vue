@@ -110,11 +110,9 @@ const scene: SceneFn = (api) => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .supernova-effect {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
+  @include effect-stage(hidden);
   animation: sn-camera 5.8s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 

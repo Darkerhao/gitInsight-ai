@@ -507,7 +507,7 @@ onBeforeUnmount(() => {
   </Teleport>
 </template>
 
-<style>
+<style lang="scss">
 .reward-effect-overlay {
   --fx-accent: #60a5fa;
   --fx-secondary: #f472b6;

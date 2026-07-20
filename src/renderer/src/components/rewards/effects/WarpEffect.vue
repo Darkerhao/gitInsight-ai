@@ -82,10 +82,9 @@ const scene: SceneFn = (api) => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .warp-effect {
-  position: absolute;
-  inset: 0;
+  @include effect-stage;
 }
 
 .warp-ship {

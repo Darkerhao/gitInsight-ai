@@ -103,10 +103,9 @@ const scene: SceneFn = (api) => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .quantum-gate-effect {
-  position: absolute;
-  inset: 0;
+  @include effect-stage;
   display: grid;
   place-items: center;
   overflow: hidden;
