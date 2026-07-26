@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import * as echarts from 'echarts';
 import { useRouter } from 'vue-router';
 import { Activity, Award, ChevronLeft, ChevronRight, Filter, GitCommitHorizontal, Maximize2, Minimize2, PanelRightClose, PanelRightOpen, Pause, Play, RefreshCw, Sparkles, Star, Zap } from 'lucide-vue-next';
 import { useTimeline, typeOptions } from '@/composables/useTimeline';
@@ -7,7 +8,6 @@ import { usePlayback } from '@/composables/usePlayback';
 import { useFullscreen } from '@/composables/useFullscreen';
 import { tone, formatDate, dayTitle, daySummary, displayTitle, detailSections } from '@/utils/timelineText';
 import type { TimelineScale } from '@/composables/useTimeline';
-import type { TimelineDayGroup } from '@shared/types';
 
 const router = useRouter();
 const timelineRoot = ref<HTMLElement | null>(null);
@@ -25,98 +25,107 @@ const { isFullscreen, toggleFullscreen } = useFullscreen(timelineRoot);
 const detailCollapsed = ref(false);
 const isMergingToday = ref(false);
 
-/* ── 年度热力图 ── */
-interface HeatCell {
-  iso: string;
-  inYear: boolean;
-  group: TimelineDayGroup | null;
-  level: number;
-  milestone: boolean;
-  today: boolean;
-}
-
-const heatmapDayLabels = ['一', '', '三', '', '五', '', '日'];
-
-function heatLevel(group: TimelineDayGroup | null) {
-  if (!group) return 0;
-  if (group.commitsCount >= 15) return 4;
-  if (group.commitsCount >= 8) return 3;
-  if (group.commitsCount >= 3) return 2;
-  return 1;
-}
-
-const heatmapWeeks = computed<HeatCell[][]>(() => {
-  if (scale.value !== 'year') return [];
-  const year = viewYear.value;
-  const groupMap = new Map(days.value.map((day) => [day.date, day]));
-  const pad = (value: number) => String(value).padStart(2, '0');
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const firstDay = new Date(year, 0, 1);
-  // 从 1 月 1 日所在周的周一开始铺格子
-  const cursor = new Date(year, 0, 1 - ((firstDay.getDay() + 6) % 7));
-  const weeks: HeatCell[][] = [];
-  while (cursor.getFullYear() <= year) {
-    const week: HeatCell[] = [];
-    for (let i = 0; i < 7; i++) {
-      const iso = `${cursor.getFullYear()}-${pad(cursor.getMonth() + 1)}-${pad(cursor.getDate())}`;
-      const group = groupMap.get(iso) ?? null;
-      week.push({
-        iso,
-        inYear: cursor.getFullYear() === year,
-        group,
-        level: heatLevel(group),
-        milestone: Boolean(group?.milestone),
-        today: iso === todayIso,
-      });
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    weeks.push(week);
-  }
-  return weeks;
+watch(detailCollapsed, async () => {
+  await nextTick();
+  heatChart?.resize();
 });
 
-const heatmapMonthLabels = computed(() =>
-  heatmapWeeks.value.map((week) => {
-    const monthStart = week.find((cell) => cell.inYear && cell.iso.endsWith('-01'));
-    return monthStart ? `${Number(monthStart.iso.slice(5, 7))}月` : '';
-  }),
-);
+/* ── 年度热力图(ECharts calendar + heatmap) ── */
+const heatmapChart = ref<HTMLElement | null>(null);
+let heatChart: ReturnType<typeof echarts.init> | null = null;
 
-function heatCellTitle(cell: HeatCell) {
-  if (!cell.group) return cell.iso;
-  return `${cell.iso} · ${cell.group.itemCount} 项工作 · ${cell.group.commitsCount} 次提交${cell.milestone ? ' · 里程碑' : ''}`;
+function disposeHeatChart() {
+  heatChart?.dispose();
+  heatChart = null;
 }
 
-function heatCellClass(cell: HeatCell) {
-  return [
-    `level-${cell.level}`,
-    {
-      out: !cell.inYear,
-      empty: !cell.group,
-      milestone: cell.milestone,
-      today: cell.today,
-      selected: selectedDay.value?.date === cell.iso,
+function buildHeatmapOption() {
+  const maxCommits = Math.max(4, ...days.value.map((day) => day.commitsCount));
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      confine: true,
+      backgroundColor: 'rgba(10, 16, 28, 0.94)',
+      borderColor: 'rgba(148, 163, 184, 0.24)',
+      textStyle: { color: '#dbe6f5', fontSize: 12 },
+      formatter: (params: any) => {
+        const date = Array.isArray(params.value) ? String(params.value[0]) : '';
+        const day = days.value.find((item) => item.date === date);
+        if (!day) return date;
+        const milestone = day.milestone ? '<br/><span style="color:#f2cc7e">里程碑</span>' : '';
+        return `<strong>${date}</strong><br/>${day.itemCount} 项工作 · ${day.commitsCount} 次提交${milestone}`;
+      },
     },
-  ];
+    visualMap: {
+      show: false,
+      min: 0,
+      max: maxCommits,
+      seriesIndex: 0,
+      inRange: { color: ['rgba(110, 231, 249, 0.16)', 'rgba(110, 231, 249, 0.55)', 'rgba(110, 231, 249, 0.95)'] },
+    },
+    calendar: {
+      top: 34,
+      left: 36,
+      right: 10,
+      bottom: 6,
+      range: String(viewYear.value),
+      cellSize: ['auto', 16],
+      splitLine: { show: true, lineStyle: { color: 'rgba(148, 163, 184, 0.2)', width: 1 } },
+      itemStyle: { color: 'rgba(148, 163, 184, 0.08)', borderColor: '#0b101c', borderWidth: 3 },
+      dayLabel: { firstDay: 1, nameMap: ['日', '一', '二', '三', '四', '五', '六'], color: '#5d6b82', fontSize: 10 },
+      monthLabel: { nameMap: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'], color: '#93a1b7', fontSize: 11 },
+      yearLabel: { show: false },
+    },
+    series: [
+      {
+        type: 'heatmap',
+        coordinateSystem: 'calendar',
+        data: days.value.map((day) => {
+          const isSelected = selectedDay.value?.date === day.date;
+          const itemStyle = isSelected
+            ? { borderColor: '#eaf6ff', borderWidth: 2 }
+            : day.milestone
+              ? { borderColor: 'rgba(246, 200, 96, 0.85)', borderWidth: 1.5 }
+              : {};
+          return { value: [day.date, day.commitsCount], itemStyle };
+        }),
+        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(110, 231, 249, 0.5)' } },
+      },
+    ],
+  };
 }
 
-function selectHeatCell(cell: HeatCell) {
-  if (cell.group) selectDay(cell.group);
+function renderHeatChart() {
+  const el = heatmapChart.value;
+  if (!el) return;
+  if (!heatChart) {
+    heatChart = echarts.init(el);
+    heatChart.on('click', (params: any) => {
+      const date = Array.isArray(params.value) ? String(params.value[0]) : '';
+      const day = days.value.find((item) => item.date === date);
+      if (day) selectDay(day);
+    });
+  }
+  heatChart.setOption(buildHeatmapOption(), true);
 }
 
-/* 年度视图打开后,自动滚动到今天(或选中日)所在的周 */
-const heatmapScroller = ref<HTMLElement | null>(null);
-watch([heatmapWeeks, heatmapScroller], async () => {
-  if (!heatmapWeeks.value.length || !heatmapScroller.value) return;
+watch([scale, days, selectedDay, viewYear], async () => {
+  if (scale.value !== 'year' || !records.value.length) {
+    disposeHeatChart();
+    return;
+  }
   await nextTick();
-  const node = heatmapScroller.value;
-  if (!node || node.scrollWidth <= node.clientWidth) return;
-  const focusIndex = heatmapWeeks.value.findIndex((week) =>
-    week.some((cell) => cell.today || cell.iso === selectedDay.value?.date),
-  );
-  const index = focusIndex >= 0 ? focusIndex : heatmapWeeks.value.length - 1;
-  const ratio = index / Math.max(1, heatmapWeeks.value.length - 1);
-  node.scrollLeft = Math.max(0, ratio * (node.scrollWidth - node.clientWidth));
+  renderHeatChart();
+});
+
+function resizeHeatChart() {
+  heatChart?.resize();
+}
+
+window.addEventListener('resize', resizeHeatChart);
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', resizeHeatChart);
+  disposeHeatChart();
 });
 
 function mergeToday() {
@@ -171,26 +180,7 @@ function onWheel(event: WheelEvent) {
     <!-- 年度热力图 -->
     <section v-else-if="scale === 'year' && records.length" class="heatmap" aria-label="年度工作热力图">
       <div class="heatmap-canvas">
-        <div ref="heatmapScroller" class="heatmap-scroller">
-          <div class="heatmap-sheet" :style="{ gridTemplateColumns: `20px repeat(${heatmapWeeks.length}, var(--hm-cell))` }">
-            <span class="hm-corner" aria-hidden="true" />
-            <span v-for="(label, index) in heatmapMonthLabels" :key="`month-${index}`" class="hm-month" aria-hidden="true">{{ label }}</span>
-            <template v-for="(dayLabel, row) in heatmapDayLabels" :key="`row-${row}`">
-              <span class="hm-day" aria-hidden="true">{{ dayLabel }}</span>
-              <button
-                v-for="(week, weekIndex) in heatmapWeeks"
-                :key="`cell-${weekIndex}-${row}`"
-                type="button"
-                class="heatmap-cell"
-                :class="heatCellClass(week[row])"
-                :title="heatCellTitle(week[row])"
-                :aria-label="heatCellTitle(week[row])"
-                :tabindex="week[row].group ? 0 : -1"
-                @click="selectHeatCell(week[row])"
-              />
-            </template>
-          </div>
-        </div>
+        <div ref="heatmapChart" class="heatmap-chart" aria-label="按提交密度着色的年度日历" />
         <div class="heatmap-foot">
           <div class="heatmap-legend"><span>少</span><i class="level-1" /><i class="level-2" /><i class="level-3" /><i class="level-4" /><span>多</span></div>
           <div class="heatmap-legend"><i class="milestone-demo" /><span>里程碑</span></div>
@@ -493,49 +483,14 @@ header p { margin: 0; color: var(--tl-muted); font-size: 13.5px; }
   display: flex; align-items: center; justify-content: center;
 }
 .heatmap-canvas {
-  --hm-cell: 13px;
-  max-width: 100%; padding: 22px 24px 16px;
+  width: min(100%, 980px);
+  padding: 20px 22px 14px;
   border: 1px solid var(--tl-line); border-radius: 16px;
   background: rgba(10, 15, 27, 0.55);
   backdrop-filter: blur(8px);
 }
-.heatmap-scroller {
-  overflow-x: auto; padding-bottom: 8px;
-  scrollbar-width: thin; scrollbar-color: rgba(110, 231, 249, 0.35) transparent;
-}
-/* 月份刻度与格子同处一个网格,列对齐由结构保证 */
-.heatmap-sheet {
-  display: grid; gap: 3px;
-  grid-auto-rows: var(--hm-cell);
-  align-items: center;
-  width: max-content;
-}
-.hm-month {
-  color: var(--tl-faint); font-size: 10px; line-height: var(--hm-cell);
-  white-space: nowrap; overflow: visible;
-}
-.hm-day {
-  color: var(--tl-faint); font-size: 10px; line-height: var(--hm-cell);
-  text-align: right; padding-right: 4px;
-}
-.heatmap-cell {
-  width: var(--hm-cell); height: var(--hm-cell); padding: 0; border: 0; border-radius: 3px;
-  background: rgba(148, 163, 184, 0.11); cursor: default;
-  transition: transform 0.12s, box-shadow 0.12s;
-}
-.heatmap-cell.out { visibility: hidden; }
-.heatmap-cell.level-1 { background: rgba(110, 231, 249, 0.2); }
-.heatmap-cell.level-2 { background: rgba(110, 231, 249, 0.38); }
-.heatmap-cell.level-3 { background: rgba(110, 231, 249, 0.6); }
-.heatmap-cell.level-4 { background: rgba(110, 231, 249, 0.88); box-shadow: 0 0 8px rgba(110, 231, 249, 0.35); }
-.heatmap-cell:not(.empty) { cursor: pointer; }
-.heatmap-cell:not(.empty):hover { transform: scale(1.35); box-shadow: 0 0 10px rgba(110, 231, 249, 0.45); }
-.heatmap-cell:focus-visible { outline: 1.5px solid rgba(110, 231, 249, 0.8); outline-offset: 1px; }
-.heatmap-cell.today { outline: 1px dashed rgba(110, 231, 249, 0.7); outline-offset: 1px; }
-.heatmap-cell.selected { outline: 1.5px solid #eaf6ff; outline-offset: 1px; }
-.heatmap-cell.milestone { box-shadow: 0 0 0 1.5px rgba(246, 200, 96, 0.75); }
-.heatmap-cell.milestone.level-4 { box-shadow: 0 0 0 1.5px rgba(246, 200, 96, 0.75), 0 0 8px rgba(110, 231, 249, 0.35); }
-.heatmap-foot { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 0 23px; }
+.heatmap-chart { width: 100%; height: 176px; }
+.heatmap-foot { display: flex; align-items: center; justify-content: space-between; margin: 10px 4px 0 36px; }
 .heatmap-legend { display: flex; align-items: center; gap: 4px; color: var(--tl-faint); font-size: 10px; }
 .heatmap-legend i { width: 11px; height: 11px; border-radius: 3px; background: rgba(148, 163, 184, 0.08); }
 .heatmap-legend i.level-1 { background: rgba(110, 231, 249, 0.2); }
@@ -729,7 +684,8 @@ header p { margin: 0; color: var(--tl-muted); font-size: 13.5px; }
   h1 { font-size: 28px; }
   .river { left: 1%; right: 340px; }
   .heatmap { left: 1%; right: 340px; }
-  .heatmap-canvas { --hm-cell: 11px; padding: 16px 16px 12px; }
+  .heatmap-canvas { padding: 14px 14px 10px; }
+  .heatmap-chart { height: 156px; }
   .detail { right: 14px; width: 320px; }
   .event { grid-template-columns: minmax(160px, 1fr) 72px minmax(160px, 1fr); }
   .copy { padding-right: 22px; }
@@ -771,6 +727,6 @@ header p { margin: 0; color: var(--tl-muted); font-size: 13.5px; }
 
 @media (prefers-reduced-motion: reduce) {
   .stars i, .river-line > i, .node b, .merge span { animation: none !important; }
-  .event, .heatmap-cell { transition: none; }
+  .event { transition: none; }
 }
 </style>
