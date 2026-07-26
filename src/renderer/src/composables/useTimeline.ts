@@ -152,13 +152,28 @@ export function useTimeline() {
     return { top: `${(2 + itemIndex - selectedDayIndex.value) * (100 / 5)}%` };
   }
 
+  /* 触控板滚动节流：deltaY 累积过阈值才切换一步,带冷却与停顿重置 */
+  let wheelAccumulated = 0;
+  let lastWheelAt = 0;
+  let wheelCooldownUntil = 0;
+
   function handleWheel(event: WheelEvent) {
     if (!days.value.length) {
       // 无数据时不阻止默认滚轮行为（.prevent 在模板上，这里通过无操作让用户知道无内容）
       return;
     }
+    const now = performance.now();
+    // 停顿超过 300ms 后清空累计量,避免触控板惯性残余误触发
+    if (now - lastWheelAt > 300) wheelAccumulated = 0;
+    lastWheelAt = now;
+    if (now < wheelCooldownUntil) return;
+    wheelAccumulated += event.deltaY;
+    if (Math.abs(wheelAccumulated) < 60) return;
+    const direction = wheelAccumulated > 0 ? 1 : -1;
+    wheelAccumulated = 0;
+    wheelCooldownUntil = now + 180;
     const current = Math.max(0, selectedDayIndex.value);
-    const next = Math.max(0, Math.min(days.value.length - 1, current + (event.deltaY > 0 ? 1 : -1)));
+    const next = Math.max(0, Math.min(days.value.length - 1, current + direction));
     selectDay(days.value[next]);
   }
 

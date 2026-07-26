@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { Activity, Award, ChevronLeft, ChevronRight, Filter, GitCommitHorizontal, Maximize2, Minimize2, PanelRightClose, PanelRightOpen, Pause, Play, RefreshCw, Sparkles, Zap } from 'lucide-vue-next';
+import { Activity, Award, ChevronLeft, ChevronRight, Filter, GitCommitHorizontal, Maximize2, Minimize2, PanelRightClose, PanelRightOpen, Pause, Play, RefreshCw, Sparkles, Star, Zap } from 'lucide-vue-next';
 import { useTimeline, typeOptions } from '@/composables/useTimeline';
 import { usePlayback } from '@/composables/usePlayback';
 import { useFullscreen } from '@/composables/useFullscreen';
 import { tone, formatDate, dayTitle, daySummary, displayTitle, detailSections } from '@/utils/timelineText';
 import type { TimelineScale } from '@/composables/useTimeline';
+import type { TimelineDayGroup } from '@shared/types';
 
 const router = useRouter();
 const timelineRoot = ref<HTMLElement | null>(null);
 
 const {
   snapshot, loading, loadError, scale, activeType,
-  viewLabel, isCurrentPeriod, navigatePeriod, goToToday,
+  viewYear, viewLabel, isCurrentPeriod, navigatePeriod, goToToday,
   records, days, selectedRecord, selectedDay, selectedDayIndex, selectedItems, timelineWindow,
   forceReload, representative, selectDay, distance, eventPosition, handleWheel,
 } = useTimeline();
@@ -23,6 +24,100 @@ const { isFullscreen, toggleFullscreen } = useFullscreen(timelineRoot);
 
 const detailCollapsed = ref(false);
 const isMergingToday = ref(false);
+
+/* ── 年度热力图 ── */
+interface HeatCell {
+  iso: string;
+  inYear: boolean;
+  group: TimelineDayGroup | null;
+  level: number;
+  milestone: boolean;
+  today: boolean;
+}
+
+const heatmapDayLabels = ['一', '', '三', '', '五', '', '日'];
+
+function heatLevel(group: TimelineDayGroup | null) {
+  if (!group) return 0;
+  if (group.commitsCount >= 15) return 4;
+  if (group.commitsCount >= 8) return 3;
+  if (group.commitsCount >= 3) return 2;
+  return 1;
+}
+
+const heatmapWeeks = computed<HeatCell[][]>(() => {
+  if (scale.value !== 'year') return [];
+  const year = viewYear.value;
+  const groupMap = new Map(days.value.map((day) => [day.date, day]));
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const firstDay = new Date(year, 0, 1);
+  // 从 1 月 1 日所在周的周一开始铺格子
+  const cursor = new Date(year, 0, 1 - ((firstDay.getDay() + 6) % 7));
+  const weeks: HeatCell[][] = [];
+  while (cursor.getFullYear() <= year) {
+    const week: HeatCell[] = [];
+    for (let i = 0; i < 7; i++) {
+      const iso = `${cursor.getFullYear()}-${pad(cursor.getMonth() + 1)}-${pad(cursor.getDate())}`;
+      const group = groupMap.get(iso) ?? null;
+      week.push({
+        iso,
+        inYear: cursor.getFullYear() === year,
+        group,
+        level: heatLevel(group),
+        milestone: Boolean(group?.milestone),
+        today: iso === todayIso,
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    weeks.push(week);
+  }
+  return weeks;
+});
+
+const heatmapMonthLabels = computed(() =>
+  heatmapWeeks.value.map((week) => {
+    const monthStart = week.find((cell) => cell.inYear && cell.iso.endsWith('-01'));
+    return monthStart ? `${Number(monthStart.iso.slice(5, 7))}月` : '';
+  }),
+);
+
+function heatCellTitle(cell: HeatCell) {
+  if (!cell.group) return cell.iso;
+  return `${cell.iso} · ${cell.group.itemCount} 项工作 · ${cell.group.commitsCount} 次提交${cell.milestone ? ' · 里程碑' : ''}`;
+}
+
+function heatCellClass(cell: HeatCell) {
+  return [
+    `level-${cell.level}`,
+    {
+      out: !cell.inYear,
+      empty: !cell.group,
+      milestone: cell.milestone,
+      today: cell.today,
+      selected: selectedDay.value?.date === cell.iso,
+    },
+  ];
+}
+
+function selectHeatCell(cell: HeatCell) {
+  if (cell.group) selectDay(cell.group);
+}
+
+/* 年度视图打开后,自动滚动到今天(或选中日)所在的周 */
+const heatmapScroller = ref<HTMLElement | null>(null);
+watch([heatmapWeeks, heatmapScroller], async () => {
+  if (!heatmapWeeks.value.length || !heatmapScroller.value) return;
+  await nextTick();
+  const node = heatmapScroller.value;
+  if (!node || node.scrollWidth <= node.clientWidth) return;
+  const focusIndex = heatmapWeeks.value.findIndex((week) =>
+    week.some((cell) => cell.today || cell.iso === selectedDay.value?.date),
+  );
+  const index = focusIndex >= 0 ? focusIndex : heatmapWeeks.value.length - 1;
+  const ratio = index / Math.max(1, heatmapWeeks.value.length - 1);
+  node.scrollLeft = Math.max(0, ratio * (node.scrollWidth - node.clientWidth));
+});
 
 function mergeToday() {
   isMergingToday.value = true;
@@ -60,7 +155,7 @@ function onWheel(event: WheelEvent) {
       </div>
     </header>
 
-    <div class="overview" v-if="snapshot"><strong>{{ snapshot.summary.totalCommits }}</strong> 次提交 <i /> <strong>{{ snapshot.summary.activeDays }}</strong> 个活跃日 <i /> <strong>{{ snapshot.total }}</strong> 项工作 <i /> <strong>{{ snapshot.summary.projects.length }}</strong> 个活跃项目</div>
+    <div class="overview" v-if="snapshot"><strong>{{ snapshot.summary.totalCommits }}</strong> 次提交 <i /> <strong>{{ snapshot.summary.activeDays }}</strong> 个活跃日 <i /> <strong>{{ snapshot.total }}</strong> 项工作 <i /> <strong class="overview-milestone">{{ snapshot.summary.milestones }}</strong> 个里程碑 <i /> <strong>{{ snapshot.summary.projects.length }}</strong> 个活跃项目</div>
     <div class="filters"><Filter :size="14" /><button v-for="item in typeOptions" :key="item.label" :class="{ active: activeType === item.value }" @click="activeType = item.value">{{ item.label }}</button></div>
 
     <!-- 骨架屏加载态 -->
@@ -73,11 +168,41 @@ function onWheel(event: WheelEvent) {
       </div>
     </section>
 
+    <!-- 年度热力图 -->
+    <section v-else-if="scale === 'year' && records.length" class="heatmap" aria-label="年度工作热力图">
+      <div class="heatmap-canvas">
+        <div ref="heatmapScroller" class="heatmap-scroller">
+          <div class="heatmap-sheet" :style="{ gridTemplateColumns: `20px repeat(${heatmapWeeks.length}, var(--hm-cell))` }">
+            <span class="hm-corner" aria-hidden="true" />
+            <span v-for="(label, index) in heatmapMonthLabels" :key="`month-${index}`" class="hm-month" aria-hidden="true">{{ label }}</span>
+            <template v-for="(dayLabel, row) in heatmapDayLabels" :key="`row-${row}`">
+              <span class="hm-day" aria-hidden="true">{{ dayLabel }}</span>
+              <button
+                v-for="(week, weekIndex) in heatmapWeeks"
+                :key="`cell-${weekIndex}-${row}`"
+                type="button"
+                class="heatmap-cell"
+                :class="heatCellClass(week[row])"
+                :title="heatCellTitle(week[row])"
+                :aria-label="heatCellTitle(week[row])"
+                :tabindex="week[row].group ? 0 : -1"
+                @click="selectHeatCell(week[row])"
+              />
+            </template>
+          </div>
+        </div>
+        <div class="heatmap-foot">
+          <div class="heatmap-legend"><span>少</span><i class="level-1" /><i class="level-2" /><i class="level-3" /><i class="level-4" /><span>多</span></div>
+          <div class="heatmap-legend"><i class="milestone-demo" /><span>里程碑</span></div>
+        </div>
+      </div>
+    </section>
+
     <section v-else-if="records.length" class="river" :class="`scale-${scale}`">
       <div class="aurora" /><div class="river-line"><i v-for="n in 14" :key="n" :style="{ '--delay': `${n * -.38}s` }" /></div>
-      <article v-for="day in timelineWindow" :key="day.date" class="event" :class="[`distance-${distance(day)}`, { selected: selectedDay?.date === day.date }]" :style="eventPosition(day)" tabindex="0" @click="selectDay(day)" @keydown.enter="selectDay(day)">
+      <article v-for="day in timelineWindow" :key="day.date" class="event" :class="[`distance-${distance(day)}`, { selected: selectedDay?.date === day.date, milestone: day.milestone }]" :style="eventPosition(day)" tabindex="0" @click="selectDay(day)" @keydown.enter="selectDay(day)">
         <div class="copy"><span :style="{ color: tone(representative(day).primaryType) }">{{ day.workTypes.join(' / ') }} · {{ day.projects.join(' / ') || '未识别项目' }}</span><h2>{{ dayTitle(day) }}</h2><p>{{ daySummary(day) }}</p></div>
-        <button class="node" :aria-label="`${day.date}，${day.itemCount} 项工作`" :style="{ '--tone': tone(representative(day).primaryType) }"><i /><b /><strong>{{ day.itemCount }}</strong><small>项工作</small></button>
+        <button class="node" :aria-label="`${day.date}，${day.itemCount} 项工作${day.milestone ? '，里程碑' : ''}`" :style="{ '--tone': tone(representative(day).primaryType) }"><i /><b /><span v-if="day.milestone" class="node-milestone" aria-hidden="true"><Star :size="9" /></span><strong>{{ day.itemCount }}</strong><small>项工作</small></button>
         <time><b>{{ day.date === new Date().toISOString().slice(0, 10) ? 'TODAY' : day.date.slice(0, 4) }}</b>{{ formatDate(day.date) }}</time>
       </article>
       <div v-if="isMergingToday" class="merge"><span v-for="label in ['日报', '提交', '成果']" :key="label">{{ label }}</span><div><Sparkles :size="24" /></div><strong>真实数据正在汇入时间长河</strong></div>
@@ -86,7 +211,7 @@ function onWheel(event: WheelEvent) {
     <section v-else class="empty"><Sparkles :size="34" /><h2>{{ loadError ? '时间长河加载失败' : '这一段时间还没有成长记录' }}</h2><p>{{ loadError || '保存一篇日报后，系统会自动分析项目、工作类型、技术标签和提交证据。' }}</p><button v-if="loadError" @click="forceReload(false)">重新加载 <RefreshCw :size="15" /></button><button v-else @click="router.push('/generate')">去生成第一篇日报 <ChevronRight :size="15" /></button></section>
 
     <aside v-if="selectedRecord && selectedDay && !detailCollapsed" class="detail" :style="{ '--detail-tone': tone(selectedRecord.primaryType) }" @wheel.stop>
-      <span><Award :size="17" /> {{ selectedDay.workTypes.join(' / ') }} · {{ selectedDay.date }}</span><h2>{{ dayTitle(selectedDay) }}</h2>
+      <span><Award :size="17" /> {{ selectedDay.workTypes.join(' / ') }} · {{ selectedDay.date }}<em v-if="selectedDay.milestone" class="detail-milestone"><Star :size="11" /> 里程碑</em></span><h2>{{ dayTitle(selectedDay) }}</h2>
       <div class="detail-scroll">
         <section v-for="item in selectedItems" :key="item.id" class="detail-section"><h3>{{ displayTitle(item) }}</h3><ul><li v-for="content in detailSections(item)" :key="content">{{ content }}</li></ul></section>
         <section v-if="selectedDay.projects.length" class="detail-section"><h3>影响范围</h3><div class="tags"><span v-for="tag in [...new Set([...selectedDay.projects, ...selectedItems.flatMap(item => item.techTags)])]" :key="tag">{{ tag }}</span></div></section>
@@ -248,7 +373,7 @@ header p { margin: 0; color: var(--tl-muted); font-size: 13.5px; }
   position: relative; display: grid; align-items: center; outline: none;
   grid-template-columns: minmax(280px, 1fr) 96px minmax(280px, 1fr);
   height: 20%; cursor: pointer;
-  transition: opacity 0.3s, transform 0.36s, filter 0.3s;
+  transition: top 0.48s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.34s, transform 0.4s, filter 0.3s;
 }
 .event:focus-visible { border-radius: 16px; box-shadow: 0 0 0 2px rgba(110, 231, 249, 0.5); }
 
@@ -332,17 +457,94 @@ header p { margin: 0; color: var(--tl-muted); font-size: 13.5px; }
     0 0 26px color-mix(in srgb, var(--tone) 28%, transparent);
 }
 
+/* ── 里程碑标识 ── */
+.node-milestone {
+  position: absolute; top: -7px; right: -7px;
+  width: 19px; height: 19px; border-radius: 50%;
+  display: grid; place-items: center;
+  color: #221805;
+  background: linear-gradient(135deg, #f8d786, #e8a94e);
+  border: 1px solid rgba(255, 244, 214, 0.5);
+  box-shadow: 0 0 12px rgba(246, 200, 96, 0.45);
+}
+.event.milestone .node b { border-color: rgba(246, 200, 96, 0.32); }
+.event.milestone .node b::after { background: #f6c860; box-shadow: 0 0 8px #f6c860; }
+.overview-milestone { color: #f2cc7e; }
+.detail-milestone {
+  display: inline-flex; align-items: center; gap: 4px;
+  flex: 0 0 auto; align-self: flex-start;
+  margin-left: auto; padding: 3px 9px;
+  border: 1px solid rgba(246, 200, 96, 0.4); border-radius: 999px;
+  color: #f2cc7e; background: rgba(246, 200, 96, 0.08);
+  font-size: 10px; font-style: normal; letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
 /* ── 视图缩放变体 ── */
 .scale-month .event { position: absolute; width: 100%; height: 20%; left: 0; }
 .scale-month .event.distance-3 { pointer-events: auto; }
-.scale-year .event { height: min(10%, 70px); }
-.scale-year .copy p { display: none; }
-.scale-year .copy h2 { max-width: 280px; font-size: 12px; margin: 2px; }
-.scale-year .copy span { font-size: 8px; }
-.scale-year .node { transform: scale(0.7); }
 .scale-day .event { height: 100%; opacity: 1; }
 .scale-day .copy h2 { font-size: 22px; -webkit-line-clamp: 3; line-clamp: 3; }
 .scale-day .copy p { display: -webkit-box; font-size: 13.5px; -webkit-line-clamp: 3; line-clamp: 3; }
+
+/* ── 年度热力图 ── */
+.heatmap {
+  position: absolute; left: 3%; right: clamp(400px, 29vw, 470px); top: 205px; bottom: 104px;
+  display: flex; align-items: center; justify-content: center;
+}
+.heatmap-canvas {
+  --hm-cell: 13px;
+  max-width: 100%; padding: 22px 24px 16px;
+  border: 1px solid var(--tl-line); border-radius: 16px;
+  background: rgba(10, 15, 27, 0.55);
+  backdrop-filter: blur(8px);
+}
+.heatmap-scroller {
+  overflow-x: auto; padding-bottom: 8px;
+  scrollbar-width: thin; scrollbar-color: rgba(110, 231, 249, 0.35) transparent;
+}
+/* 月份刻度与格子同处一个网格,列对齐由结构保证 */
+.heatmap-sheet {
+  display: grid; gap: 3px;
+  grid-auto-rows: var(--hm-cell);
+  align-items: center;
+  width: max-content;
+}
+.hm-month {
+  color: var(--tl-faint); font-size: 10px; line-height: var(--hm-cell);
+  white-space: nowrap; overflow: visible;
+}
+.hm-day {
+  color: var(--tl-faint); font-size: 10px; line-height: var(--hm-cell);
+  text-align: right; padding-right: 4px;
+}
+.heatmap-cell {
+  width: var(--hm-cell); height: var(--hm-cell); padding: 0; border: 0; border-radius: 3px;
+  background: rgba(148, 163, 184, 0.11); cursor: default;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.heatmap-cell.out { visibility: hidden; }
+.heatmap-cell.level-1 { background: rgba(110, 231, 249, 0.2); }
+.heatmap-cell.level-2 { background: rgba(110, 231, 249, 0.38); }
+.heatmap-cell.level-3 { background: rgba(110, 231, 249, 0.6); }
+.heatmap-cell.level-4 { background: rgba(110, 231, 249, 0.88); box-shadow: 0 0 8px rgba(110, 231, 249, 0.35); }
+.heatmap-cell:not(.empty) { cursor: pointer; }
+.heatmap-cell:not(.empty):hover { transform: scale(1.35); box-shadow: 0 0 10px rgba(110, 231, 249, 0.45); }
+.heatmap-cell:focus-visible { outline: 1.5px solid rgba(110, 231, 249, 0.8); outline-offset: 1px; }
+.heatmap-cell.today { outline: 1px dashed rgba(110, 231, 249, 0.7); outline-offset: 1px; }
+.heatmap-cell.selected { outline: 1.5px solid #eaf6ff; outline-offset: 1px; }
+.heatmap-cell.milestone { box-shadow: 0 0 0 1.5px rgba(246, 200, 96, 0.75); }
+.heatmap-cell.milestone.level-4 { box-shadow: 0 0 0 1.5px rgba(246, 200, 96, 0.75), 0 0 8px rgba(110, 231, 249, 0.35); }
+.heatmap-foot { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 0 23px; }
+.heatmap-legend { display: flex; align-items: center; gap: 4px; color: var(--tl-faint); font-size: 10px; }
+.heatmap-legend i { width: 11px; height: 11px; border-radius: 3px; background: rgba(148, 163, 184, 0.08); }
+.heatmap-legend i.level-1 { background: rgba(110, 231, 249, 0.2); }
+.heatmap-legend i.level-2 { background: rgba(110, 231, 249, 0.38); }
+.heatmap-legend i.level-3 { background: rgba(110, 231, 249, 0.6); }
+.heatmap-legend i.level-4 { background: rgba(110, 231, 249, 0.88); }
+.heatmap-legend i.milestone-demo { background: rgba(148, 163, 184, 0.12); box-shadow: 0 0 0 1.5px rgba(246, 200, 96, 0.75); margin-right: 3px; }
+.heatmap-legend span { margin: 0 3px; }
+.detail-collapsed .heatmap { right: 28px; }
 
 /* ── 右侧详情面板 ── */
 .detail {
@@ -513,6 +715,7 @@ header p { margin: 0; color: var(--tl-muted); font-size: 13.5px; }
 @media (max-width: 1440px) {
   .timeline-view { padding-left: 28px; padding-right: 28px; }
   .river { left: 2%; right: clamp(360px, 26vw, 420px); }
+  .heatmap { left: 2%; right: clamp(360px, 26vw, 420px); }
   .detail { right: 18px; width: clamp(340px, 24vw, 400px); }
   .event { grid-template-columns: minmax(200px, 1fr) 84px minmax(200px, 1fr); }
   .copy span, .copy h2, .copy p { max-width: 320px; }
@@ -525,6 +728,8 @@ header p { margin: 0; color: var(--tl-muted); font-size: 13.5px; }
   .actions { flex-wrap: wrap; gap: 6px; }
   h1 { font-size: 28px; }
   .river { left: 1%; right: 340px; }
+  .heatmap { left: 1%; right: 340px; }
+  .heatmap-canvas { --hm-cell: 11px; padding: 16px 16px 12px; }
   .detail { right: 14px; width: 320px; }
   .event { grid-template-columns: minmax(160px, 1fr) 72px minmax(160px, 1fr); }
   .copy { padding-right: 22px; }
@@ -548,6 +753,7 @@ header p { margin: 0; color: var(--tl-muted); font-size: 13.5px; }
 /* 窄屏：详情面板覆盖式抽屉、时间轴全宽 */
 @media (max-width: 1024px) {
   .river { right: 28px; }
+  .heatmap { right: 28px; }
   .detail {
     z-index: 12; right: 0; top: 0; bottom: 0; width: min(420px, 85vw);
     border-radius: 0;
@@ -565,6 +771,6 @@ header p { margin: 0; color: var(--tl-muted); font-size: 13.5px; }
 
 @media (prefers-reduced-motion: reduce) {
   .stars i, .river-line > i, .node b, .merge span { animation: none !important; }
-  .event { transition: none; }
+  .event, .heatmap-cell { transition: none; }
 }
 </style>
