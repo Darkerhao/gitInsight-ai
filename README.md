@@ -1,89 +1,183 @@
 # GitInsight AI · AI日报助手
 
-一款 Electron 桌面应用:扫描本地 Git 仓库 → 调用 OpenAI 兼容接口将当天提交汇总成中文工作日报 → 同步到飞书日报表单。
+一款跨平台桌面应用（Windows / macOS / Linux）：扫描你本地的 Git 仓库，把指定时间范围内的提交记录交给 AI，自动生成正式的中文研发日报，并可一键同步到飞书日报表单。
 
-技术栈:Electron + Vue 3(`<script setup>`)+ Element Plus + TypeScript,使用 electron-vite 打包。
+写代码的事你来，写日报的事交给它。
 
-> 面向 Claude Code 的英文工作说明见 [CLAUDE.md](CLAUDE.md),本文件与其内容对应。
+> 开发者文档（架构、约定、IPC 契约）见 [CLAUDE.md](CLAUDE.md)；本文件面向使用者。
 
-## 功能
+---
 
-- 选择工作目录,自动递归扫描其中所有 Git 仓库
-- 选定仓库与日期,提取当天提交记录、改动文件与代码变更
-- 调用 OpenAI 兼容的 `/chat/completions` 接口生成正式中文日报(今日工作 / 工作成果 / 明日计划)
-- 未配置密钥或接口失败时,自动降级为本地模板日报,界面不会报错中断
-- 一键同步日报到飞书日报表单
+## 功能一览
 
-## 命令
+| 模块 | 功能 |
+| --- | --- |
+| 日报生成 | 多仓库提交采集 → AI 生成日报 → 在线编辑 → 复制 / 导出 Markdown → 发布到飞书 |
+| 日报配置 | 工作目录与仓库管理、AI 接入（多配置档案）、飞书连接四步引导、自动同步定时任务 |
+| 历史日志 | 所有生成 / 同步 / 错误记录可检索、可回溯，支持继续编辑与重新发布 |
+| 时间长河 | 基于真实日报与提交的年度工程轨迹：提交热力图、里程碑、轨迹回放 |
+| 签到奖励 | 每日签到赚「甲币」，兑换播放几十种全屏特效 |
+| 系统设置 | 明暗主题、开屏动画、本地存储与加密状态查看 |
+
+应用分 **简洁版（Lite）** 和 **标准版（Standard）** 两个发行版，功能完全一致，仅产品名称与安装包不同，按团队习惯任选其一即可。
+
+---
+
+## 下载安装
+
+前往 [GitHub Releases](https://github.com/Darkerhao/gitInsight-ai/releases) 下载对应平台、对应版本（Lite / Standard）的安装包，安装后启动即可。
+
+也可以从源码运行，见文末[开发者](#开发者)一节。
+
+---
+
+## 快速上手（5 分钟）
+
+### 第 1 步：初始化配置
+
+首次启动会进入欢迎引导。进入主界面后，打开侧边栏 **日报中心 → 日报配置**：
+
+1. **项目路径**：选择你的工作目录（存放代码项目的文件夹）。应用会自动递归扫描其中所有 Git 仓库（自动跳过 `node_modules`、`dist` 等目录），支持添加多个目录。
+2. **负责人**：填写汇报人姓名。⚠️ 需要与你 Git 提交的作者名（`git config user.name`）一致（不区分大小写），应用按作者名筛选属于你的提交。
+
+顶栏会实时提示「配置待保存」，改完记得点 **保存配置**。
+
+### 第 2 步：接入 AI
+
+打开 **设置 → AI 设置**，填写三项：
+
+- **接口地址**：任何 OpenAI 兼容接口均可（如 `https://api.openai.com/v1`，或国内各家模型的兼容地址）。填基础地址或完整 `/chat/completions` 地址都行，应用会自动规范化。
+- **模型名称**：如 `gpt-4o-mini`、`deepseek-chat` 等。填错模型时应用会自动查询 `/models` 给出可用模型建议。
+- **API Key**：密钥通过系统级加密（Electron safeStorage）保存在本机，不会写入明文配置。
+
+填好后点 **测试连接** 验证连通性。支持创建多套「AI 配置档案」，生成日报时可随时切换。
+
+> 💡 不配置 AI 也能用：未填密钥或接口调用失败时，应用会自动降级为本地模板日报（正文附「AI提示」说明原因），流程不会中断。
+
+### 第 3 步：生成第一份日报
+
+打开 **日报中心 → 日报生成**，页面按三步工作流组织：
+
+1. **选择生成范围**
+   - 在仓库选择器中勾选今天动过代码的仓库（支持多选、搜索、置顶、重命名、移除）；
+   - 选择 AI 配置档案；
+   - 选择时间范围：快捷按钮「今天 / 昨天 / 昨日 9 点至现在」，或自定义提交起止时间。
+2. **生成与编辑**
+   - 点击生成，AI 会把每个仓库的提交与代码变更汇总成结构化日报（今日工作 / 工作成果 / 明日计划）；
+   - 每个项目一份独立草稿，可自由编辑、补充手动工作内容，随时 **复制** 或 **导出 Markdown**。
+3. **发布与同步**（需先完成飞书配置，见下一步）
+   - 为每个项目选择飞书目标项目与工作时长；
+   - 工时支持三种来源：默认工时、按提交活跃度**自动分配**（依据提交次数与影响文件数）、手动调整，并提供常用时长快捷按钮与一键重算；
+   - 可 **仅发布当前项目**，也可 **批量发布全部已生成项目**，发布后可直接查看飞书提交记录。
+
+### 第 4 步（可选）：连接飞书
+
+打开 **日报中心 → 日报配置**，「AI 接入与飞书连接」面板提供四步引导，完成度实时显示（x/4 步完成）：
+
+1. **连接飞书**：点击「登录飞书」，在弹出的窗口中登录你的飞书账号，应用会自动抓取登录凭据（Cookie / CSRF Token）并加密保存；
+2. **映射表单字段**：点击「解析字段」自动读取你团队日报表单的字段，然后为日期、汇报人、明细表问题、所属项目、工作时长、工作内容六个字段完成映射；
+3. **确认人员与项目**：刷新并选择飞书项目选项，填写汇报人 userId；
+4. **提交前检查**：点「测试提交」写入一条测试记录，验证整个链路。
+
+完成后即可在生成页发布日报，也可在基础配置里设置默认工时、默认所属项目。
+
+### 第 5 步（可选）：开启自动同步
+
+在 **日报配置 → 自动同步配置** 中：
+
+- 打开开关，设置每天的 **执行时间**；
+- 选择 **统计窗口**：「日报日期全天」或「昨日固定时间至执行时刻」（可自定义窗口开始时间）;
+- 面板实时显示下次执行、上次执行、上次成功时间与调度状态，也可以点「立即执行一次」手动触发。
+
+到点后应用会自动生成日报并提交飞书，结果记入历史日志。
+
+> ⚠️ 自动同步仅在应用打开期间生效，关闭应用不会触发定时提交。建议工作日让它常驻后台。
+
+---
+
+## 功能详解
+
+### 历史日志
+
+**日报中心 → 历史日志** 汇总四类记录：日报生成、手动同步、同步任务（自动同步）、错误日志。
+
+- 支持按项目、类型、状态（成功/失败）、时间范围、关键词组合筛选，分页浏览；
+- 点击任意一条打开详情抽屉，可 **复制** 或 **导出** 详情内容（Markdown）；
+- 对日报生成记录，还可以 **继续编辑**（把当时的日报连同时间范围载回生成页）或直接 **重新发布** 到飞书。
+
+### 时间长河
+
+**成长中心 → 时间长河** 把你的真实日报与 Git 提交汇成年度工程轨迹：
+
+- **年度视图**：GitHub 风格的全年提交热力图，里程碑日期高亮，点击任意一天查看当日工作；
+- **月度 / 单日视图**：逐步下钻到具体某天的每一项工作与提交明细；
+- **轨迹回放**：自动按天播放你的开发历程，支持全屏沉浸模式、按类型筛选、滚轮缩放导航；
+- 点击某条记录可直接跳转到对应的日报详情。
+
+### 签到与甲币特效
+
+顶栏内置签到奖励中心：
+
+- 每日签到随机获得 88,888 ～ 888,888 **甲币**，连续签到累计连签天数；
+- 甲币可用于播放几十种精心设计的全屏特效（烟花、超新星、黑洞、机甲启动、轨道打击……），按等级分组，支持搜索与预览。
+
+生成日报之余的一点小仪式感。
+
+### 外观与系统
+
+- **明暗主题**：顶栏一键切换浅色 / 深色模式（默认跟随系统），带圆形扩散过渡动画；
+- **开屏动画**：可在 **设置 → 系统设置 → 基础设置** 中开启/关闭每次启动的欢迎动画；
+- **系统设置** 还可以查看应用版本与发行版、本地存储文件的路径和大小、加密可用状态、日报/日志数据统计，并支持刷新本地数据状态、重置同步默认值。
+
+---
+
+## 数据与隐私
+
+所有数据都保存在你的本机（Electron 用户数据目录，具体路径见 系统设置 → 安全设置）：
+
+- `config.json` —— 普通配置（工作目录、汇报人、字段映射等）；
+- `secrets.json` —— AI API Key、飞书 Cookie / CSRF Token，使用操作系统级加密（Electron safeStorage）存储，绝不写入明文；若系统加密能力不可用，应用会拒绝保存密钥而不是明文落盘；
+- `gitinsight.db` —— SQLite 本地数据库，存放日报历史、同步日志、错误日志。
+
+你的代码不会离开本机——只有截断后的提交信息与变更摘要会发送给**你自己配置的** AI 接口用于生成日报。
+
+---
+
+## 常见问题
+
+**Q：生成的日报是空的 / 提示没有提交？**
+检查三点：① 所选仓库当天是否真的有提交；② 时间范围是否覆盖提交时间；③ 「负责人」是否与 Git 提交作者名一致（按作者名过滤，不区分大小写）。
+
+**Q：不配置 AI 能用吗？**
+能。会自动降级为本地模板日报，把提交记录整理成结构化内容，正文附「AI提示」说明降级原因。
+
+**Q：AI 报 404 / 模型不存在？**
+应用会自动查询接口的 `/models` 列表并在错误信息里给出可用模型建议，按建议改模型名即可。
+
+**Q：飞书登录态过期了怎么办？**
+在日报配置里重新点「登录飞书」，应用会自动抓取并更新凭据。
+
+**Q：自动同步没有执行？**
+自动同步仅在应用打开时生效；另外每天同一配置只会成功执行一次，可在历史日志中查看「同步任务」记录排查。
+
+---
+
+## 开发者
+
+技术栈：Electron + Vue 3 + TypeScript + Element Plus，electron-vite 打包。
 
 ```bash
-npm run dev        # electron-vite 开发模式(热更新);渲染层运行在 127.0.0.1:5174,strictPort
-npm run build      # 打包 main + preload + renderer 到 out/
-npm start          # electron . —— 运行已构建的 out/main/main.js(需先 build)
-npm run preview    # electron-vite preview
-npm run typecheck  # vue-tsc --noEmit(唯一的静态检查;没有 ESLint/Prettier)
+npm install
+npm run dev        # 开发模式（渲染层固定端口 5174）
+npm run build      # 构建到 out/
+npm start          # 运行已构建产物
+npm run typecheck  # vue-tsc 类型检查
+npm test           # 单元测试（timeline / repo-names / ai-client）
+
+# 打包发行版：dist:<win|mac|linux>:<lite|standard>，产物在 release/<版本>/<发行版>/
+npm run dist:win:standard
 ```
 
-### 双版本打包
+推送 `v*` 标签后，GitHub Actions 会自动构建 Lite 与 Standard 两套 Release 资产。
 
-```bash
-npm run dist:win:lite       # Windows 简洁版
-npm run dist:win:standard   # Windows 标准版
-npm run dist:mac:lite       # macOS 简洁版
-npm run dist:mac:standard   # macOS 标准版
-npm run dist:linux:lite     # Linux 简洁版
-npm run dist:linux:standard # Linux 标准版
-```
-
-打包脚本通过 `APP_EDITION=lite|standard` 区分发行版本,产物会输出到 `release/<version>/lite` 或 `release/<version>/standard`。
-推送 `v*` 标签时,GitHub Actions 会同时构建 Lite 和 Standard 两套 Release 资产。
-
-**没有配置测试框架**——没有 `test` 脚本,也没有测试运行器。
-
-`npm run dev` 需要 TCP 端口 **5174** 空闲(`strictPort: true`)。Windows 上若端口处于系统保留/排除区间,会报 `listen EACCES ... 127.0.0.1:5174`(见 `dev.stderr.log`),此时在 `electron.vite.config.ts` 中改端口即可。
-
-## 架构
-
-三个 Electron 进程,在 `electron.vite.config.ts` 中各自是独立的打包目标:
-
-- **主进程(Main)**—— [electron/main.ts](electron/main.ts):所有 Node / 文件系统 / Git / 网络逻辑都在这里,负责窗口与全部 IPC 处理。
-- **预加载(Preload)**—— [electron/preload.ts](electron/preload.ts):用 `contextBridge` 暴露一个收窄且带类型的 `window.api`(开启了 contextIsolation,关闭 nodeIntegration)。渲染层**无法**直接访问 Node。
-- **渲染层(Renderer)**—— [src/renderer/src/App.vue](src/renderer/src/App.vue):整个界面就是这一个 Vue 组件,无路由、无状态库,UI 组件只用 Element Plus。
-
-### IPC 是主进程与渲染层之间唯一的契约
-
-任何跨进程的功能改动,都要**同步修改四处**,否则类型与运行时会悄悄不一致:
-
-1. [electron/main.ts](electron/main.ts) 里的 `ipcMain.handle('频道名', ...)`(注册在 `app.whenReady()` 内)。
-2. [electron/preload.ts](electron/preload.ts) 里对应的 `ipcRenderer.invoke('频道名', ...)` 封装。
-3. [src/renderer/src/env.d.ts](src/renderer/src/env.d.ts) 里 `window.api` 的方法签名。
-4. [src/shared/types.ts](src/shared/types.ts) 里共享的入参/返回类型。
-
-现有频道:`app:load-config`、`app:save-config`、`dialog:select-directory`、`repo:scan`、`report:generate`、`feishu:login`、`feishu:list-projects`、`feishu:test-submit`、`report:sync-feishu`。
-
-### 日报生成流程(核心业务,全在 main.ts)
-
-`generateReport` → 对每个选中仓库执行 `collectGitData(repoPath, date)`:
-
-- 对当天执行 `git log`(`--since`/`--until` 覆盖当日零点到次日零点,`--no-merges`),用 `__COMMIT__` 标记 + `%x09` 制表符格式,逐行解析为 `CommitEntry[]`。
-- 对每个提交执行 `git show --stat`;单个 diff 截断到 4000 字符,合并后的 diff 截断到 12000 字符(给 LLM 留上下文预算——改动时请保留这些上限)。
-- 拼接固定的中文 Prompt,调用 OpenAI 兼容的 `/chat/completions` 接口(`callAiReport`)。
-
-容错:当 `config.aiApiKey` 为空、或 AI 调用抛错时,`generateReport` 返回本地模板的 `fallbackReport`,并追加一条 `AI提示:...`,永远不会把异常抛给界面。改日报逻辑时,请保证 **AI 路径和降级路径都能正常工作**。
-
-`aiBaseUrl` 会被规范化:既支持填基础地址(如 `https://api.openai.com/v1`,自动补 `/chat/completions`、`/models`),也支持填完整的 `.../chat/completions`。当遇到 404「不支持的模型」错误时,会查询 `/models` 给出可用模型建议。
-
-### 配置持久化
-
-`AppConfig`(工作目录、汇报人、AI 接口地址/密钥/模型、飞书表单配置)以 `config.json` 存放在 Electron 的 `app.getPath('userData')` 目录里,**不在仓库内**。`loadConfig` 始终在 `DEFAULT_CONFIG` 上展开,所以新增字段天然向后兼容。
-
-### 仓库扫描
-
-`scanRepositories` 从工作目录做迭代式 DFS:把任何含 `.git` 的目录视为一个仓库(并停止深入),跳过 `IGNORED_DIRS`(`node_modules`、`.git`、`dist`、`out` 等)和点开头的目录。
-
-## 约定
-
-- 路径别名(`electron.vite.config.ts` + `tsconfig.json`):`@` → `src/renderer/src`,`@shared` → `src/shared`。渲染层用 `@shared/types` 引入共享类型;主进程/预加载用相对路径 `../src/shared/types.js`(注意打包配置要求带 `.js` 后缀)。
-- 渲染层样式集中在全局的 [src/renderer/src/style.css](src/renderer/src/style.css),`App.vue` 没有 scoped `<style>`。
-- 预加载文件路径在 `createWindow()` 运行时解析,并带回退(先 `../preload/index.js`,再 `../preload/preload.cjs`),因为开发与生产产出的预加载文件名不同。
-- 面向用户的文案、Prompt、生成的日报全部是中文——改 UI 或 AI Prompt 文本时保持一致。
+架构说明、IPC 契约与代码约定见 [CLAUDE.md](CLAUDE.md)。
