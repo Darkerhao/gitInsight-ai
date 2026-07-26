@@ -6,8 +6,8 @@ defineProps<{
 </script>
 
 <template>
-  <div class="page-header">
-    <div>
+  <div class="page-header atelier-page-header">
+    <div class="page-header-copy">
       <h1>{{ title }}</h1>
       <p v-if="subtitle">{{ subtitle }}</p>
     </div>

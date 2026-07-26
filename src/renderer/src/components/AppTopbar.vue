@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Moon, Save, Sun } from 'lucide-vue-next';
+import { CalendarDays, Command, Moon, Save, Sun } from 'lucide-vue-next';
 import { useAssistant } from '@/composables/useAssistant';
 import CheckinRewardCenter from '@/components/rewards/CheckinRewardCenter.vue';
 
@@ -29,13 +29,29 @@ const greetingText = computed(() => {
 
 const configStatusText = computed(() => (isConfigDirty.value ? '配置待保存' : '配置已同步'));
 const configStatusType = computed(() => (isConfigDirty.value ? 'warning' : 'success'));
+const currentDateLabel = computed(() =>
+  new Intl.DateTimeFormat('zh-CN', {
+    month: 'short',
+    day: 'numeric',
+    weekday: 'short',
+  }).format(new Date()),
+);
 </script>
 
 <template>
-  <header class="topbar">
+  <header class="topbar atelier-topbar">
+    <div class="topbar-command" aria-label="工作台状态栏">
+      <span class="topbar-command-icon" aria-hidden="true"><Command :size="16" /></span>
+      <span class="topbar-command-copy">
+        <small>工作区</small>
+        <strong>日报工作台</strong>
+      </span>
+    </div>
     <div class="topbar-greeting">
       <h1>{{ greetingText }}</h1>
-      <p>当前界面已收敛为日报主流程，方便直接配置、生成与回看历史。</p>
+      <div class="topbar-meta" aria-label="当前工作区信息">
+        <span><CalendarDays :size="13" />{{ currentDateLabel }}</span>
+      </div>
     </div>
 
     <div class="topbar-actions">
@@ -51,7 +67,7 @@ const configStatusType = computed(() => (isConfigDirty.value ? 'warning' : 'succ
         />
       </el-tooltip>
 
-      <el-tag class="topbar-status" :type="configStatusType" effect="light" round>
+      <el-tag class="topbar-status" :type="configStatusType" effect="plain" round>
         {{ configStatusText }}
       </el-tag>
 

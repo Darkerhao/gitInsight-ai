@@ -1,5 +1,18 @@
 # 产品化优化修复发现记录
 
+## 2026-07-25 Signal Atelier
+
+- 当前视觉令牌和 shell 样式以 Element Plus 默认后台语法为主；新增单独 atelier 覆盖层比重写 2600+ 行旧样式更安全。
+- `lucide-vue-next` 已存在于 `package.json`，无需引入图标依赖。
+- `App.vue` 已有主题切换与路由过渡，可在其上叠加 pointer/scroll 变量，不应重写主题状态机。
+- Playwright skill 已读取；`npx --package @playwright/cli` 在本环境连续无输出/疑似等待包获取，不能把未完成的浏览器会话当作验收证据。
+- Chrome headless 可直接读取 `out/renderer` 生产产物并输出截图；通过临时 QA 页面关闭 WelcomeGate 后可验证真实 CSS/DOM，不代表 Electron preload/IPC 已在浏览器中运行。
+- Review 修复：pointer 改为 requestAnimationFrame + velocity damping；工作流阶段使用 IntersectionObserver 更新 active/aria-current；移动端保存按钮保留为图标按钮；新增文案与 aria-label 统一中文。
+- 最终 Chrome 截图中的 `getCheckinWalletSnapshot` 提示来自静态浏览器没有 Electron preload；生产构建已包含 `out/preload/preload.cjs`，因此截图只用于 DOM/CSS/响应式核验，不替代 Electron IPC 验收。
+- Playwright MCP 路径被本地自动审批代理 404 拒绝；没有绕过审批，改用既有 Chrome headless 产物、UI 契约测试和完整构建/测试门禁收口。
+- 最终验证：14 个既有测试、UI smoke、typecheck、build、diff check、renderer emoji scan 均通过；构建只保留 Element Plus 内部 `@vueuse/core` PURE 注释警告。
+- 500px 视口比 760px 更能暴露移动端顶栏挤压；移动断点现在只保留必要状态（头像、主题、硬币与保存图标），主内容单列且不产生可见横向溢出。
+
 ## 2026-07-11 时间长河最终版
 
 - 用户明确允许新增时间长河数据库 schema。

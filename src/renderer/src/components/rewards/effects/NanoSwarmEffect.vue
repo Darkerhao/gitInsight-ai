@@ -37,7 +37,7 @@ function sampleTextPoints(text: string, width: number, height: number): Array<{ 
 
 const scene: SceneFn = (api) => {
   api.setTrail(0.34);
-  const points = sampleTextPoints('已签到 ✓', api.width, api.height);
+  const points = sampleTextPoints('已签到', api.width, api.height);
   const count = Math.min(points.length, 380);
   let disband = false;
   api.at(DISBAND_AT, () => {

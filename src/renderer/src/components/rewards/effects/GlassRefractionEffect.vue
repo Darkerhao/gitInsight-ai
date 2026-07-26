@@ -61,7 +61,7 @@ const scene: SceneFn = (api) => {
       x: api.width / 2 + api.range(-api.width * 0.24, api.width * 0.24),
       y: api.height / 2 + api.range(-api.height * 0.2, api.height * 0.2),
       shape: 'glyph',
-      glyph: '✦',
+      glyph: '+',
       size: api.range(16, 34),
       endSize: 8,
       maxLife: api.range(0.6, 1),

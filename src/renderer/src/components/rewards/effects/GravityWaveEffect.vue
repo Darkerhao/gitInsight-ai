@@ -116,7 +116,7 @@ const scene: SceneFn = (api) => {
     <div class="gw-hud">
       <Waves :size="30" />
       <strong>引力波事件 GW-260705</strong>
-      <small>CHIRP MASS 2.7 M☉ · SNR 24.1</small>
+      <small>CHIRP MASS 2.7 SOL · SNR 24.1</small>
     </div>
   </div>
 </template>

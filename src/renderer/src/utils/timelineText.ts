@@ -1,13 +1,13 @@
 import type { TimelineDayGroup, TimelineRecord, TimelineWorkType } from '@shared/types';
 
-/** 工作类型 → 语义色 */
+/** 工作类型 → 语义色(统一收敛在冷色系,保持整体高级感) */
 export function tone(type: TimelineWorkType) {
   return ({
-    '功能开发': '#67e6bd',
-    'Bug 修复': '#f0b86d',
-    '重构优化': '#bd9aff',
-    '性能优化': '#f1d36f',
-    '工程优化': '#70dff4',
+    '功能开发': '#5eead4',
+    'Bug 修复': '#c4b5fd',
+    '重构优化': '#93c5fd',
+    '性能优化': '#6ee7f9',
+    '工程优化': '#a5b4fc',
     '日常开发': '#8ea3bb',
   } as const)[type];
 }

@@ -1135,7 +1135,7 @@ export const EFFECT_OPTIONS: readonly RewardEffectOption[] = [
     phases: { entry: 650, loop: 4250, exit: 900 },
     motion: {
       entry: '四周涌入数百绿金微粒，虫群般游弋汇集',
-      loop: '1.8s 粒子受采样点弹簧引力收敛，拼出发光「已签到 ✓」并呼吸抖动',
+      loop: '1.8s 粒子受采样点弹簧引力收敛，拼出发光「已签到」并呼吸抖动',
       exit: '集体炸散成光条四散逃逸，残留萤光明灭',
       camera: '聚形时收缩、解散时舒张的尺度呼吸',
     },

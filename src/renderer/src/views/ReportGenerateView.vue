@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, ref, watch } from 'vue';
+import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { BrainCog, CalendarDays, FileText } from 'lucide-vue-next';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
@@ -21,6 +21,13 @@ import {
 type DateShortcut = 'today' | 'yesterday' | 'rolling' | 'custom';
 type GenerationCheckAction = '' | 'config' | 'ai';
 
+const workflowStages = [
+  { key: 'scope', index: '01', label: '范围', title: '选择生成范围' },
+  { key: 'generate', index: '02', label: '生成', title: '编辑日报内容' },
+  { key: 'publish', index: '03', label: '发布', title: '同步到工作台' },
+] as const;
+type WorkflowStageKey = (typeof workflowStages)[number]['key'];
+
 interface GenerationCheck {
   key: string;
   label: string;
@@ -35,6 +42,9 @@ const emit = defineEmits<{
 }>();
 
 const assistant = useAssistant();
+const workflowRoot = ref<HTMLElement | null>(null);
+const activeWorkflowStage = ref<WorkflowStageKey>('scope');
+let workflowObserver: IntersectionObserver | null = null;
 const {
   config,
   form,
@@ -519,6 +529,26 @@ async function generateDraft(draftKey: string, options: { updateStatus?: boolean
   }
 }
 
+function scrollToStage(stage: (typeof workflowStages)[number]['key']) {
+  activeWorkflowStage.value = stage;
+  const target = workflowRoot.value?.querySelector<HTMLElement>(`[data-stage="${stage}"]`);
+  if (!target) return;
+  target.scrollIntoView({
+    behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    block: 'start',
+  });
+}
+
+function syncActiveWorkflowStage(entries: IntersectionObserverEntry[]) {
+  const visible = entries
+    .filter((entry) => entry.isIntersecting)
+    .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)[0];
+  const stage = visible?.target.getAttribute('data-stage');
+  if (stage === 'scope' || stage === 'generate' || stage === 'publish') {
+    activeWorkflowStage.value = stage;
+  }
+}
+
 async function handleGenerateCurrent() {
   const draft = activeDraft.value;
   if (!draft || !validateGenerationReady()) return;
@@ -932,10 +962,27 @@ async function confirmRemoveRepo(item: RepoInfo) {
     ElMessage.error(error instanceof Error ? error.message : '移除仓库失败');
   }
 }
+
+onMounted(() => {
+  const stages = workflowRoot.value?.querySelectorAll<HTMLElement>('[data-stage]');
+  if (!stages?.length || !('IntersectionObserver' in window)) return;
+
+  workflowObserver = new IntersectionObserver(syncActiveWorkflowStage, {
+    root: null,
+    rootMargin: '-18% 0px -55% 0px',
+    threshold: [0.15, 0.45],
+  });
+  stages.forEach((stage) => workflowObserver?.observe(stage));
+});
+
+onBeforeUnmount(() => {
+  workflowObserver?.disconnect();
+  workflowObserver = null;
+});
 </script>
 
 <template>
-  <div class="view-stack report-generate-view">
+  <div ref="workflowRoot" class="view-stack report-generate-view atelier-page" data-page="report-generate">
     <ReportGenerationLoadingOverlay :visible="loading" />
 
     <PageHeader title="日报生成" subtitle="基于 Git 提交记录生成研发日报">
@@ -946,9 +993,32 @@ async function confirmRemoveRepo(item: RepoInfo) {
       </template>
     </PageHeader>
 
+    <nav class="atelier-workflow-rail" aria-label="日报工作流阶段">
+      <button
+        v-for="stage in workflowStages"
+        :key="stage.key"
+        type="button"
+        class="atelier-workflow-step"
+        :class="{ active: activeWorkflowStage === stage.key }"
+        :aria-controls="`stage-${stage.key}`"
+        :aria-current="activeWorkflowStage === stage.key ? 'step' : undefined"
+        @click="scrollToStage(stage.key)"
+      >
+        <span class="atelier-workflow-index">{{ stage.index }}</span>
+        <span class="atelier-workflow-copy">
+          <strong>{{ stage.label }}</strong>
+          <small>{{ stage.title }}</small>
+        </span>
+      </button>
+    </nav>
+
     <div class="content-grid has-right-panel">
       <div class="view-stack">
         <ReportSetupCard
+          id="stage-scope"
+          class="atelier-stage atelier-stage-card atelier-stage-scope"
+          data-stage="scope"
+          aria-label="生成范围"
           :active-ai-profile-id="config.activeAiProfileId"
           :form="form"
           :setup-status="setupStatus"
@@ -979,6 +1049,10 @@ async function confirmRemoveRepo(item: RepoInfo) {
         />
 
         <ReportEditorCard
+          id="stage-generate"
+          class="atelier-stage atelier-stage-card atelier-stage-generate"
+          data-stage="generate"
+          aria-label="日报生成"
           :drafts="editorDrafts"
           :active-draft-key="activeDraftKey"
           :manual-work-content="form.manualWorkContent"
@@ -1006,6 +1080,10 @@ async function confirmRemoveRepo(item: RepoInfo) {
       </div>
 
       <ReportPublishSidebar
+        id="stage-publish"
+        class="atelier-stage atelier-stage-publish"
+        data-stage="publish"
+        aria-label="日报发布"
         :active-draft="activePublishDraft"
         :drafts="publishDraftItems"
         :project-options="projectOptions"

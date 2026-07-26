@@ -71,7 +71,7 @@ export function useTimeline() {
     if (scale.value === 'year') return days.value;
     if (scale.value === 'day') return selectedDay.value ? [selectedDay.value] : [];
     const focusIndex = Math.max(0, selectedDayIndex.value);
-    return days.value.slice(Math.max(0, focusIndex - 3), Math.min(days.value.length, focusIndex + 4));
+    return days.value.slice(Math.max(0, focusIndex - 2), Math.min(days.value.length, focusIndex + 3));
   });
 
   /* ── 查询构建 ── */
@@ -149,7 +149,7 @@ export function useTimeline() {
   function eventPosition(day: TimelineDayGroup) {
     if (scale.value !== 'month') return undefined;
     const itemIndex = days.value.findIndex((entry) => entry.date === day.date);
-    return { top: `${(3 + itemIndex - selectedDayIndex.value) * (100 / 7)}%` };
+    return { top: `${(2 + itemIndex - selectedDayIndex.value) * (100 / 5)}%` };
   }
 
   function handleWheel(event: WheelEvent) {

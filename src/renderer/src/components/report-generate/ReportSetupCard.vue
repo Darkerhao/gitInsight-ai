@@ -87,7 +87,7 @@ function handleEndDateTimeChange(value: string | null) {
 </script>
 
 <template>
-  <section class="surface-card step-card report-setup-card">
+  <section class="surface-card step-card report-setup-card atelier-stage-card" data-card-stage="范围" aria-label="生成范围">
     <div class="step-title with-action">
       <div>
         <span>1</span>

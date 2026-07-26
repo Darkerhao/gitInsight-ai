@@ -110,7 +110,7 @@ const scene: SceneFn = (api) => {
 <template>
   <div class="emp-blast-effect">
     <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.empBlast" :scene="scene" />
-    <div class="emp-glitch" data-text="⚠ EMP DISCHARGE">⚠ EMP DISCHARGE</div>
+    <div class="emp-glitch" data-text="EMP DISCHARGE">EMP DISCHARGE</div>
   </div>
 </template>
 

@@ -98,7 +98,7 @@ const scene: SceneFn = (api) => {
     <ParticleCanvas :seed="props.seed" :duration="EFFECT_DURATIONS.bioScan" :scene="scene" />
     <div class="bio-verdict">
       <Dna :size="26" />
-      <strong>IDENTITY VERIFIED ✓</strong>
+      <strong>IDENTITY VERIFIED</strong>
       <small>基因序列匹配 99.98%</small>
     </div>
   </div>

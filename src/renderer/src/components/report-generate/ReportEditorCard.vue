@@ -108,7 +108,7 @@ function getTabStatusType(item: ProjectReportDraft) {
 </script>
 
 <template>
-  <section class="surface-card step-card report-editor-card">
+  <section class="surface-card step-card report-editor-card atelier-stage-card" data-card-stage="生成" aria-label="日报生成">
     <div class="step-title">
       <span>2</span>
       <strong>生成与编辑</strong>

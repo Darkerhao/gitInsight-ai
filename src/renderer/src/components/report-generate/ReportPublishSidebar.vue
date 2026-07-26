@@ -140,7 +140,7 @@ function handleReportDateChange(value: string | null) {
 </script>
 
 <template>
-  <aside class="view-stack publish-sidebar">
+  <aside class="view-stack publish-sidebar atelier-publish-rail" data-card-stage="发布" aria-label="日报发布">
     <section class="surface-card publish-panel">
       <div class="step-title with-action">
         <div>

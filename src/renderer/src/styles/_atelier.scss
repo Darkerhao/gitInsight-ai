@@ -1,0 +1,179 @@
+@use 'tools' as *;
+
+/*
+ * 简约收敛层(替代原 Signal Atelier 高装饰层)。
+ * 原则:跟随基础主题的单一主色(--c-primary)与白色卡片,
+ * 常规标题字号;不再引入酸性绿/电光紫/珊瑚等额外强调色,
+ * 也不做画布网格、轨道圆环、指针光场等装饰效果。
+ */
+
+/* 关闭旧版装饰:氛围画布与指针光场 */
+.app-atmosphere {
+  display: none;
+}
+
+.atelier-app::before {
+  content: none;
+}
+
+.atelier-scroll {
+  scroll-behavior: smooth;
+}
+
+/* 顶栏左侧工作区标识:低调的文字块 */
+.topbar-command {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding-right: 16px;
+  border-right: 1px solid var(--c-border);
+}
+
+.topbar-command-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--c-primary);
+  background: var(--c-primary-soft);
+}
+
+.topbar-command-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.topbar-command-copy small {
+  color: var(--c-text-faint);
+  font-size: 11px;
+}
+
+.topbar-command-copy strong {
+  color: var(--c-text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.topbar-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  color: var(--c-text-faint);
+  font-size: 12px;
+}
+
+.topbar-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* 页头:常规页面标题(标题字号由基础层 .page-header 提供) */
+.page-header-copy {
+  min-width: 0;
+}
+
+.atelier-page-header .page-header-actions {
+  justify-content: flex-end;
+}
+
+/* 工作流阶段导航:简单的三段卡片 */
+.atelier-workflow-rail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.atelier-workflow-step {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 10px 14px;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-card);
+  background: var(--c-surface);
+  color: var(--c-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.atelier-workflow-step:hover,
+.atelier-workflow-step:focus-visible {
+  border-color: var(--c-primary);
+  outline: none;
+}
+
+.atelier-workflow-step.active {
+  border-color: var(--c-primary);
+  background: var(--c-primary-soft);
+}
+
+.atelier-workflow-index {
+  color: var(--c-text-faint);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.atelier-workflow-step.active .atelier-workflow-index {
+  color: var(--c-primary);
+}
+
+.atelier-workflow-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.atelier-workflow-copy strong {
+  font-size: 13px;
+}
+
+.atelier-workflow-copy small {
+  color: var(--c-text-muted);
+  font-size: 12px;
+}
+
+/* 发布栏吸顶,便于长页面操作 */
+.atelier-publish-rail {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+}
+
+@include breakpoint-down('desktop') {
+  .atelier-publish-rail {
+    position: static;
+  }
+}
+
+@include breakpoint-down('tablet') {
+  .topbar-command {
+    display: none;
+  }
+}
+
+@include breakpoint-down('mobile') {
+  .atelier-workflow-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .atelier-workflow-step {
+    min-height: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atelier-workflow-step {
+    transition: none;
+  }
+
+  .atelier-scroll {
+    scroll-behavior: auto;
+  }
+}

@@ -1,5 +1,53 @@
 # 产品化优化修复任务计划
 
+## 2026-07-25 Signal Atelier 工作台视觉与交互优化
+
+### 目标
+
+在不触碰 IPC、数据库与日报生成逻辑的前提下，把 renderer 壳层与日报生成主流程升级为沉浸式、可读、可操作的工作台；统一使用 Lucide 图标，清除可见 emoji。
+
+### 阶段
+
+| 阶段 | 状态 | 验收 |
+| --- | --- | --- |
+| 1. 规格与 route-note | complete | `.ai_state/_index.md`、route-note、design 已建立 |
+| 2. TDD red / 结构契约 | complete | `node tests/ui-shell.smoke.mjs` 已按预期因缺少 `_atelier.scss` 失败 |
+| 3. renderer 实现 | complete | 壳层、主流程、atelier 样式与 reduced-motion 完成 |
+| 4. typecheck/build | complete | `npm run typecheck`、`npm run build`、现有测试均通过 |
+| 5. runtime-verify / review / polish | complete | 审阅修复后复跑 smoke、14 个既有测试、typecheck、build、diff check、emoji scan；桌面/窄屏截图已核对 |
+
+### 当前决策
+
+- 黄区单模块 Feature，单一实现代理；主线程负责门禁与交付。
+- 视觉方向：Signal Atelier（深墨画布、酸性绿/电光紫信号色、编辑部排版、指针光场）。
+- 不新增依赖；复用现有 `lucide-vue-next` 与 Element Plus 能力。
+
+### Review 结论与修复
+
+- Standards：修正阶段状态源、中文可见文案/ARIA、删除无消费者 pointer token 与 scroll 状态。
+- Spec：窄屏保留保存按钮；工作流 rail 增加 active/aria-current/IntersectionObserver；pointer 光场改为 rAF + 阻尼弹簧跟随。
+- Polish：修正滚动进度条 `scaleX` 的非法百分比回退值；最终产物只保留第三方 PURE 注释警告。
+
+### 最终证据
+
+- `node tests/ui-shell.smoke.mjs`：pass。
+- `npm test`：14/14 pass。
+- `npm run typecheck`：pass。
+- `npm run build`：pass。
+- `git diff --check`：pass（仅 Git 行尾转换提示）。
+- renderer emoji PCRE2 扫描：pass。
+- Chrome headless：桌面 1600px 与移动 500px 静态构建产物截图已核对；移动端状态标签/用户文字已隐藏并保留头像与保存入口。静态浏览器不具备 Electron preload/IPC，不把该限制误记为业务链路验收。
+
+### 已知错误
+
+| 错误 | 次数 | 处理 |
+| --- | --- | --- |
+| PACE skill / orchestration 文件在用户级与仓库路径均缺失 | 1 | 按用户提供的铁律摘要执行，并记录到 route-note |
+| 首次定位 router 路径错误（实际为 `src/renderer/src/router.ts`） | 1 | 改用定点路径读取 |
+| Playwright wrapper/npx CLI 在当前沙箱无输出并疑似卡在包获取 | 3 | 保留 renderer-only 服务，后续改用可用的本地浏览器/静态验证；不绕过安全策略 |
+| Playwright MCP 自动审批代理返回 404 | 1 | 停止该路径，使用既有 Chrome headless 证据与构建/测试门禁，不绕过审批 |
+| 清理误创建空目录的 Remove-Item 被审批拒绝 | 1 | 不再重试破坏性删除；空目录不参与交付 |
+
 ## 目标
 
 按照 `docs/productization-optimization-plan.md` 中列出的产品化问题，逐项完成可落地修复，并通过类型检查、构建或关键验证确认改动可用。

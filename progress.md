@@ -1,5 +1,19 @@
 # 产品化优化修复进度
 
+## 2026-07-25
+
+- 读取现有规划、壳层、日报生成页面与样式基线；确认本轮为 renderer 黄区 Feature。
+- 建立 `.ai_state/_index.md`、route-note 与 design；确定 Signal Atelier 视觉方向和不触碰业务链路的边界。
+- 已启动 renderer-only dev server `http://127.0.0.1:5174/` 作为后续 runtime-verify 基线；Playwright CLI 在沙箱内获取包时无可用输出，待实现后复核替代路径。
+- 建立 `tests/ui-shell.smoke.mjs` 并完成 red：缺少 `_atelier.scss` 时以 ENOENT 失败，契约门已生效。
+- renderer 实现完成并通过首轮 smoke/typecheck/build；Chrome headless 截图确认深色桌面构图、三段工作流、浮动侧栏与发布 rail 已真实渲染。
+- Standards/Spec 双轴审阅发现 6 项：状态索引未同步、英文文案、死状态、窄屏保存按钮、阶段 rail 无当前态、pointer 无弹簧；已全部修复，准备复跑构建与截图。
+- 恢复中断任务并完成最终门禁：`node tests/ui-shell.smoke.mjs`、`npm test`（14/14）、`npm run typecheck`、`npm run build`、`git diff --check` 与 renderer emoji 扫描全部通过。
+- 视觉复核确认桌面与窄屏构图、三阶段 rail、浮动导航、发布侧栏和移动端保存入口；静态截图中的 preload API 提示属于非 Electron QA 环境限制，未作为业务错误处理。
+- 最终 polish 修正滚动进度条 `scaleX` 回退值，`.ai_state/_index.md` 已同步到 ship。
+- 真实 500px 视口复核发现移动端冗余状态标签会挤占顶栏；已隐藏状态标签与用户文字容器、保留头像和保存图标，并重跑 typecheck/smoke/build；最终截图无静态 preload 提示。
+- 收口复跑 `npm test`：timeline 3、repo-name 4、AI client 7，合计 14/14 通过；工作树仅保留本轮未提交改动与验收截图。
+
 ## 2026-07-11
 
 - 用户确认将“时间长河”从高保真原型升级为真实数据最终版，并允许新增数据库表及兼容迁移。

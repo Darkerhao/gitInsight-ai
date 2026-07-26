@@ -86,8 +86,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <aside class="sidebar">
-    <div class="sidebar-brand">
+  <aside class="sidebar atelier-sidebar" aria-label="工作台主导航">
+    <div class="sidebar-brand atelier-sidebar-brand">
       <img class="sidebar-logo" src="../assets/logo.png" alt="Logo" />
       <span class="sidebar-brand-name">AI日报助手</span>
     </div>
@@ -105,19 +105,32 @@ onBeforeUnmount(() => {
         @select="onSelect"
       >
         <template v-for="item in navItems" :key="item.type === 'group' ? item.id : item.key">
-          <el-sub-menu v-if="item.type === 'group'" :index="item.id" popper-class="sidebar-menu-popper">
+          <el-sub-menu v-if="item.type === 'group'" :index="item.id" class="atelier-nav-group" popper-class="sidebar-menu-popper">
             <template #title>
               <component :is="item.icon" :size="18" class="sidebar-menu-icon" />
               <span class="sidebar-menu-label">{{ item.label }}</span>
             </template>
 
-            <el-menu-item v-for="child in item.children" :key="child.key" :index="child.key" :disabled="!child.enabled">
+            <el-menu-item
+              v-for="child in item.children"
+              :key="child.key"
+              :index="child.key"
+              class="atelier-nav-item"
+              :aria-current="activeNav === child.key ? 'page' : undefined"
+              :disabled="!child.enabled"
+            >
               <component :is="child.icon" :size="16" class="sidebar-menu-icon" />
               <span class="sidebar-menu-label">{{ child.label }}</span>
             </el-menu-item>
           </el-sub-menu>
 
-          <el-menu-item v-else :index="item.key" :disabled="!item.enabled">
+          <el-menu-item
+            v-else
+            :index="item.key"
+            class="atelier-nav-item"
+            :aria-current="activeNav === item.key ? 'page' : undefined"
+            :disabled="!item.enabled"
+          >
             <component :is="item.icon" :size="18" class="sidebar-menu-icon" />
             <span class="sidebar-menu-label">{{ item.label }}</span>
           </el-menu-item>

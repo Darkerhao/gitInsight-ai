@@ -104,7 +104,7 @@ const scene: SceneFn = (api) => {
     <div class="strike-crosshair">
       <Crosshair :size="120" :stroke-width="1" />
     </div>
-    <div class="strike-warning">⚠ TARGET LOCKED · KINETIC BOMBARDMENT AUTHORIZED</div>
+    <div class="strike-warning">TARGET LOCKED · KINETIC BOMBARDMENT AUTHORIZED</div>
   </div>
 </template>
 
