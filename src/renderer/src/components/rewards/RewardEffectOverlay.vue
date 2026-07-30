@@ -49,6 +49,22 @@ import SupernovaEffect from '@/components/rewards/effects/SupernovaEffect.vue';
 import TimeFoldEffect from '@/components/rewards/effects/TimeFoldEffect.vue';
 import VelocityTrailEffect from '@/components/rewards/effects/VelocityTrailEffect.vue';
 import WarpEffect from '@/components/rewards/effects/WarpEffect.vue';
+// 创世级 GENESIS（五期）
+import CelestialThroneEffect from '@/components/rewards/effects/CelestialThroneEffect.vue';
+import CosmicStringEffect from '@/components/rewards/effects/CosmicStringEffect.vue';
+import DimensionFoilEffect from '@/components/rewards/effects/DimensionFoilEffect.vue';
+import EntropyReversalEffect from '@/components/rewards/effects/EntropyReversalEffect.vue';
+import EpochZeroEffect from '@/components/rewards/effects/EpochZeroEffect.vue';
+import ExtinctionRainEffect from '@/components/rewards/effects/ExtinctionRainEffect.vue';
+import GalaxyDevourEffect from '@/components/rewards/effects/GalaxyDevourEffect.vue';
+import GammaLanceEffect from '@/components/rewards/effects/GammaLanceEffect.vue';
+import GenesisBangEffect from '@/components/rewards/effects/GenesisBangEffect.vue';
+import MagnetarSurgeEffect from '@/components/rewards/effects/MagnetarSurgeEffect.vue';
+import OvermindEffect from '@/components/rewards/effects/OvermindEffect.vue';
+import PlasmaDrakeEffect from '@/components/rewards/effects/PlasmaDrakeEffect.vue';
+import StarForgeEffect from '@/components/rewards/effects/StarForgeEffect.vue';
+import ThunderVerdictEffect from '@/components/rewards/effects/ThunderVerdictEffect.vue';
+import VacuumDecayEffect from '@/components/rewards/effects/VacuumDecayEffect.vue';
 import { EFFECT_OPTION_MAP, EFFECT_TIERS } from '@/components/rewards/rewardEffects';
 import type { RewardEffectKey } from '@/components/rewards/rewardEffects';
 
@@ -118,6 +134,21 @@ const effectComponentMap: Record<RewardEffectKey, Component> = {
   energyShield: EnergyShieldEffect,
   deepSonar: DeepSonarEffect,
   skyUplink: SkyUplinkEffect,
+  genesisBang: GenesisBangEffect,
+  dimensionFoil: DimensionFoilEffect,
+  gammaLance: GammaLanceEffect,
+  magnetarSurge: MagnetarSurgeEffect,
+  vacuumDecay: VacuumDecayEffect,
+  starForge: StarForgeEffect,
+  galaxyDevour: GalaxyDevourEffect,
+  overmind: OvermindEffect,
+  extinctionRain: ExtinctionRainEffect,
+  thunderVerdict: ThunderVerdictEffect,
+  plasmaDrake: PlasmaDrakeEffect,
+  epochZero: EpochZeroEffect,
+  cosmicString: CosmicStringEffect,
+  entropyReversal: EntropyReversalEffect,
+  celestialThrone: CelestialThroneEffect,
 };
 
 const activeComponent = computed(() => (props.effect ? effectComponentMap[props.effect] : null));
@@ -431,6 +462,11 @@ onBeforeUnmount(() => {
       <div class="fx-aperture">
         <span v-for="ring in 3" :key="ring" :style="{ animationDelay: `${(ring - 1) * 180}ms` }" />
       </div>
+      <div v-if="option.tier === 'genesis'" class="fx-genesis-rig" aria-hidden="true">
+        <span class="fx-genesis-ring is-outer" />
+        <span class="fx-genesis-ring is-inner" />
+        <span class="fx-genesis-halo" />
+      </div>
 
       <div class="fx-camera">
         <div class="fx-shake-rig">
@@ -552,7 +588,7 @@ onBeforeUnmount(() => {
   animation: fx-backdrop var(--fx-ms) ease both;
 }
 
-/* 实时 WebGL 空间介质：以统一 shader 为 47 款协议补充星尘、潮汐与光谱折射。 */
+/* 实时 WebGL 空间介质：以统一 shader 为 63 款协议补充星尘、潮汐与光谱折射。 */
 .fx-spatial-medium {
   z-index: -2;
   width: 100%;
@@ -575,6 +611,11 @@ onBeforeUnmount(() => {
 .fx-apex .fx-spatial-medium {
   mix-blend-mode: screen;
   filter: saturate(1.65) contrast(1.16) brightness(1.08);
+}
+
+.fx-tier-genesis .fx-spatial-medium {
+  mix-blend-mode: screen;
+  filter: saturate(1.82) contrast(1.2) brightness(1.14);
 }
 
 .fx-ambient-grid {
@@ -613,6 +654,10 @@ onBeforeUnmount(() => {
 
 .fx-tier-singularity .fx-backdrop {
   backdrop-filter: blur(3px) saturate(1.12);
+}
+
+.fx-tier-genesis .fx-backdrop {
+  backdrop-filter: blur(4px) saturate(1.2);
 }
 
 /* ── 相机 rig：镜头预设作用于内容 + 辉光 + 冲击波 ── */
@@ -704,7 +749,8 @@ onBeforeUnmount(() => {
   animation-delay: 520ms;
 }
 
-.fx-tier-singularity .fx-shockwave.is-third {
+.fx-tier-singularity .fx-shockwave.is-third,
+.fx-tier-genesis .fx-shockwave.is-third {
   display: block;
 }
 
@@ -717,7 +763,8 @@ onBeforeUnmount(() => {
 }
 
 .fx-tier-tactical .fx-injectors,
-.fx-tier-singularity .fx-injectors {
+.fx-tier-singularity .fx-injectors,
+.fx-tier-genesis .fx-injectors {
   display: block;
 }
 
@@ -778,7 +825,8 @@ onBeforeUnmount(() => {
   animation: fx-chroma var(--fx-ms) ease both;
 }
 
-.fx-tier-singularity .fx-chroma {
+.fx-tier-singularity .fx-chroma,
+.fx-tier-genesis .fx-chroma {
   display: block;
 }
 
@@ -817,8 +865,14 @@ onBeforeUnmount(() => {
   background: linear-gradient(180deg, rgba(1, 3, 10, 0.96), rgba(1, 3, 10, 0.88));
 }
 
-.fx-tier-singularity .fx-cinebar {
+.fx-tier-singularity .fx-cinebar,
+.fx-tier-genesis .fx-cinebar {
   display: block;
+}
+
+.fx-tier-genesis .fx-cinebar {
+  background: linear-gradient(180deg, rgba(1, 3, 10, 0.98), rgba(1, 3, 10, 0.9));
+  box-shadow: 0 0 24px rgba(250, 204, 21, 0.08);
 }
 
 .fx-cinebar.is-top {
@@ -844,7 +898,8 @@ onBeforeUnmount(() => {
 }
 
 .fx-tier-tactical .fx-hud,
-.fx-tier-singularity .fx-hud {
+.fx-tier-singularity .fx-hud,
+.fx-tier-genesis .fx-hud {
   display: block;
 }
 
@@ -886,13 +941,22 @@ onBeforeUnmount(() => {
 }
 
 .fx-tier-singularity .fx-hud-bracket.is-tl,
-.fx-tier-singularity .fx-hud-bracket.is-tr {
+.fx-tier-singularity .fx-hud-bracket.is-tr,
+.fx-tier-genesis .fx-hud-bracket.is-tl,
+.fx-tier-genesis .fx-hud-bracket.is-tr {
   top: calc(7vh + 2.2%);
 }
 
 .fx-tier-singularity .fx-hud-bracket.is-bl,
-.fx-tier-singularity .fx-hud-bracket.is-br {
+.fx-tier-singularity .fx-hud-bracket.is-br,
+.fx-tier-genesis .fx-hud-bracket.is-bl,
+.fx-tier-genesis .fx-hud-bracket.is-br {
   bottom: calc(7vh + 2.2%);
+}
+
+.fx-tier-genesis .fx-hud-bracket {
+  border-color: color-mix(in srgb, #facc15 46%, var(--fx-accent));
+  box-shadow: 0 0 18px rgba(250, 204, 21, 0.18);
 }
 
 .fx-hud-protocol {
@@ -906,7 +970,8 @@ onBeforeUnmount(() => {
   animation: fx-hud-in var(--fx-ms) ease both;
 }
 
-.fx-tier-singularity .fx-hud-protocol {
+.fx-tier-singularity .fx-hud-protocol,
+.fx-tier-genesis .fx-hud-protocol {
   top: calc(7vh + 3.6%);
 }
 
@@ -932,6 +997,24 @@ onBeforeUnmount(() => {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* 创世级协议名：熔金流光字 */
+.fx-tier-genesis .fx-hud-protocol strong {
+  background: linear-gradient(92deg, #fff 0%, #fde047 34%, color-mix(in srgb, var(--fx-accent) 78%, #fff) 62%, #fbbf24 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: fx-genesis-goldflow 2.8s ease-in-out infinite;
+  font-size: 23px;
+  letter-spacing: 0.22em;
+}
+
+.fx-tier-genesis .fx-hud-protocol em {
+  border-color: rgba(250, 204, 21, 0.66);
+  background: rgba(250, 204, 21, 0.14);
+  color: #fde68a;
 }
 
 .fx-hud-protocol span {
@@ -968,7 +1051,8 @@ onBeforeUnmount(() => {
   text-shadow: 0 0 16px color-mix(in srgb, var(--fx-accent) 40%, transparent);
 }
 
-.fx-tier-singularity .fx-hud-status {
+.fx-tier-singularity .fx-hud-status,
+.fx-tier-genesis .fx-hud-status {
   bottom: calc(7vh + 3.2%);
 }
 
@@ -998,7 +1082,8 @@ onBeforeUnmount(() => {
   animation: fx-progress-in var(--fx-ms) ease both;
 }
 
-.fx-tier-singularity .fx-progress {
+.fx-tier-singularity .fx-progress,
+.fx-tier-genesis .fx-progress {
   bottom: calc(7vh + 1.8%);
 }
 
@@ -1080,7 +1165,8 @@ onBeforeUnmount(() => {
   transition: border-color 0.16s ease, color 0.16s ease, transform 0.16s ease, background 0.16s ease;
 }
 
-.fx-tier-singularity .fx-skip {
+.fx-tier-singularity .fx-skip,
+.fx-tier-genesis .fx-skip {
   top: calc(7vh + 1.2%);
 }
 
@@ -1125,6 +1211,113 @@ onBeforeUnmount(() => {
   --fx-grain-o: 0.17;
   --fx-scanline-o: 0.38;
   --fx-vignette-o: 1;
+}
+
+.fx-tier-genesis {
+  --fx-grain-o: 0.2;
+  --fx-scanline-o: 0.42;
+  --fx-vignette-o: 1;
+}
+
+/* ── 创世级专属：禁忌协议法阵（双反向鎏金环 + 呼吸圣辉） ── */
+.fx-genesis-rig {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.fx-genesis-ring {
+  grid-area: 1 / 1;
+  width: min(74vmin, 760px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    conic-gradient(
+      from 0deg,
+      transparent 0 8%,
+      color-mix(in srgb, #facc15 52%, var(--fx-accent)) 10% 12%,
+      transparent 14% 24%,
+      color-mix(in srgb, var(--fx-accent) 66%, #fff) 26% 27%,
+      transparent 29% 41%,
+      color-mix(in srgb, #facc15 52%, var(--fx-accent)) 43% 45%,
+      transparent 47% 57%,
+      color-mix(in srgb, var(--fx-secondary) 66%, #fff) 59% 60%,
+      transparent 62% 74%,
+      color-mix(in srgb, #facc15 52%, var(--fx-accent)) 76% 78%,
+      transparent 80% 91%,
+      color-mix(in srgb, var(--fx-accent) 66%, #fff) 93% 94%,
+      transparent 96%
+    );
+  mask-image: radial-gradient(circle, transparent 0 calc(50% - 2.5px), #000 calc(50% - 1.5px) calc(50% - 0.5px), transparent 50%);
+  opacity: 0;
+  filter: drop-shadow(0 0 14px color-mix(in srgb, #facc15 36%, transparent));
+  animation:
+    fx-genesis-rig var(--fx-ms) ease both,
+    fx-genesis-spin 22s linear infinite;
+}
+
+.fx-genesis-ring.is-inner {
+  width: min(58vmin, 600px);
+  animation:
+    fx-genesis-rig var(--fx-ms) ease both,
+    fx-genesis-spin 14s linear infinite reverse;
+}
+
+.fx-genesis-halo {
+  grid-area: 1 / 1;
+  width: min(46vmin, 480px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, #facc15 14%, transparent), transparent 66%);
+  opacity: 0;
+  animation:
+    fx-genesis-rig var(--fx-ms) ease both,
+    fx-genesis-breathe 3.4s ease-in-out infinite;
+}
+
+@keyframes fx-genesis-rig {
+  0%,
+  4% {
+    opacity: 0;
+  }
+  16%,
+  84% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fx-genesis-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fx-genesis-breathe {
+  0%,
+  100% {
+    transform: scale(0.94);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.9;
+  }
+}
+
+@keyframes fx-genesis-goldflow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
 }
 
 /* ── 关键帧 ── */

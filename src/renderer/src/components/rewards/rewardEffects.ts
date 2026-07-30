@@ -9,8 +9,10 @@ import {
   Building2,
   Cake,
   CircleDashed,
+  CircleDot,
   CircuitBoard,
   Clock3,
+  CloudLightning,
   CloudRain,
   CloudUpload,
   Code2,
@@ -23,10 +25,16 @@ import {
   Eclipse,
   Expand,
   Eye,
+  Flame,
+  Frame,
   Gauge,
   Gem,
   Globe,
+  Hammer,
+  Hourglass,
   Layers,
+  Magnet,
+  Network,
   Orbit,
   PartyPopper,
   Plane,
@@ -36,18 +44,23 @@ import {
   Rocket,
   Satellite,
   ScanLine,
+  Shell,
   Shield,
   Slice,
   Sparkles,
+  Spline,
   Star,
   Sun,
+  Sunrise,
   Telescope,
+  Undo2,
   Waves,
+  Wind,
   Zap,
 } from 'lucide-vue-next';
 
 /**
- * NEXUS 深空中枢 · 统一视觉协议系统（三期重构）
+ * NEXUS 深空中枢 · 统一视觉协议系统（三期重构 · 五期新增创世级）
  *
  * 所有签到特效同属一个世界观：GitInsight 的 AI 中枢是一座深空指挥舰桥，
  * 每个特效都是一次由甲币能量授权执行的「视觉协议」（Visual Protocol）。
@@ -104,10 +117,25 @@ export type RewardEffectKey =
   | 'satelliteSweep'
   | 'energyShield'
   | 'deepSonar'
-  | 'skyUplink';
+  | 'skyUplink'
+  | 'genesisBang'
+  | 'dimensionFoil'
+  | 'gammaLance'
+  | 'magnetarSurge'
+  | 'vacuumDecay'
+  | 'starForge'
+  | 'galaxyDevour'
+  | 'overmind'
+  | 'extinctionRain'
+  | 'thunderVerdict'
+  | 'plasmaDrake'
+  | 'epochZero'
+  | 'cosmicString'
+  | 'entropyReversal'
+  | 'celestialThrone';
 
-/** 视觉压制分级：信标(4-6) → 战术(7-10) → 奇点(11-14)，随甲币定价单调升级 */
-export type EffectTierKey = 'signal' | 'tactical' | 'singularity';
+/** 视觉压制分级：信标(4-6) → 战术(7-10) → 奇点(11-14) → 创世(666)，随甲币定价单调升级 */
+export type EffectTierKey = 'signal' | 'tactical' | 'singularity' | 'genesis';
 
 /**
  * 舞台镜头预设（由 RewardEffectOverlay 的相机 rig 实现）：
@@ -160,7 +188,7 @@ export interface RewardEffectOption {
   narrative: string;
   cost: number;
   tier: EffectTierKey;
-  /** 巅峰演出（cost ≥ 13），商店内在奇点级之上再加 APEX 徽记 */
+  /** 巅峰演出（奇点级 cost ≥ 13，创世级全员），商店内额外加 APEX 徽记 */
   apex?: boolean;
   icon: Component;
   /** 商店卡片强调色 */
@@ -179,7 +207,7 @@ export interface RewardEffectOption {
 
 export interface EffectTierMeta {
   key: EffectTierKey;
-  grade: 1 | 2 | 3;
+  grade: 1 | 2 | 3 | 4;
   label: string;
   codename: string;
   tagline: string;
@@ -210,6 +238,14 @@ export const EFFECT_TIERS: Record<EffectTierKey, EffectTierMeta> = {
     codename: 'SINGULARITY',
     tagline: '宇宙级事件 · 镜头语言 / 时空尺度 / 三幕叙事',
     costRange: [11, 14],
+  },
+  genesis: {
+    key: 'genesis',
+    grade: 4,
+    label: '创世级',
+    codename: 'GENESIS',
+    tagline: '禁忌级演出 · 法则重写 / 文明尺度 / 神话叙事',
+    costRange: [666, 666],
   },
 };
 
@@ -1330,6 +1366,368 @@ export const EFFECT_OPTIONS: readonly RewardEffectOption[] = [
       camera: '撕裂瞬间急推 + 震屏，缝合时回稳',
     },
   },
+
+  // ── 创世级 GENESIS（666 甲币 · 禁忌演出）─────────────────────
+  {
+    key: 'genesisBang',
+    label: '创世纪元',
+    codename: 'GENESIS DAWN',
+    narrative: '万物起于一点：奇点静默三拍，暴涨撕开虚无，星尘在余晖中织出第一批星系。',
+    cost: 666,
+    tier: 'genesis',
+    apex: true,
+    icon: Sunrise,
+    tone: '#fde68a',
+    accent: '#fde68a',
+    secondary: '#a78bfa',
+    backdrop:
+      'radial-gradient(circle at center, rgba(253, 230, 138, 0.2), transparent 30%), radial-gradient(circle at 50% 50%, rgba(167, 139, 250, 0.16), transparent 52%), linear-gradient(180deg, rgba(1, 2, 8, 0.9), rgba(30, 27, 75, 0.34))',
+    camera: 'collapse',
+    shake: 2,
+    phases: { entry: 900, loop: 5400, exit: 1100 },
+    motion: {
+      entry: '绝对黑暗中一粒奇点呼吸发亮，引力涟漪逐圈向内收拢',
+      loop: '2.2s 暴涨闪爆：白金激波撕开虚无，三波次原初粒子外冲冷却变色，星尘受引力汇聚成旋臂与星团',
+      exit: '新生星系群缓旋定格，宇宙微波余晖 FIRST LIGHT 冷却后归于深空',
+      camera: '吸入蓄势 → 暴涨反弹回冲 + 重震 → 上帝视角缓慢回拉',
+    },
+  },
+  {
+    key: 'dimensionFoil',
+    label: '降维打击',
+    codename: 'DUAL-VECTOR FOIL',
+    narrative: '一片二向箔滑入星域，三维世界沿光的前沿被压成一幅无限薄的绝美画卷。',
+    cost: 666,
+    tier: 'genesis',
+    apex: true,
+    icon: Frame,
+    tone: '#e2e8f0',
+    accent: '#e2e8f0',
+    secondary: '#a78bfa',
+    backdrop:
+      'radial-gradient(circle at 18% 30%, rgba(226, 232, 240, 0.16), transparent 36%), linear-gradient(180deg, rgba(2, 6, 23, 0.9), rgba(49, 46, 129, 0.26))',
+    camera: 'sweep',
+    shake: 2,
+    phases: { entry: 900, loop: 5600, exit: 1200 },
+    motion: {
+      entry: '晶莹箔片自深空翻转滑入，边缘折射冷光，星点开始不安抖动',
+      loop: '二维化前沿自一角斜扫全屏：立体星体触及瞬间闪白、被拉扁成平面色块并入巨幅星图，空间网格随之塌陷',
+      exit: '整幅二维画卷微微波动定格 DIMENSION SEALED，随后连同画卷一起熄灭',
+      camera: '跟随二维化前沿的横移长镜头，触发瞬间伴随震屏',
+    },
+  },
+  {
+    key: 'gammaLance',
+    label: '伽马湮灭',
+    codename: 'GAMMA LANCE',
+    narrative: '坍缩星双极喷流贯穿星域，千秒差距内的一切在射线风暴中电离蒸发。',
+    cost: 666,
+    tier: 'genesis',
+    apex: true,
+    icon: Zap,
+    tone: '#c084fc',
+    accent: '#e879f9',
+    secondary: '#67e8f9',
+    backdrop:
+      'radial-gradient(circle at 50% 50%, rgba(192, 132, 252, 0.22), transparent 34%), linear-gradient(180deg, rgba(2, 6, 23, 0.88), rgba(59, 7, 100, 0.3))',
+    camera: 'punch',
+    shake: 2,
+    phases: { entry: 800, loop: 5200, exit: 1000 },
+    motion: {
+      entry: '坍缩星急速自转收紧，磁力线绞成双极漏斗，吸积盘增亮',
+      loop: '1.6s 双向伽马喷流贯穿全屏（白紫光柱 + 电离缘），沿途星体逐一过曝蒸发成离子雾，射线风暴横扫余域',
+      exit: '喷流截断回缩，星域只余电离余辉 STERILIZATION COMPLETE',
+      camera: '喷流贯通瞬间猛烈急推 + 重震屏',
+    },
+  },
+  {
+    key: 'magnetarSurge',
+    label: '磁星风暴',
+    codename: 'MAGNETAR TEMPEST',
+    narrative: '中子星壳层星震撕裂，万亿特斯拉磁力线崩断回弹，磁暴席卷整片星域。',
+    cost: 666,
+    tier: 'genesis',
+    apex: true,
+    icon: Magnet,
+    tone: '#38bdf8',
+    accent: '#7dd3fc',
+    secondary: '#f472b6',
+    backdrop:
+      'radial-gradient(circle at 50% 46%, rgba(56, 189, 248, 0.2), transparent 38%), linear-gradient(180deg, rgba(2, 6, 23, 0.88), rgba(12, 74, 110, 0.3))',
+    camera: 'warp',
+    shake: 2,
+    phases: { entry: 850, loop: 5300, exit: 1050 },
+    motion: {
+      entry: '磁星表面裂纹发亮，磁力线弧逐条绷紧震颤',
+      loop: '2s 星震爆发：磁力线崩断甩出等离子鞭，磁暴波纹层层外扩，X 射线热斑绕星扫射',
+      exit: '磁场重联归位，极冠双辉脉动 FIELD RECONNECTED 后熄灭',
+      camera: '磁暴节律的尺度呼吸 + 崩断瞬间失焦脉冲',
+    },
+  },
+  {
+    key: 'vacuumDecay',
+    label: '真空衰变',
+    codename: 'FALSE VACUUM',
+    narrative: '一颗真真空气泡以光速膨胀，所过之处物理常数被逐行改写。',
+    cost: 666,
+    tier: 'genesis',
+    apex: true,
+    icon: CircleDot,
+    tone: '#5eead4',
+    accent: '#5eead4',
+    secondary: '#c4b5fd',
+    backdrop:
+      'radial-gradient(circle at 40% 44%, rgba(94, 234, 212, 0.18), transparent 36%), linear-gradient(180deg, rgba(2, 6, 23, 0.9), rgba(19, 78, 74, 0.28))',
+    camera: 'warp',
+    shake: 1,
+    phases: { entry: 900, loop: 5500, exit: 1100 },
+    motion: {
+      entry: '深空一点量子涨落明灭不定，周围星光开始折射弯曲',
+      loop: '真真空泡球面持续膨胀：界面色散流光，泡内星野被改写成异色物理，法则文本逐行重写滚动',
+      exit: '气泡吞没镜头瞬间白透，新常数表定格 CONSTANTS REWRITTEN 后淡出',
+      camera: '界面逼近时的尺度胀缩与失焦，吞没瞬间静默一拍',
+    },
+  },
+  {
+    key: 'starForge',
+    label: '铸星熔炉',
+    codename: 'STELLAR FOUNDRY',
+    narrative: '星云在引力砧上被千锤锻打，点火一刻，一颗主序星睁开眼睛。',
+    cost: 666,
+    tier: 'genesis',
+    apex: true,
+    icon: Hammer,
+    tone: '#fb923c',
+    accent: '#fdba74',
+    secondary: '#38bdf8',
+    backdrop:
+      'radial-gradient(circle at 50% 58%, rgba(251, 146, 60, 0.22), transparent 36%), linear-gradient(180deg, rgba(2, 6, 23, 0.86), rgba(67, 20, 7, 0.3))',
+    camera: 'dolly',
+    shake: 1,
+    phases: { entry: 850, loop: 5450, exit: 1000 },
+    motion: {
+      entry: '冷暗星云缓旋汇聚，锻炉环架通电合拢',
+      loop: '引力锤击三次递强：每击迸出熔浆花与冲击环、核心增亮升温；2.8s 氢聚变点火，星风吹散胎盘星云',
+      exit: '新星光度校准入轨 STAR ONLINE，炉架退场余温冷却',
+      camera: '锻击节奏的推镜落定，点火瞬间轻震',
+    },
+  },
+  {
+    key: 'galaxyDevour',
+    label: '星系相吞',
+    codename: 'GALACTIC DEVOUR',
+    narrative: '两座旋臂星系跨越亿年相拥相撕，潮汐尾横贯天幕，并合为一枚新星核。',
+    cost: 666,
+    tier: 'genesis',
+    apex: true,
+    icon: Shell,
+    tone: '#818cf8',
+    accent: '#a5b4fc',
+    secondary: '#f0abfc',
+    backdrop:
+      'radial-gradient(circle at 30% 34%, rgba(129, 140, 248, 0.2), transparent 36%), radial-gradient(circle at 72% 68%, rgba(240, 171, 252, 0.16), transparent 36%), linear-gradient(180deg, rgba(2, 6, 23, 0.88), rgba(30, 27, 75, 0.3))',
+    camera: 'collapse',
+    shake: 1,
+    phases: { entry: 900, loop: 5600, exit: 1100 },
+    motion: {
+      entry: '双星系自对角入场，旋臂缓旋星点闪烁',
+      loop: '引力剥出两条潮汐星尾，旋臂交错穿透触发星暴蓝闪，双核螺旋接近逐圈加速',
+      exit: '双核并合白闪成单一亮核，新星系归于平稳缓旋 MERGER COMPLETE',
+      camera: '被引力拖入的缓推，并合瞬间回冲',
+    },
+  },
+  {
+    key: 'overmind',
+    label: '主宰降临',
+    codename: 'OVERMIND ASCENSION',
+    narrative: '全域节点同时倒戈效忠，红瞳中枢自数据之海升起，宣告接管一切协议。',
+    cost: 666,
+    tier: 'genesis',
+    apex: true,
+    icon: Network,
+    tone: '#f43f5e',
+    accent: '#fb7185',
+    secondary: '#67e8f9',
+    backdrop:
+      'radial-gradient(circle at 50% 42%, rgba(244, 63, 94, 0.18), transparent 40%), linear-gradient(180deg, rgba(1, 2, 8, 0.92), rgba(76, 5, 25, 0.3))',
+    camera: 'dolly',
+    shake: 1,
+    phases: { entry: 950, loop: 5500, exit: 1150 },
+    motion: {
+      entry: '全屏节点网格逐层显影，光脉冲沿边汇向屏心',
+      loop: '中枢核心自下而上升起展开三层环冠，节点逐批转红效忠，主宰之瞳睁开扫视全场',
+      exit: '万节点齐明三连鼓点 ALL PROTOCOLS SERVE，中枢闭目沉入黑暗',
+      camera: '压迫感缓推，凝视中枢升起后静止',
+    },
+  },
+  {
+    key: 'extinctionRain',
+    label: '灭世陨雨',
+    codename: 'EXTINCTION RAIN',
+    narrative: '天穹被千百条火流星撕成条幅，冲击波连环推平地平线上的一切。',
+    cost: 666,
+    tier: 'genesis',
+    apex: true,
+    icon: Flame,
+    tone: '#f97316',
+    accent: '#fb923c',
+    secondary: '#fca5a5',
+    backdrop:
+      'radial-gradient(circle at 50% 78%, rgba(249, 115, 22, 0.24), transparent 42%), linear-gradient(180deg, rgba(12, 10, 9, 0.9), rgba(69, 10, 10, 0.34))',
+    camera: 'punch',
+    shake: 2,
+    phases: { entry: 800, loop: 5600, exit: 1000 },
+    motion: {
+      entry: '高空警报红光扫掠，首颗火流星拖烟划破天幕',
+      loop: '陨石雨梯次贯落：每次着弹白闪 + 半圆火幕 + 冲击环推开尘暴，地表火线蔓延，天穹被烟尘染红',
+      exit: '末陨最大一击后余烬横飘，EXTINCTION EVENT 在焦土余光中定格',
+      camera: '多次着弹急推与重震，结尾缓慢抬头看天',
+    },
+  },
+  {
+    key: 'thunderVerdict',
+    label: '雷狱天罚',
+    codename: 'THUNDER VERDICT',
+    narrative: '雷云法阵在穹顶成形，九道审判之雷依序贯落，终审一击白昼天地。',
+    cost: 666,
+    tier: 'genesis',
+    apex: true,
+    icon: CloudLightning,
+    tone: '#7dd3fc',
+    accent: '#a5f3fc',
+    secondary: '#c4b5fd',
+    backdrop:
+      'radial-gradient(circle at 50% 12%, rgba(125, 211, 252, 0.2), transparent 40%), linear-gradient(180deg, rgba(2, 6, 23, 0.92), rgba(30, 41, 59, 0.36))',
+    camera: 'punch',
+    shake: 2,
+    phases: { entry: 850, loop: 5400, exit: 1000 },
+    motion: {
+      entry: '雷云压顶翻滚，法阵光环在穹心通电成形',
+      loop: '九道锯齿主雷依序劈落：命中点炸开电花球与环波，链状支闪沿地表游走，法阵刻度逐环点亮',
+      exit: '终审巨雷全屏过曝一拍，法阵合卷 VERDICT DELIVERED 余电噼啪',
+      camera: '每次落雷急推 + 重震，终审时全屏白闪定格',
+    },
+  },
+  {
+    key: 'plasmaDrake',
+    label: '等离子天龙',
+    codename: 'PLASMA DRAKE',
+    narrative: '一条由等离子体织成的巨龙自星海跃出，绕场三匝，龙吟处极光崩落。',
+    cost: 666,
+    tier: 'genesis',
+    apex: true,
+    icon: Wind,
+    tone: '#22d3ee',
+    accent: '#67e8f9',
+    secondary: '#f0abfc',
+    backdrop:
+      'radial-gradient(circle at 50% 66%, rgba(34, 211, 238, 0.2), transparent 40%), linear-gradient(180deg, rgba(2, 6, 23, 0.88), rgba(8, 47, 73, 0.32))',
+    camera: 'sweep',
+    shake: 1,
+    phases: { entry: 850, loop: 5700, exit: 1050 },
+    motion: {
+      entry: '星海聚成漩涡，龙首破面跃出拖起水光',
+      loop: '龙躯正弦长波绕场游弋三匝，鳞光沿脊线流动，摆尾甩出青粉极光帘；龙吟一声全场光压低伏',
+      exit: '巨龙昂首冲天化作星座连线 DRAKE ASCENDED，鳞光散作星雨',
+      camera: '跟随龙躯的横移长镜头，龙吟瞬间轻震',
+    },
+  },
+  {
+    key: 'epochZero',
+    label: '纪元归零',
+    codename: 'EPOCH ZERO',
+    narrative: '时之沙漏倒转，星轨倒卷、残骸复原，一切退回第零纪元的第一秒。',
+    cost: 666,
+    tier: 'genesis',
+    apex: true,
+    icon: Hourglass,
+    tone: '#93c5fd',
+    accent: '#bfdbfe',
+    secondary: '#fbbf24',
+    backdrop:
+      'radial-gradient(circle at 50% 48%, rgba(147, 197, 253, 0.2), transparent 38%), linear-gradient(180deg, rgba(2, 6, 23, 0.9), rgba(30, 58, 138, 0.28))',
+    camera: 'warp',
+    shake: 1,
+    phases: { entry: 900, loop: 5500, exit: 1100 },
+    motion: {
+      entry: '巨型沙漏显影翻转，金色时砂开始逆流上升',
+      loop: '全场时间倒卷：星轨拖尾反向回绕、碎片逆飞复原成完整星体、刻度盘急速回拨，倒卷波每圈留下残像',
+      exit: '回到 EPOCH 0：全画面凝为一枚初始光种，轻轻落入黑暗',
+      camera: '倒流节律的收缩呼吸，归零瞬间失焦定格',
+    },
+  },
+  {
+    key: 'cosmicString',
+    label: '宇宙弦切',
+    codename: 'STRING SEVER',
+    narrative: '一根横贯天幕的宇宙弦被拨动，切过之处空间错位，两侧星野永不再对齐。',
+    cost: 666,
+    tier: 'genesis',
+    apex: true,
+    icon: Spline,
+    tone: '#f0abfc',
+    accent: '#f5d0fe',
+    secondary: '#67e8f9',
+    backdrop:
+      'radial-gradient(circle at 50% 50%, rgba(240, 171, 252, 0.18), transparent 38%), linear-gradient(180deg, rgba(2, 6, 23, 0.9), rgba(59, 7, 100, 0.28))',
+    camera: 'sweep',
+    shake: 2,
+    phases: { entry: 800, loop: 5300, exit: 1000 },
+    motion: {
+      entry: '一根发光细弦横贯屏幕绷紧，星野沿弦微微弯折',
+      loop: '弦体三次拨振：驻波沿弦奔跑甩出引力涟漪；1.9s 弦切掠过，全屏沿切线错位半格，切缝喷出光尘',
+      exit: '弦淡出，错位的两半星野保持永久错格 SPACETIME OFFSET 定格',
+      camera: '沿弦向的横移，切割瞬间急推震屏',
+    },
+  },
+  {
+    key: 'entropyReversal',
+    label: '熵逆狂潮',
+    codename: 'ENTROPY REVERSAL',
+    narrative: '热寂尽头的死寂灰烬被逆流点燃，碎片重组、灰烬归星，时间之矢倒指。',
+    cost: 666,
+    tier: 'genesis',
+    apex: true,
+    icon: Undo2,
+    tone: '#34d399',
+    accent: '#6ee7b7',
+    secondary: '#93c5fd',
+    backdrop:
+      'radial-gradient(circle at 50% 52%, rgba(52, 211, 153, 0.18), transparent 40%), linear-gradient(180deg, rgba(2, 6, 23, 0.9), rgba(2, 44, 34, 0.32))',
+    camera: 'collapse',
+    shake: 1,
+    phases: { entry: 900, loop: 5400, exit: 1100 },
+    motion: {
+      entry: '灰暗死寂的余烬悬浮，熵计量表读数濒临 MAX',
+      loop: '逆熵波自屏心荡开：所过处灰烬点亮回燃、碎片倒飞聚合成晶格与星体，熵条逐段倒退，负熵流环场奔涌',
+      exit: '万物重归有序的一瞬齐明 ENTROPY REVERSED，宇宙重新开始呼吸',
+      camera: '逆熵波的反向吸入感，重组完成时回冲',
+    },
+  },
+  {
+    key: 'celestialThrone',
+    label: '星神王座',
+    codename: 'CELESTIAL THRONE',
+    narrative: '诸天星辰列阵让道，光铸王座自星云中升起，为今日的签到者加冕神格。',
+    cost: 666,
+    tier: 'genesis',
+    apex: true,
+    icon: Crown,
+    tone: '#facc15',
+    accent: '#fde047',
+    secondary: '#c4b5fd',
+    backdrop:
+      'radial-gradient(circle at 50% 40%, rgba(250, 204, 21, 0.2), transparent 36%), linear-gradient(180deg, rgba(2, 6, 23, 0.9), rgba(66, 32, 6, 0.32))',
+    camera: 'dolly',
+    shake: 1,
+    phases: { entry: 1000, loop: 5600, exit: 1200 },
+    motion: {
+      entry: '星幕分开垂下光瀑，王座基座自星云中升起',
+      loop: '光铸王座逐层拼合（基座→扶手→冠冕背板），十二星辰列阵环绕加冕，神辉光柱贯通天地，金雨洒落',
+      exit: '王座定格于星穹之心 DEITY CROWNED，星辰归位光瀑收拢',
+      camera: '仰角朝圣式缓推，加冕瞬间轻震',
+    },
+  },
 ] as const;
 
 export const EFFECT_OPTION_MAP: Record<RewardEffectKey, RewardEffectOption> = Object.fromEntries(
@@ -1344,9 +1742,9 @@ export const EFFECT_DURATIONS: Record<RewardEffectKey, number> = Object.fromEntr
   ])
 ) as Record<RewardEffectKey, number>;
 
-/** 按分级（奇点 → 战术 → 信标）分组，组内按甲币降序，供商店渲染 */
+/** 按分级（创世 → 奇点 → 战术 → 信标）分组，组内按甲币降序，供商店渲染 */
 export function groupEffectsByTier(): Array<{ meta: EffectTierMeta; options: RewardEffectOption[] }> {
-  const order: EffectTierKey[] = ['singularity', 'tactical', 'signal'];
+  const order: EffectTierKey[] = ['genesis', 'singularity', 'tactical', 'signal'];
   return order.map((tierKey) => ({
     meta: EFFECT_TIERS[tierKey],
     options: EFFECT_OPTIONS.filter((option) => option.tier === tierKey).sort(

@@ -49,6 +49,7 @@ onBeforeUnmount(cleanup);
     <div class="lb-whiteout" aria-hidden="true" />
     <div class="lb-annihilation-front" aria-hidden="true" />
     <div class="lb-ground-burn" aria-hidden="true" />
+    <div class="lb-cityline" aria-hidden="true" />
     <div class="lb-scanlines" aria-hidden="true" />
     <div class="lb-vignette" aria-hidden="true" />
 
@@ -66,10 +67,19 @@ onBeforeUnmount(cleanup);
       <span class="lb-readout is-right">SHOCK FRONT</span>
     </div>
 
+    <div class="lb-alert-band is-top" aria-hidden="true"><span>⚠ AIRBURST PROTOCOL ENGAGED · SHOCKFRONT INBOUND</span></div>
+    <div class="lb-alert-band is-bottom" aria-hidden="true"><span>EVACUATION WINDOW CLOSED · T-00:00:01</span></div>
+
+    <div class="lb-telemetry" aria-hidden="true">
+      <span>YIELD ....... 15 KT</span>
+      <span>DET ALT ..... 580 M</span>
+      <span>SHOCK ....... MACH 3.1</span>
+    </div>
+
     <div class="lb-title">
       <Radiation :size="44" :stroke-width="1.35" />
       <strong>小男孩</strong>
-      <small>LITTLE BOY / THREE.JS APEX</small>
+      <small>LITTLE BOY · MK-I AIRBURST DELIVERY</small>
     </div>
 
     <div class="lb-destruction-status" aria-hidden="true">
@@ -109,13 +119,87 @@ onBeforeUnmount(cleanup);
 .lb-whiteout,
 .lb-annihilation-front,
 .lb-ground-burn,
+.lb-cityline,
 .lb-scanlines,
 .lb-vignette,
 .lb-hud,
+.lb-alert-band,
+.lb-telemetry,
 .lb-title,
 .lb-fallback-cloud {
   position: absolute;
   pointer-events: none;
+}
+
+/* 地景剪影：城市天际线 —— 白闪过曝 → 冲击掀翻 → 坍缩抹除 */
+.lb-cityline {
+  left: -2%;
+  right: -2%;
+  bottom: 27%;
+  height: 13vh;
+  z-index: 2;
+  clip-path: polygon(
+    0 100%, 0 58%, 4% 58%, 4% 34%, 8% 34%, 8% 60%, 12% 60%, 12% 22%, 16% 22%, 16% 52%,
+    21% 52%, 21% 38%, 26% 38%, 26% 64%, 31% 64%, 31% 16%, 35% 16%, 35% 48%, 40% 48%, 40% 30%,
+    45% 30%, 45% 58%, 50% 58%, 50% 10%, 54% 10%, 54% 44%, 59% 44%, 59% 26%, 64% 26%, 64% 56%,
+    69% 56%, 69% 20%, 73% 20%, 73% 50%, 78% 50%, 78% 34%, 83% 34%, 83% 62%, 88% 62%, 88% 28%,
+    92% 28%, 92% 54%, 96% 54%, 96% 40%, 100% 40%, 100% 100%
+  );
+  background:
+    repeating-linear-gradient(0deg, rgba(254, 215, 170, 0.07) 0 2px, transparent 2px 9px),
+    repeating-linear-gradient(90deg, rgba(2, 6, 23, 0.2) 0 3px, transparent 3px 26px),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.86), rgba(12, 10, 9, 0.96));
+  transform-origin: 50% 100%;
+  animation: lb-cityline 6.6s ease both;
+}
+
+/* 警示条：上下双轨危险纹，爆闪期频闪告警后被冲击吹散 */
+.lb-alert-band {
+  left: 0;
+  right: 0;
+  height: 24px;
+  z-index: 9;
+  display: grid;
+  place-items: center;
+  border-top: 1px solid rgba(254, 215, 170, 0.32);
+  border-bottom: 1px solid rgba(254, 215, 170, 0.32);
+  background: repeating-linear-gradient(45deg, rgba(251, 146, 60, 0.2) 0 14px, rgba(2, 6, 23, 0.55) 14px 28px);
+}
+
+.lb-alert-band span {
+  color: #fed7aa;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  text-shadow: 0 0 12px rgba(249, 115, 22, 0.66);
+  white-space: nowrap;
+}
+
+.lb-alert-band.is-top {
+  top: 3.2%;
+  animation: lb-alert-top 6.6s ease both;
+}
+
+.lb-alert-band.is-bottom {
+  bottom: 3.2%;
+  animation: lb-alert-bottom 6.6s ease both;
+}
+
+/* 侧栏遥测：等宽微文案，爆后读数驻留 */
+.lb-telemetry {
+  left: 6%;
+  bottom: 19%;
+  z-index: 9;
+  display: grid;
+  gap: 5px;
+  color: rgba(255, 237, 213, 0.78);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-shadow: 0 0 14px rgba(249, 115, 22, 0.5);
+  animation: lb-telemetry 6.6s ease both;
 }
 
 .lb-annihilation-front {
@@ -436,6 +520,42 @@ onBeforeUnmount(cleanup);
   92%, 100% { opacity: 0; transform: translateX(-50%) translateY(-6px); }
 }
 
+@keyframes lb-cityline {
+  0%, 15% { opacity: 1; transform: scaleY(1); filter: brightness(1); }
+  18% { opacity: 1; transform: scaleY(1); filter: brightness(4.4) saturate(0.4); }
+  21% { opacity: 1; transform: scaleY(0.98); filter: brightness(2.1); }
+  26% { opacity: 0.9; transform: scaleY(0.9) skewX(1.5deg); filter: brightness(0.8) saturate(0.7); }
+  36% { opacity: 0.72; transform: scaleY(0.62) skewX(-2.5deg); filter: brightness(0.5); }
+  50% { opacity: 0.4; transform: scaleY(0.26) skewX(2deg); filter: brightness(0.34); }
+  64%, 100% { opacity: 0; transform: scaleY(0.04); filter: brightness(0.2); }
+}
+
+@keyframes lb-alert-top {
+  0% { opacity: 0; transform: translateY(-10px); }
+  4%, 12% { opacity: 0.92; transform: translateY(0); }
+  14% { opacity: 0.3; }
+  15.5% { opacity: 0.95; }
+  17% { opacity: 0.35; }
+  18.5% { opacity: 0.9; }
+  26%, 100% { opacity: 0; transform: translateY(-8px); filter: blur(3px); }
+}
+
+@keyframes lb-alert-bottom {
+  0% { opacity: 0; transform: translateY(10px); }
+  4%, 12% { opacity: 0.92; transform: translateY(0); }
+  14% { opacity: 0.3; }
+  15.5% { opacity: 0.95; }
+  17% { opacity: 0.35; }
+  18.5% { opacity: 0.9; }
+  26%, 100% { opacity: 0; transform: translateY(8px); filter: blur(3px); }
+}
+
+@keyframes lb-telemetry {
+  0%, 25% { opacity: 0; transform: translateY(8px); }
+  32%, 76% { opacity: 0.92; transform: translateY(0); }
+  90%, 100% { opacity: 0; transform: translateY(-4px); }
+}
+
 @keyframes lb-heat-haze {
   0%, 15% { opacity: 0; transform: scale(0.98) translateY(0); }
   19% { opacity: 0.38; transform: scale(1.04) translateY(-1%); }
@@ -488,8 +608,13 @@ onBeforeUnmount(cleanup);
     inset: 5%;
   }
 
-  .lb-readout {
+  .lb-readout,
+  .lb-telemetry {
     display: none;
+  }
+
+  .lb-alert-band span {
+    letter-spacing: 0.16em;
   }
 
   .lb-reticle {
@@ -526,8 +651,11 @@ onBeforeUnmount(cleanup);
   .lb-whiteout,
   .lb-annihilation-front,
   .lb-ground-burn,
+  .lb-cityline,
   .lb-scanlines,
   .lb-hud,
+  .lb-alert-band,
+  .lb-telemetry,
   .lb-title,
   .lb-reticle,
   .lb-destruction-status,

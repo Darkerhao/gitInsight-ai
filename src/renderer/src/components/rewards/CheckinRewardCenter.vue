@@ -219,7 +219,7 @@ async function playEffect(effect: RewardEffectKey) {
   try {
     applyWalletSnapshot(await window.api.spendCheckinCoins({
       amount: option.cost,
-      reason: `使用轻量效果：${option.label}`,
+      reason: `启动视觉协议：${option.label}`,
       refKey: effect,
     }));
     startEffect(effect);
@@ -925,7 +925,7 @@ onBeforeUnmount(() => {
 
 .effect-tier-filters {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -1049,6 +1049,150 @@ onBeforeUnmount(() => {
 .effect-shop-copy small span:last-child:not(:first-child) {
   color: #b45309;
   font-size: 8px;
+}
+
+/* ── 创世级 GENESIS：666 甲币禁忌协议的商店视觉 ── */
+.effect-tier-head.tier-genesis {
+  background:
+    linear-gradient(90deg, rgba(250, 204, 21, 0.12), rgba(244, 63, 94, 0.05) 52%, transparent),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 74%, rgba(255, 255, 255, 0.84));
+}
+
+.effect-tier-head.tier-genesis strong {
+  background: linear-gradient(92deg, #b45309, #eab308 46%, #b45309);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: genesis-head-flow 3.2s ease-in-out infinite;
+}
+
+.effect-tier-head.tier-genesis span {
+  color: #b45309;
+}
+
+.effect-tier-head.tier-genesis small {
+  color: #b45309;
+  font-weight: 800;
+}
+
+.effect-shop-item.tier-genesis {
+  border-color: color-mix(in srgb, #f59e0b 42%, rgba(203, 213, 225, 0.6));
+  background:
+    linear-gradient(#fffdf5, #fffdf5) padding-box,
+    linear-gradient(120deg, rgba(245, 158, 11, 0.8), rgba(244, 63, 94, 0.5), rgba(245, 158, 11, 0.8)) border-box;
+  border: 1px solid transparent;
+  box-shadow: 0 6px 18px rgba(180, 83, 9, 0.08);
+}
+
+.effect-shop-item.tier-genesis::after {
+  content: '';
+  position: absolute;
+  top: -60%;
+  bottom: -60%;
+  width: 30%;
+  left: -40%;
+  z-index: 0;
+  background: linear-gradient(100deg, transparent, rgba(253, 224, 71, 0.28), transparent);
+  transform: skewX(-18deg);
+  animation: genesis-card-sheen 4.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.effect-shop-item.tier-genesis .effect-shop-copy small span:first-child {
+  color: #b45309;
+  font-weight: 800;
+}
+
+.effect-shop-item.tier-genesis.is-selected {
+  box-shadow:
+    0 12px 26px rgba(180, 83, 9, 0.16),
+    inset 3px 0 0 #f59e0b;
+}
+
+.effect-inspector.tier-genesis {
+  border-color: color-mix(in srgb, #f59e0b 56%, var(--effect-tone));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 16px 36px rgba(180, 83, 9, 0.16),
+    0 0 0 1px rgba(250, 204, 21, 0.22);
+}
+
+.effect-inspector.tier-genesis .effect-inspector-kicker {
+  color: #b45309;
+}
+
+.effect-inspector.tier-genesis .effect-inspector-stats span:first-child b {
+  color: #b45309;
+  font-size: 11px;
+}
+
+@keyframes genesis-head-flow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes genesis-card-sheen {
+  0%,
+  46% {
+    left: -40%;
+    opacity: 0;
+  }
+  54% {
+    opacity: 1;
+  }
+  78%,
+  100% {
+    left: 116%;
+    opacity: 0;
+  }
+}
+
+:root[data-theme='dark'] .effect-tier-head.tier-genesis {
+  background:
+    linear-gradient(90deg, rgba(250, 204, 21, 0.12), rgba(244, 63, 94, 0.06) 52%, transparent),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.98) 74%, rgba(15, 23, 42, 0.86));
+}
+
+:root[data-theme='dark'] .effect-tier-head.tier-genesis strong {
+  background: linear-gradient(92deg, #fde68a, #facc15 46%, #fde68a);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+:root[data-theme='dark'] .effect-tier-head.tier-genesis span,
+:root[data-theme='dark'] .effect-tier-head.tier-genesis small {
+  color: #fbbf24;
+}
+
+:root[data-theme='dark'] .effect-shop-item.tier-genesis {
+  background:
+    linear-gradient(#171410, #171410) padding-box,
+    linear-gradient(120deg, rgba(245, 158, 11, 0.66), rgba(244, 63, 94, 0.4), rgba(245, 158, 11, 0.66)) border-box;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme='dark'] .effect-shop-item.tier-genesis .effect-shop-copy small span:first-child {
+  color: #fbbf24;
+}
+
+:root[data-theme='dark'] .effect-inspector.tier-genesis {
+  border-color: rgba(250, 204, 21, 0.42);
+  box-shadow:
+    0 18px 38px rgba(0, 0, 0, 0.32),
+    0 0 0 1px rgba(250, 204, 21, 0.18);
+}
+
+:root[data-theme='dark'] .effect-inspector.tier-genesis .effect-inspector-kicker,
+:root[data-theme='dark'] .effect-inspector.tier-genesis .effect-inspector-stats span:first-child b {
+  color: #fbbf24;
 }
 
 .effect-empty {
