@@ -49,3 +49,13 @@ Thumbs.db
 
 # Misc
 *.local
+
+
+# Claude Code 本地配置（不入库）
+/agents/
+/hooks/
+/rules/
+/skills/
+/settings.json
+/settings.proxy.json
+/CLAUDE.local.md
