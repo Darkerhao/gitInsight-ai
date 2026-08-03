@@ -26,7 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-GitInsight AI (中文界面 "AI日报助手") is an Electron desktop app that scans local Git repositories, summarizes a time range of commits into a Chinese work report via an OpenAI-compatible chat API, and syncs it to a Feishu daily report form — manually or on a daily auto-sync schedule. Report/sync/error history is persisted locally in SQLite. Stack: Electron + Vue 3 (`<script setup>`) + Vue Router + Element Plus + TypeScript, bundled with electron-vite.
+GitInsight AI (中文界面 "AI日报助手") is an Electron desktop app that scans local Git repositories, summarizes a time range of commits into a Chinese work report via an OpenAI-compatible chat API, and syncs it to a Feishu daily report form — manually or on a daily auto-sync schedule. Report/sync/error history is persisted locally in SQLite. Around that core it also ships a "时间长河" annual engineering-timeline view and a 甲币 check-in/reward-effect system. Stack: Electron + Vue 3 (`<script setup>`) + Vue Router + Element Plus + TypeScript, bundled with electron-vite.
 
 The app ships as two **editions**, Lite (简洁版) and Standard (标准版). Editions are resolved at build time from the `APP_EDITION` env var (`electron.vite.config.ts` turns it into `__APP_EDITION__`/`__APP_EDITION_LABEL__`/`__APP_PRODUCT_NAME__` defines, read by [src/shared/edition.ts](src/shared/edition.ts); `electron-builder.config.cjs` picks appId/productName/output dir from it). Currently the editions differ **only in branding and packaging** — there is no feature gating in code.
 
@@ -38,9 +38,10 @@ npm run build      # bundle main + preload + renderer into out/
 npm start          # electron . — runs the already-built out/main/main.js (run build first)
 npm run typecheck  # vue-tsc --noEmit (the only static check; there is no ESLint/Prettier)
 npm run check      # typecheck + build
+npm test           # all three unit suites
 ```
 
-There is **no test framework** configured — no `test` script, no test runner. Do not assume one exists.
+Tests are hand-rolled `node:test` suites in [tests/](tests/), run one at a time via per-suite scripts — there is **no** test runner (no vitest/jest) and no watch mode. Each script `tsc`-compiles just the files under test into a throwaway `.<name>-test-dist/` dir, runs `node --test`, then deletes the dir. To run a single suite: `npm run test:timeline`, `npm run test:repo-names`, or `npm run test:ai-client`. Adding a suite means adding a matching `test:<name>` script with its own explicit file list and appending it to `test`. Only pure/injectable logic is covered — anything touching `electron` APIs can't be tested this way (the timeline suite works because `timeline.ts` takes a `Database` argument). [tests/ui-shell.smoke.mjs](tests/ui-shell.smoke.mjs) asserts on renderer source text (regex over `.vue`/`.scss` files) and is **not** wired into any npm script.
 
 `npm run dev` requires TCP port **5174** to be free (`strictPort: true`). On Windows this commonly fails with `listen EACCES ... 127.0.0.1:5174` when the port is in an excluded/reserved range (see `dev.stderr.log`); change the port in `electron.vite.config.ts` if so.
 

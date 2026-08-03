@@ -1,0 +1,7 @@
+{
+  "enabledPlugins": {
+    "superpowers-chrome@superpowers-marketplace": true,
+    "double-shot-latte@superpowers-marketplace": true,
+    "private-journal-mcp@superpowers-marketplace": true
+  }
+}
