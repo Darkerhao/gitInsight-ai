@@ -1,34 +1,36 @@
 # AI State Index
 
-本轮唯一入口：Signal Atelier 工作台视觉与交互优化。
+本轮唯一入口：多任务自动同步（方案 B）—— 每任务独立仓库集合/飞书项目/执行时间/统计窗口/状态。
 
 ## 当前路由
 
-- stage: ship
-- route: 黄区 / 单模块 renderer Feature
-- route-note: [2026-07-25-ui-refresh.md](route-notes/2026-07-25-ui-refresh.md)
-- design: [2026-07-25-ui-refresh.md](design/2026-07-25-ui-refresh.md)
-- writer: 一个实现代理；主线程负责规格、审阅、验证与交付
-- confidence: 0.92
+- stage: ship（brainstorm/design/impl/review/runtime-verify 已完成：用户在 A/B 两案中选 B）
+- route: 红区 / 跨 shared+main+preload+renderer 的调度核心系统改造
+- design: [2026-08-04-multi-auto-sync-tasks.md](design/2026-08-04-multi-auto-sync-tasks.md)
+- writer: 一个实现代理（原生 worktree 隔离）；主线程负责规格、审阅、验证与交付
+- confidence: 0.85
+
+## route_history
+
+- 2026-07-25 Signal Atelier UI：黄区 renderer Feature，已 ship（14 测试+smoke+typecheck+build 全绿）
+- 2026-08-04 多任务自动同步：分诊确认现状为全局单例配置（autoSync.ts 单跑单提交）→ 提供 A（单条多明细行）/B（多任务调度）两案 → 用户选 B → 红区 worktree 写者；升级日幂等靠运行键格式不变
+- 2026-08-10 多任务自动同步：写者完成多任务核心/调度/IPC/UI/迁移并集成；核心测试、typecheck、build、npm test、diff check 全绿；UI smoke 与未改造基线同因既有奖励组件 emoji 断言失败
 
 ## 验收入口
 
 - `npm run typecheck`
 - `npm run build`
-- `npm test`
-- `node tests/ui-shell.smoke.mjs`
+- `npm test`（既有 14 + 新 `test:auto-sync` 纯核心套件，实际 21 tests）
 - `git diff --check`
-- `rg --pcre2 -n "[\\x{1F300}-\\x{1FAFF}\\x{2600}-\\x{27BF}]" src/renderer/src`
-- Chrome headless 静态构建产物截图：桌面 1600px 与移动 500px 均已完成；该路径不覆盖 Electron preload/IPC。
-
-## 交付状态
-
-- runtime-verify、Standards/Spec review 与 polish 已完成。
-- 最终门禁：14 个既有测试、UI smoke、typecheck、build、diff check、emoji scan 全绿。
-- 唯一非阻塞告警：Element Plus 内部 `@vueuse/core` PURE 注释位置警告，构建成功且非本轮代码引入。
+- 迁移连续性：legacy lastSuccessKey 与迁移后任务新键逐字符相等（测试断言）
 
 ## 变更边界
 
-- 允许：renderer 壳层、日报生成页面的模板类名、SCSS、无副作用的 pointer/scroll 交互。
-- 禁止：IPC、数据库、报告生成算法、持久化协议、外部依赖新增。
-- 视觉约束：Lucide 图标；界面不出现 emoji；深浅色均可读；`prefers-reduced-motion` 有降级。
+- 允许：src/shared/types.ts（autoSync 相关）、electron/main/autoSync.ts、新 electron/main/autoSyncCore.ts、config.ts 的 autoSync normalize 迁移、ipc/preload/env.d.ts 的 auto-sync 三通道、assistant/autoSyncState.ts、configState.ts 校验钩子、AutoSyncCard.vue、package.json 测试脚本、CLAUDE.md/CONTEXT.md 对应段落
+- 禁止：手动生成/发布链路、数据库 schema、飞书表单载荷协议（仍单明细行）、报告生成算法、按任务 AI Profile
+
+## 交付证据
+
+- 实现提交：`7253abe feat(auto-sync): support multiple scheduled tasks`
+- 运行验证：`.ai_state/sprints/multi-auto-sync-tasks/runtime-verify.md`
+- 审查结论：规格覆盖完整；无新增 correctness/security/test/design/quality 阻塞项

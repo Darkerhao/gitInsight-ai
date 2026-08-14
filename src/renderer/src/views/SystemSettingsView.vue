@@ -15,7 +15,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import { useAssistant } from '@/composables/useAssistant';
-import { DEFAULT_AUTO_SYNC_CONFIG } from '@shared/types';
+import { DEFAULT_AUTO_SYNC_CONFIG, DEFAULT_AUTO_SYNC_TASK_CONFIG } from '@shared/types';
 
 const assistant = useAssistant();
 const { config, activeAiProfile, projectOptions, storageInfo, refreshLocalData, saveSettings } = assistant;
@@ -38,6 +38,12 @@ function toggleWelcomeAnimation(value: boolean) {
 }
 
 const systemTimezone = computed(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai');
+const autoSyncSummary = computed(() => {
+  const tasks = config.autoSync.tasks ?? [];
+  const enabledCount = tasks.filter((task) => task.enabled).length;
+  const stateLabel = config.autoSync.enabled ? '总开关已开启' : '总开关已关闭';
+  return tasks.length ? `${stateLabel} · 共 ${tasks.length} 个任务（启用 ${enabledCount} 个）` : `${stateLabel} · 暂无同步任务`;
+});
 const selectedProject = computed(() => {
   const selected = projectOptions.value.find((item) => item.id === config.feishuForm.projectOptionId);
   return selected?.name || config.feishuForm.projectName || '未选择飞书项目';
@@ -87,11 +93,13 @@ async function refreshStorage() {
 }
 
 async function resetSettings() {
-  await ElMessageBox.confirm('确认将自动同步时间窗口和默认工时恢复为默认值？保存后生效。', '重置同步默认值', { type: 'warning' });
+  await ElMessageBox.confirm('确认将各同步任务的时间窗口和默认工时恢复为默认值？保存后生效。', '重置同步默认值', { type: 'warning' });
   config.autoSync.enabled = DEFAULT_AUTO_SYNC_CONFIG.enabled;
-  config.autoSync.time = DEFAULT_AUTO_SYNC_CONFIG.time;
-  config.autoSync.timeWindowMode = DEFAULT_AUTO_SYNC_CONFIG.timeWindowMode;
-  config.autoSync.windowStartTime = DEFAULT_AUTO_SYNC_CONFIG.windowStartTime;
+  for (const task of config.autoSync.tasks) {
+    task.time = DEFAULT_AUTO_SYNC_TASK_CONFIG.time;
+    task.timeWindowMode = DEFAULT_AUTO_SYNC_TASK_CONFIG.timeWindowMode;
+    task.windowStartTime = DEFAULT_AUTO_SYNC_TASK_CONFIG.windowStartTime;
+  }
   config.feishuForm.defaultWorkHours = 8;
   config.feishuForm.projectWorkHours = {};
   ElMessage.success('已重置同步默认值，请保存后生效');
@@ -183,8 +191,8 @@ const operationCards = [
               <el-input-number v-model="config.feishuForm.defaultWorkHours" :min="0.5" :max="24" :step="0.5" controls-position="right" />
             </div>
             <div class="field">
-              <label>自动同步时间</label>
-              <el-time-picker v-model="config.autoSync.time" format="HH:mm" value-format="HH:mm" :clearable="false" />
+              <label>自动同步任务</label>
+              <el-input :model-value="autoSyncSummary" readonly />
             </div>
             <div class="field">
               <label>飞书项目</label>

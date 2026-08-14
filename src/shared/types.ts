@@ -28,8 +28,15 @@ export interface FeishuFormConfig {
 export type AutoSyncStatus = 'idle' | 'running' | 'success' | 'failed' | 'skipped';
 export type AutoSyncTimeWindowMode = 'full-day' | 'yesterday-start-to-run';
 
-export interface AutoSyncConfig {
+export interface AutoSyncTaskConfig {
+  id: string;
+  name: string;
   enabled: boolean;
+  repoPaths: string[];
+  projectOptionId: string;
+  projectName: string;
+  /** 任务级工时覆盖；null 时按 projectWorkHours[projectOptionId] → defaultWorkHours 解析 */
+  workHours: number | null;
   time: string;
   timeWindowMode: AutoSyncTimeWindowMode;
   windowStartTime: string;
@@ -40,6 +47,12 @@ export interface AutoSyncConfig {
   lastRunKey: string;
   lastScheduledRunKey: string;
   lastSuccessKey: string;
+}
+
+export interface AutoSyncConfig {
+  /** 总开关；关闭后不调度任何任务 */
+  enabled: boolean;
+  tasks: AutoSyncTaskConfig[];
 }
 
 export const DEFAULT_FEISHU_FORM_CONFIG: FeishuFormConfig = {
@@ -62,8 +75,14 @@ export const DEFAULT_FEISHU_FORM_CONFIG: FeishuFormConfig = {
   contentFieldId: '',
 };
 
-export const DEFAULT_AUTO_SYNC_CONFIG: AutoSyncConfig = {
-  enabled: false,
+export const DEFAULT_AUTO_SYNC_TASK_CONFIG: AutoSyncTaskConfig = {
+  id: '',
+  name: '',
+  enabled: true,
+  repoPaths: [],
+  projectOptionId: '',
+  projectName: '',
+  workHours: null,
   time: '18:30',
   timeWindowMode: 'full-day',
   windowStartTime: '09:00',
@@ -74,6 +93,11 @@ export const DEFAULT_AUTO_SYNC_CONFIG: AutoSyncConfig = {
   lastRunKey: '',
   lastScheduledRunKey: '',
   lastSuccessKey: '',
+};
+
+export const DEFAULT_AUTO_SYNC_CONFIG: AutoSyncConfig = {
+  enabled: false,
+  tasks: [],
 };
 
 export const DEFAULT_AI_BASE_URL_OPTIONS = ['https://api.openai.com/v1', 'https://api.deepseek.com'];
@@ -403,9 +427,29 @@ export interface FeishuProjectOptionsPayload {
   config: FeishuFormConfig;
 }
 
-export interface AutoSyncState extends AutoSyncConfig {
-  isRunning: boolean;
+export interface AutoSyncTaskState extends AutoSyncTaskConfig {
   nextRunAt: string;
+  isRunning: boolean;
+}
+
+export interface AutoSyncState {
+  enabled: boolean;
+  tasks: AutoSyncTaskState[];
+  isRunning: boolean;
+  runningTaskId: string;
+  nextRunAt: string;
+  nextRunTaskId: string;
+}
+
+export interface AutoSyncTaskRunResult {
+  taskId: string;
+  taskName: string;
+  status: AutoSyncStatus;
+  message: string;
+  report?: string;
+  date?: string;
+  timeRange?: ReportTimeRange;
+  commitsCount?: number;
 }
 
 export interface AutoSyncRunResult {
@@ -413,15 +457,20 @@ export interface AutoSyncRunResult {
   message: string;
   ranAt: string;
   nextRunAt: string;
-  report?: string;
-  date?: string;
-  timeRange?: ReportTimeRange;
-  commitsCount?: number;
+  taskResults: AutoSyncTaskRunResult[];
+}
+
+export interface AutoSyncTaskValidationResult {
+  taskId: string;
+  taskName: string;
+  valid: boolean;
+  message: string;
 }
 
 export interface AutoSyncValidationResult {
   valid: boolean;
   message: string;
+  results: AutoSyncTaskValidationResult[];
 }
 
 export type JiaziFarmResourceType = 'water' | 'sunlight' | 'nutrient';

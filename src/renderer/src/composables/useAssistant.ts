@@ -104,7 +104,7 @@ function createAssistant() {
     aiProfiles: [{ ...DEFAULT_AI_PROFILE }],
     activeAiProfileId: DEFAULT_AI_PROFILE_ID,
     feishuForm: { ...DEFAULT_FEISHU_FORM_CONFIG },
-    autoSync: { ...DEFAULT_AUTO_SYNC_CONFIG },
+    autoSync: { ...DEFAULT_AUTO_SYNC_CONFIG, tasks: [] },
   });
 
   const form = reactive({
@@ -264,8 +264,8 @@ function createAssistant() {
         projectWorkHours: normalizeProjectWorkHours(saved.feishuForm?.projectWorkHours),
       },
       autoSync: {
-        ...DEFAULT_AUTO_SYNC_CONFIG,
-        ...saved.autoSync,
+        enabled: Boolean(saved.autoSync?.enabled ?? DEFAULT_AUTO_SYNC_CONFIG.enabled),
+        tasks: (saved.autoSync?.tasks ?? []).map((task) => ({ ...task, repoPaths: [...(task.repoPaths ?? [])] })),
       },
     });
 
@@ -374,6 +374,7 @@ function createAssistant() {
     autoSyncRunning: autoSyncStateApi.autoSyncRunning,
     autoSyncStatusType: autoSyncStateApi.autoSyncStatusType,
     autoSyncStatusLabel: autoSyncStateApi.autoSyncStatusLabel,
+    getAutoSyncTaskState: autoSyncStateApi.getAutoSyncTaskState,
     isConfigDirty: configState.isConfigDirty,
     persistConfig: configState.persistConfig,
     applyFullDayReportRange: reportState.applyFullDayReportRange,

@@ -1,5 +1,5 @@
 import {
-  DEFAULT_AUTO_SYNC_CONFIG,
+  DEFAULT_AUTO_SYNC_TASK_CONFIG,
   DEFAULT_FEISHU_FORM_CONFIG,
 } from '@shared/types';
 
@@ -36,6 +36,13 @@ export function normalizeProjectWorkHours(value: unknown) {
       .map(([key, hours]) => [key.trim(), normalizeWorkHours(hours)] as const)
       .filter(([key]) => key),
   );
+}
+
+export function normalizeTaskWorkHours(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized) || normalized <= 0) return null;
+  return Math.min(Math.max(normalized, 0.5), 24);
 }
 
 export interface ProjectWorkHourInput {
@@ -91,7 +98,7 @@ export function allocateProjectWorkHours(
     }));
 }
 
-export function normalizeTimeValue(value: unknown) {
+export function normalizeTimeValue(value: unknown, fallback = DEFAULT_AUTO_SYNC_TASK_CONFIG.time) {
   if (typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
     return value;
   }
@@ -112,11 +119,11 @@ export function normalizeTimeValue(value: unknown) {
     }
   }
 
-  return DEFAULT_AUTO_SYNC_CONFIG.time;
+  return fallback;
 }
 
 export function normalizeAutoSyncTimeWindowMode(value: unknown) {
-  return value === 'yesterday-start-to-run' ? 'yesterday-start-to-run' : DEFAULT_AUTO_SYNC_CONFIG.timeWindowMode;
+  return value === 'yesterday-start-to-run' ? 'yesterday-start-to-run' : DEFAULT_AUTO_SYNC_TASK_CONFIG.timeWindowMode;
 }
 
 export function mergeCurrentOption(options: string[], currentValue: string) {

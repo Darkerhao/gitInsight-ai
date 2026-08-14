@@ -31,7 +31,8 @@
     "test:timeline": "tsc --outDir .timeline-test-dist --module NodeNext --moduleResolution NodeNext --target ES2022 --types node --skipLibCheck electron/main/timeline.ts tests/timeline.test.ts && node --test .timeline-test-dist/tests/timeline.test.js && node -e \"require('fs').rmSync('.timeline-test-dist',{recursive:true,force:true})\"",
     "test:repo-names": "tsc --outDir .repo-name-test-dist --module NodeNext --moduleResolution NodeNext --target ES2022 --types node --skipLibCheck src/shared/types.ts src/shared/repositoryName.ts tests/repositoryName.test.ts && node --test .repo-name-test-dist/tests/repositoryName.test.js && node -e \"require('fs').rmSync('.repo-name-test-dist',{recursive:true,force:true})\"",
     "test:ai-client": "tsc --outDir .ai-client-test-dist --module NodeNext --moduleResolution NodeNext --target ES2022 --lib ES2022,DOM --types node --skipLibCheck src/shared/types.ts electron/main/aiClient.ts tests/aiClient.test.ts && node --test .ai-client-test-dist/tests/aiClient.test.js && node -e \"require('fs').rmSync('.ai-client-test-dist',{recursive:true,force:true})\"",
-    "test": "npm run test:timeline && npm run test:repo-names && npm run test:ai-client",
+    "test:auto-sync": "tsc --outDir .auto-sync-test-dist --module NodeNext --moduleResolution NodeNext --target ES2022 --types node --skipLibCheck src/shared/types.ts electron/main/dateUtils.ts electron/main/autoSyncCore.ts tests/autoSyncCore.test.ts && node --test .auto-sync-test-dist/tests/autoSyncCore.test.js && node -e \"require('fs').rmSync('.auto-sync-test-dist',{recursive:true,force:true})\"",
+    "test": "npm run test:timeline && npm run test:repo-names && npm run test:ai-client && npm run test:auto-sync",
     "check": "npm run typecheck && npm run build",
     "release:tag": "node scripts/release-tag.mjs"
   },

@@ -1,8 +1,8 @@
 import { computed } from 'vue';
 import type { Ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { DEFAULT_AI_PROFILE, DEFAULT_AUTO_SYNC_CONFIG } from '@shared/types';
-import type { AiProfile, AppConfig } from '@shared/types';
+import { DEFAULT_AI_PROFILE, DEFAULT_AUTO_SYNC_CONFIG, DEFAULT_AUTO_SYNC_TASK_CONFIG } from '@shared/types';
+import type { AiProfile, AppConfig, AutoSyncTaskConfig } from '@shared/types';
 import { normalizeRepoDisplayNames } from '@shared/repositoryName';
 import {
   mergeCurrentOption,
@@ -10,6 +10,7 @@ import {
   normalizeOptions,
   normalizeProjectWorkHours,
   normalizeRepoSelections,
+  normalizeTaskWorkHours,
   normalizeTimeValue,
   normalizeWorkHours,
   normalizeWorkspaceDirs,
@@ -107,6 +108,28 @@ export function createConfigState(ctx: ConfigStateContext) {
 
   const aiModelOptions = computed(() => mergeCurrentOption(config.aiModelOptions, activeAiProfile.value.model));
 
+  function getAutoSyncTaskPayload(task: AutoSyncTaskConfig, index: number): AutoSyncTaskConfig {
+    return {
+      id: toPlainString(task.id) || `task-${index + 1}`,
+      name: toPlainString(task.name) || `任务${index + 1}`,
+      enabled: task.enabled !== false,
+      repoPaths: normalizeRepoSelections(task.repoPaths ?? []),
+      projectOptionId: toPlainString(task.projectOptionId).trim(),
+      projectName: toPlainString(task.projectName).trim(),
+      workHours: normalizeTaskWorkHours(task.workHours),
+      time: normalizeTimeValue(task.time),
+      timeWindowMode: normalizeAutoSyncTimeWindowMode(task.timeWindowMode),
+      windowStartTime: normalizeTimeValue(task.windowStartTime, DEFAULT_AUTO_SYNC_TASK_CONFIG.windowStartTime),
+      lastRunAt: toPlainString(task.lastRunAt),
+      lastSuccessAt: toPlainString(task.lastSuccessAt),
+      lastStatus: task.lastStatus ?? 'idle',
+      lastMessage: toPlainString(task.lastMessage),
+      lastRunKey: toPlainString(task.lastRunKey),
+      lastScheduledRunKey: toPlainString(task.lastScheduledRunKey),
+      lastSuccessKey: toPlainString(task.lastSuccessKey),
+    };
+  }
+
   function getConfigPayload(): AppConfig {
     const workspaceDirs = getWorkspaceDirs();
     const normalizedSelectedRepoPaths = normalizeRepoSelections(selectedRepoPaths.value);
@@ -162,16 +185,7 @@ export function createConfigState(ctx: ConfigStateContext) {
       },
       autoSync: {
         enabled: Boolean(config.autoSync.enabled),
-        time: normalizeTimeValue(config.autoSync.time),
-        timeWindowMode: normalizeAutoSyncTimeWindowMode(config.autoSync.timeWindowMode),
-        windowStartTime: normalizeTimeValue(config.autoSync.windowStartTime),
-        lastRunAt: toPlainString(config.autoSync.lastRunAt),
-        lastSuccessAt: toPlainString(config.autoSync.lastSuccessAt),
-        lastStatus: config.autoSync.lastStatus,
-        lastMessage: toPlainString(config.autoSync.lastMessage),
-        lastRunKey: toPlainString(config.autoSync.lastRunKey),
-        lastScheduledRunKey: toPlainString(config.autoSync.lastScheduledRunKey),
-        lastSuccessKey: toPlainString(config.autoSync.lastSuccessKey),
+        tasks: (config.autoSync.tasks ?? []).map((task, index) => getAutoSyncTaskPayload(task, index)),
       },
     };
   }
@@ -203,9 +217,21 @@ export function createConfigState(ctx: ConfigStateContext) {
       },
       autoSync: {
         enabled: Boolean(config.autoSync.enabled),
-        time: normalizeTimeValue(config.autoSync.time),
-        timeWindowMode: normalizeAutoSyncTimeWindowMode(config.autoSync.timeWindowMode),
-        windowStartTime: normalizeTimeValue(config.autoSync.windowStartTime),
+        tasks: (config.autoSync.tasks ?? []).map((task, index) => {
+          const payload = getAutoSyncTaskPayload(task, index);
+          return {
+            id: payload.id,
+            name: payload.name,
+            enabled: payload.enabled,
+            repoPaths: payload.repoPaths,
+            projectOptionId: payload.projectOptionId,
+            projectName: payload.projectName,
+            workHours: payload.workHours,
+            time: payload.time,
+            timeWindowMode: payload.timeWindowMode,
+            windowStartTime: payload.windowStartTime,
+          };
+        }),
       },
     });
   }
@@ -242,8 +268,8 @@ export function createConfigState(ctx: ConfigStateContext) {
     try {
       const saved = await persistConfig();
       Object.assign(config.autoSync, {
-        ...DEFAULT_AUTO_SYNC_CONFIG,
-        ...saved.autoSync,
+        enabled: Boolean(saved.autoSync?.enabled ?? DEFAULT_AUTO_SYNC_CONFIG.enabled),
+        tasks: (saved.autoSync?.tasks ?? []).map((task) => ({ ...task, repoPaths: [...(task.repoPaths ?? [])] })),
       });
       markConfigSaved();
       await refreshAutoSyncState();

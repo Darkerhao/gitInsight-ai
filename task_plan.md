@@ -1,5 +1,21 @@
 # 产品化优化修复任务计划
 
+## 2026-08-04 多任务自动同步（方案 B）
+
+### 目标
+
+自动同步从全局单例升级为任务列表：每任务独立的仓库集合、飞书所属项目、执行时间、统计窗口与运行状态；旧配置无损迁移且升级日不重复提交。设计见 `.ai_state/design/2026-08-04-multi-auto-sync-tasks.md`。
+
+### 阶段
+
+| 阶段 | 状态 | 验收 |
+| --- | --- | --- |
+| 1. 分诊与设计 | complete | 确认现状单例链路；A/B 两案用户选 B；设计与路由已落盘 |
+| 2. 红区写者实现（worktree） | complete | autoSyncCore TDD red→green、类型/调度器/IPC 四件套/UI/迁移 |
+| 3. 审阅与集成 | complete | 规格/回归/diff 审查完成，改动已 cherry-pick 回主树 |
+| 4. 门禁 | complete | typecheck / build / npm test（含新套件）/ git diff --check 全绿 |
+| 5. ship | complete | `_index.md`、`progress.md`、`CLAUDE.md` 已同步；CONTEXT.md 不存在且未新建 |
+
 ## 2026-07-25 Signal Atelier 工作台视觉与交互优化
 
 ### 目标

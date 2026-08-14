@@ -38,10 +38,10 @@ npm run build      # bundle main + preload + renderer into out/
 npm start          # electron . — runs the already-built out/main/main.js (run build first)
 npm run typecheck  # vue-tsc --noEmit (the only static check; there is no ESLint/Prettier)
 npm run check      # typecheck + build
-npm test           # all three unit suites
+npm test           # all four unit suites
 ```
 
-Tests are hand-rolled `node:test` suites in [tests/](tests/), run one at a time via per-suite scripts — there is **no** test runner (no vitest/jest) and no watch mode. Each script `tsc`-compiles just the files under test into a throwaway `.<name>-test-dist/` dir, runs `node --test`, then deletes the dir. To run a single suite: `npm run test:timeline`, `npm run test:repo-names`, or `npm run test:ai-client`. Adding a suite means adding a matching `test:<name>` script with its own explicit file list and appending it to `test`. Only pure/injectable logic is covered — anything touching `electron` APIs can't be tested this way (the timeline suite works because `timeline.ts` takes a `Database` argument). [tests/ui-shell.smoke.mjs](tests/ui-shell.smoke.mjs) asserts on renderer source text (regex over `.vue`/`.scss` files) and is **not** wired into any npm script.
+Tests are hand-rolled `node:test` suites in [tests/](tests/), run one at a time via per-suite scripts — there is **no** test runner (no vitest/jest) and no watch mode. Each script `tsc`-compiles just the files under test into a throwaway `.<name>-test-dist/` dir, runs `node --test`, then deletes the dir. To run a single suite: `npm run test:timeline`, `npm run test:repo-names`, `npm run test:ai-client`, or `npm run test:auto-sync`. Adding a suite means adding a matching `test:<name>` script with its own explicit file list and appending it to `test`. The auto-sync suite covers the pure migration, key, window, work-hour, and scheduling helpers in `electron/main/autoSyncCore.ts`; anything touching Electron APIs can't be tested this way. [tests/ui-shell.smoke.mjs](tests/ui-shell.smoke.mjs) asserts on renderer source text (regex over `.vue`/`.scss` files) and is **not** wired into any npm script.
 
 `npm run dev` requires TCP port **5174** to be free (`strictPort: true`). On Windows this commonly fails with `listen EACCES ... 127.0.0.1:5174` when the port is in an excluded/reserved range (see `dev.stderr.log`); change the port in `electron.vite.config.ts` if so.
 
@@ -66,7 +66,7 @@ To add or change a feature that crosses the process boundary, edit **four** plac
 3. The `window.api` method signature in [src/renderer/src/env.d.ts](src/renderer/src/env.d.ts).
 4. Any shared payload/return shapes in [src/shared/types.ts](src/shared/types.ts).
 
-Invoke channels: `app:load-config`, `app:save-config`, `dialog:select-directory`, `repo:scan`, `report:generate`, `daily-report:list`, `daily-report:save`, `sync-log:list`, `error-log:list`, `storage:info`, `feishu:login`, `feishu:list-fields`, `feishu:list-projects`, `feishu:test-submit`, `report:sync-feishu`, `auto-sync:get-state`, `auto-sync:validate`, `auto-sync:run-now`.
+Invoke channels: `app:load-config`, `app:save-config`, `dialog:select-directory`, `repo:scan`, `report:generate`, `daily-report:list`, `daily-report:save`, `sync-log:list`, `error-log:list`, `storage:info`, `feishu:login`, `feishu:list-fields`, `feishu:list-projects`, `feishu:test-submit`, `report:sync-feishu`, `auto-sync:get-state`, `auto-sync:validate`, `auto-sync:run-now`. Auto-sync validation and execution accept an optional `taskId`; omitted execution targets all enabled tasks, while a task-specific manual run is allowed even when that task or the global schedule switch is disabled. The pushed `auto-sync:updated` payload includes per-task state plus the global and next-task scheduling fields.
 
 Main also **pushes** two events via `webContents.send` — `auto-sync:updated` (AutoSyncState) and `feishu:auth-updated` (FeishuAuthSnapshot) — exposed in preload as `onAutoSyncUpdated`/`onFeishuAuthUpdated` subscription functions that return an unsubscribe. Pushed payloads must be structured-cloneable (`toCloneable` strips reactivity/functions).
 
@@ -92,7 +92,7 @@ Resilience: if `config.aiApiKey` is empty, or the AI call throws, `generateRepor
 
 ### Auto-sync scheduler
 
-A `setTimeout`-based daily scheduler in [electron/main/autoSync.ts](electron/main/autoSync.ts) (`scheduleAutoSync`), re-armed on config save, app start, and `powerMonitor` resume. Idempotency across restarts is enforced with run keys (`lastRunKey`/`lastScheduledRunKey`/`lastSuccessKey` in `AutoSyncConfig`, derived from date + config fingerprint). A run generates the report for the configured time window (`full-day` or `yesterday-start-to-run`) and submits to Feishu, recording sync/error logs and emitting `auto-sync:updated`.
+A single `setTimeout`-based scheduler in [electron/main/autoSync.ts](electron/main/autoSync.ts) (`scheduleAutoSync`) selects the earliest enabled task and is re-armed on config save, app start, and `powerMonitor` resume. `AutoSyncConfig` stores a global `enabled` switch and independent task records; each task owns its repository set, Feishu project, execution time/window, work-hour override, status, and run keys. A scheduled wake runs all tasks currently due in array order, while a manual task run can target one task directly. Idempotency across restarts is enforced with task run keys (`lastRunKey`/`lastScheduledRunKey`/`lastSuccessKey` in `AutoSyncTaskConfig`, derived from date plus shared report configuration and deliberately excluding `task.id`). Each run generates its task's configured report window (`full-day` or `yesterday-start-to-run`) and submits to Feishu, recording sync/error logs and emitting `auto-sync:updated` after every task status change.
 
 ### Feishu integration
 

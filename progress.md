@@ -1,5 +1,16 @@
 # 产品化优化修复进度
 
+## 2026-08-04
+
+- 多任务自动同步（方案 B）：分诊、A/B 决策与设计文档在前一会话完成；`_index.md` 已路由 stage=impl、红区、worktree 写者。
+- 会话中断恢复：核对发现前一会话创建的 worktree（agent-a5b47caaa8450bfea）与主树同在 66c4196 且零改动，实现尚未开始；该 worktree 暂留待 ship 时清理。
+- 已派出红区写者代理（原生 worktree 隔离）：顺序为 autoSyncCore 测试 red → 纯函数 green → 类型/调度器/IPC 四件套/UI/迁移 → typecheck/build/npm test（含新 test:auto-sync 套件）/diff check 全绿后在其分支提交。
+- 迁移硬约束已写入写者指令：运行键格式逐字符不变（`date::reporter::projectOptionId::mode@start::repos`），升级日幂等跳过必须有逐字符断言测试。
+- 红区写者完成并提交 `499cc59`，主树已集成提交 `7253abe`；新增 `autoSyncCore` 纯函数、任务调度器、IPC/preload 类型同步、任务卡片 UI 与旧配置迁移。
+- 审阅确认旧单例字段无残留引用，运行键继续复用旧格式；`run-now` 先保存并重新武装调度器，避免旧定时器继续调度。
+- 门禁全绿：`npm run test:auto-sync` 7/7、`npm test` 21/21、`npm run typecheck`、`npm run build`、`git diff --check`。
+- runtime-verify：当前与未改造基线的 `node tests/ui-shell.smoke.mjs` 均因既有 `CodeMaterializeEffect.vue` emoji 断言失败；未新增 UI smoke 回归。
+
 ## 2026-07-25
 
 - 读取现有规划、壳层、日报生成页面与样式基线；确认本轮为 renderer 黄区 Feature。
@@ -84,6 +95,7 @@
 - 已将输入框从第 1 步调整到截图标注的第 2 步“生成与编辑”区域，位于生成按钮之前。
 - 三轮验证完成：`npm test` 7 个测试通过，`npm run typecheck` 通过，`npm run build` 通过，`git diff --check` 通过。
 - 尝试使用本地浏览器预览时被浏览器安全策略阻止访问 `127.0.0.1`；已关闭临时服务，没有尝试替代地址或绕过策略。生产构建和静态模板结构检查正常。
+
 ## 2026-07-19
 
 - 用户追加项目工时自动计算需求；本轮采用按提交活跃度分配默认当日总工时的口径，并保留手动覆盖。

@@ -15,7 +15,7 @@ import type {
 } from '../../src/shared/types.js';
 import { getAutoSyncState, runAutoSync, saveConfigAndReschedule, validateAutoSync } from './autoSync.js';
 import { getCheckinWalletSnapshot, importCheckinWallet, runDailyCheckin, spendCheckinCoins } from './checkinWallet.js';
-import { loadConfig, saveConfig } from './config.js';
+import { loadConfig } from './config.js';
 import { getDatabase, getStorageInfo, listDailyReports, listErrorLogs, listHistoryProjects, listSyncLogs, queryHistoryLogs, saveDailyReport } from './database.js';
 import { getTimelineSnapshot } from './timeline.js';
 import type { TimelineQuery } from '../../src/shared/types.js';
@@ -60,9 +60,9 @@ export function registerIpcHandlers() {
   ipcMain.handle('feishu:test-submit', async (_event, payload: FeishuTestSubmitPayload) => testSubmitFeishuForm(payload));
   ipcMain.handle('report:sync-feishu', async (_event, payload: SyncFeishuDailyPayload) => syncFeishuDaily(payload));
   ipcMain.handle('auto-sync:get-state', async () => getAutoSyncState(await loadConfig()));
-  ipcMain.handle('auto-sync:validate', async (_event, config: AppConfig) => validateAutoSync(config));
-  ipcMain.handle('auto-sync:run-now', async (_event, config: AppConfig) => {
-    await saveConfig(config);
-    return runAutoSync('manual');
+  ipcMain.handle('auto-sync:validate', async (_event, config: AppConfig, taskId?: string) => validateAutoSync(config, taskId));
+  ipcMain.handle('auto-sync:run-now', async (_event, config: AppConfig, taskId?: string) => {
+    await saveConfigAndReschedule(config);
+    return runAutoSync('manual', taskId);
   });
 }

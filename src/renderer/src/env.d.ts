@@ -43,8 +43,8 @@ declare global {
       testSubmitFeishu: (payload: FeishuTestSubmitPayload) => Promise<FeishuSubmitResult>;
       syncFeishuDaily: (payload: SyncFeishuDailyPayload) => Promise<boolean>;
       getAutoSyncState: () => Promise<AutoSyncState>;
-      validateAutoSync: (config: AppConfig) => Promise<AutoSyncValidationResult>;
-      runAutoSyncNow: (config: AppConfig) => Promise<AutoSyncRunResult>;
+      validateAutoSync: (config: AppConfig, taskId?: string) => Promise<AutoSyncValidationResult>;
+      runAutoSyncNow: (config: AppConfig, taskId?: string) => Promise<AutoSyncRunResult>;
       listDailyReports: (limit?: number) => Promise<import('@shared/types').DailyReportRecord[]>;
       listSyncLogs: (limit?: number) => Promise<import('@shared/types').SyncLogRecord[]>;
       listErrorLogs: (limit?: number) => Promise<import('@shared/types').ErrorLogRecord[]>;

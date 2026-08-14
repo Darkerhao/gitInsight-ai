@@ -52,8 +52,10 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('feishu:test-submit', payload) as Promise<FeishuSubmitResult>,
   syncFeishuDaily: (payload: SyncFeishuDailyPayload) => ipcRenderer.invoke('report:sync-feishu', payload) as Promise<boolean>,
   getAutoSyncState: () => ipcRenderer.invoke('auto-sync:get-state') as Promise<AutoSyncState>,
-  validateAutoSync: (config: AppConfig) => ipcRenderer.invoke('auto-sync:validate', config) as Promise<AutoSyncValidationResult>,
-  runAutoSyncNow: (config: AppConfig) => ipcRenderer.invoke('auto-sync:run-now', config) as Promise<AutoSyncRunResult>,
+  validateAutoSync: (config: AppConfig, taskId?: string) =>
+    ipcRenderer.invoke('auto-sync:validate', config, taskId) as Promise<AutoSyncValidationResult>,
+  runAutoSyncNow: (config: AppConfig, taskId?: string) =>
+    ipcRenderer.invoke('auto-sync:run-now', config, taskId) as Promise<AutoSyncRunResult>,
   listDailyReports: (limit?: number) => ipcRenderer.invoke('daily-report:list', limit) as Promise<DailyReportRecord[]>,
   listSyncLogs: (limit?: number) => ipcRenderer.invoke('sync-log:list', limit) as Promise<SyncLogRecord[]>,
   listErrorLogs: (limit?: number) => ipcRenderer.invoke('error-log:list', limit) as Promise<ErrorLogRecord[]>,

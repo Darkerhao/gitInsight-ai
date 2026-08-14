@@ -8,9 +8,26 @@ import {
   DEFAULT_AUTO_SYNC_CONFIG,
   DEFAULT_FEISHU_FORM_CONFIG,
 } from '../../src/shared/types.js';
-import type { AiProfile, AppConfig, AutoSyncConfig, AutoSyncStatus } from '../../src/shared/types.js';
+import type { AiProfile, AppConfig } from '../../src/shared/types.js';
 import { normalizeRepoDisplayNames } from '../../src/shared/repositoryName.js';
+import {
+  normalizeAutoSyncConfig,
+  normalizeProjectWorkHours,
+  normalizeRepoPaths,
+  normalizeWorkHours,
+} from './autoSyncCore.js';
 import { ensureConfigDir, getConfigPath, getSecretsPath } from './paths.js';
+
+export {
+  normalizeAutoSyncConfig,
+  normalizeAutoSyncStatus,
+  normalizeAutoSyncTime,
+  normalizeAutoSyncTimeWindowMode,
+  normalizeProjectWorkHours,
+  normalizeRepoPaths,
+  normalizeTaskWorkHours,
+  normalizeWorkHours,
+} from './autoSyncCore.js';
 
 export const DEFAULT_CONFIG: AppConfig = {
   workspaceDir: '',
@@ -28,7 +45,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   aiProfiles: [{ ...DEFAULT_AI_PROFILE }],
   activeAiProfileId: DEFAULT_AI_PROFILE_ID,
   feishuForm: { ...DEFAULT_FEISHU_FORM_CONFIG },
-  autoSync: { ...DEFAULT_AUTO_SYNC_CONFIG },
+  autoSync: { ...DEFAULT_AUTO_SYNC_CONFIG, tasks: [] },
 };
 
 
@@ -183,6 +200,7 @@ export function normalizeConfig(config?: Partial<AppConfig>): AppConfig {
   const workspaceDirs = normalizeWorkspaceDirs(config?.workspaceDirs, config?.workspaceDir);
   const ignoredRepoPaths = normalizeRepoPaths(config?.ignoredRepoPaths);
   const ignoredRepoPathSet = new Set(ignoredRepoPaths.map((item) => item.toLocaleLowerCase()));
+  const selectedRepoPaths = normalizeRepoPaths(config?.selectedRepoPaths).filter((item) => !ignoredRepoPathSet.has(item.toLocaleLowerCase()));
   const aiProfiles = normalizeAiProfiles(config?.aiProfiles, config);
   const activeAiProfileId = normalizeActiveAiProfileId(config?.activeAiProfileId, aiProfiles);
   const activeAiProfile = aiProfiles.find((profile) => profile.id === activeAiProfileId) ?? aiProfiles[0] ?? DEFAULT_AI_PROFILE;
@@ -191,7 +209,7 @@ export function normalizeConfig(config?: Partial<AppConfig>): AppConfig {
     ...configWithoutTokenStats,
     workspaceDirs,
     workspaceDir: config?.workspaceDir || workspaceDirs[0] || '',
-    selectedRepoPaths: normalizeRepoPaths(config?.selectedRepoPaths).filter((item) => !ignoredRepoPathSet.has(item.toLocaleLowerCase())),
+    selectedRepoPaths,
     ignoredRepoPaths,
     pinnedRepoPaths: normalizeRepoPaths(config?.pinnedRepoPaths).filter((item) => !ignoredRepoPathSet.has(item.toLocaleLowerCase())),
     repoDisplayNames: normalizeRepoDisplayNames(config?.repoDisplayNames),
@@ -214,7 +232,10 @@ export function normalizeConfig(config?: Partial<AppConfig>): AppConfig {
       defaultWorkHours: normalizeWorkHours(config?.feishuForm?.defaultWorkHours),
       projectWorkHours: normalizeProjectWorkHours(config?.feishuForm?.projectWorkHours),
     },
-    autoSync: normalizeAutoSyncConfig(config?.autoSync),
+    autoSync: normalizeAutoSyncConfig(config?.autoSync, {
+      feishuForm: config?.feishuForm,
+      selectedRepoPaths,
+    }),
   };
 }
 
@@ -234,65 +255,6 @@ export function normalizeWorkspaceDirs(options: unknown, currentWorkspaceDir?: s
 export function normalizeOptions(options: unknown, fallbackOptions: string[]) {
   const source = Array.isArray(options) ? options : fallbackOptions;
   return Array.from(new Set(source.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean)));
-}
-
-
-export function normalizeWorkHours(value: unknown, fallback = DEFAULT_FEISHU_FORM_CONFIG.defaultWorkHours) {
-  const normalized = Number(value);
-  if (!Number.isFinite(normalized) || normalized <= 0) return fallback;
-  return Math.min(Math.max(normalized, 0.5), 24);
-}
-
-
-export function normalizeProjectWorkHours(value: unknown) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>)
-      .map(([key, hours]) => [key.trim(), normalizeWorkHours(hours)] as const)
-      .filter(([key]) => key),
-  );
-}
-
-
-export function normalizeRepoPaths(options: unknown) {
-  const source = Array.isArray(options) ? options : [];
-  return Array.from(new Set(source.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean)));
-}
-
-
-export function normalizeAutoSyncTime(time: unknown) {
-  if (typeof time !== 'string') return DEFAULT_AUTO_SYNC_CONFIG.time;
-  const normalizedTime = time.trim();
-  return /^([01]\d|2[0-3]):[0-5]\d$/.test(normalizedTime) ? normalizedTime : DEFAULT_AUTO_SYNC_CONFIG.time;
-}
-
-
-export function normalizeAutoSyncStatus(status: unknown): AutoSyncStatus {
-  return ['idle', 'running', 'success', 'failed', 'skipped'].includes(String(status)) ? (status as AutoSyncStatus) : 'idle';
-}
-
-
-export function normalizeAutoSyncTimeWindowMode(mode: unknown): AutoSyncConfig['timeWindowMode'] {
-  return mode === 'yesterday-start-to-run' ? 'yesterday-start-to-run' : DEFAULT_AUTO_SYNC_CONFIG.timeWindowMode;
-}
-
-
-export function normalizeAutoSyncConfig(autoSync?: Partial<AutoSyncConfig>): AutoSyncConfig {
-  return {
-    ...DEFAULT_AUTO_SYNC_CONFIG,
-    ...(autoSync ?? {}),
-    enabled: Boolean(autoSync?.enabled),
-    time: normalizeAutoSyncTime(autoSync?.time),
-    timeWindowMode: normalizeAutoSyncTimeWindowMode(autoSync?.timeWindowMode),
-    windowStartTime: normalizeAutoSyncTime(autoSync?.windowStartTime ?? DEFAULT_AUTO_SYNC_CONFIG.windowStartTime),
-    lastRunAt: typeof autoSync?.lastRunAt === 'string' ? autoSync.lastRunAt : '',
-    lastSuccessAt: typeof autoSync?.lastSuccessAt === 'string' ? autoSync.lastSuccessAt : '',
-    lastStatus: normalizeAutoSyncStatus(autoSync?.lastStatus),
-    lastMessage: typeof autoSync?.lastMessage === 'string' ? autoSync.lastMessage : '',
-    lastRunKey: typeof autoSync?.lastRunKey === 'string' ? autoSync.lastRunKey : '',
-    lastScheduledRunKey: typeof autoSync?.lastScheduledRunKey === 'string' ? autoSync.lastScheduledRunKey : '',
-    lastSuccessKey: typeof autoSync?.lastSuccessKey === 'string' ? autoSync.lastSuccessKey : '',
-  };
 }
 
 
