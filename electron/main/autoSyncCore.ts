@@ -13,6 +13,7 @@ import { formatDateTimeForGit, nextDateString, normalizeDateTimeValue, shiftDate
 
 export interface AutoSyncKeyContext {
   reporterName: string;
+  gitAuthorEmail?: string;
 }
 
 export interface AutoSyncNormalizeContext {
@@ -178,7 +179,7 @@ function normalizeReporterKey(name: string) {
 }
 
 
-/** 运行键格式与旧版全局单例逐字符一致：date::reporter::projectOptionId::mode@start::repos，不掺 task.id。 */
+/** 无邮箱时运行键与旧版全局单例逐字符一致；配置邮箱后纳入运行键，避免换作者后被旧成功记录跳过。 */
 export function buildAutoSyncTaskKey(task: AutoSyncTaskConfig, ctx: AutoSyncKeyContext, date: string) {
   const repoKey = normalizeRepoPaths(task.repoPaths)
     .map((item) => item.toLocaleLowerCase())
@@ -188,9 +189,10 @@ export function buildAutoSyncTaskKey(task: AutoSyncTaskConfig, ctx: AutoSyncKeyC
     normalizeAutoSyncTimeWindowMode(task.timeWindowMode),
     normalizeAutoSyncTime(task.windowStartTime, DEFAULT_AUTO_SYNC_TASK_CONFIG.windowStartTime),
   ].join('@');
+  const reporterKey = [normalizeReporterKey(ctx.reporterName), normalizeReporterKey(ctx.gitAuthorEmail ?? '')].filter(Boolean).join('|');
   return [
     date,
-    normalizeReporterKey(ctx.reporterName),
+    reporterKey,
     task.projectOptionId.trim(),
     timeWindowKey,
     repoKey,

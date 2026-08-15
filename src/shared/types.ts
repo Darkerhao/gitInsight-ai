@@ -143,6 +143,8 @@ export interface AppConfig {
   pinnedRepoPaths: string[];
   repoDisplayNames: Record<string, string>;
   reporterName: string;
+  /** Git author email used as an additional commit matching condition. */
+  gitAuthorEmail: string;
   aiBaseUrl: string;
   aiApiKey: string;
   aiModel: string;
@@ -160,6 +162,7 @@ export interface GenerateReportParams {
   startDateTime?: string;
   endDateTime?: string;
   reporterName: string;
+  gitAuthorEmail?: string;
   aiProfileId?: string;
   /** 用户补充的非 Git 工作内容，例如网页测试、上线、会议或联调。 */
   manualWorkContent?: string;
@@ -175,6 +178,7 @@ export interface CommitEntry {
   hash: string;
   date: string;
   author: string;
+  authorEmail: string;
   message: string;
   files: string[];
   show: string;

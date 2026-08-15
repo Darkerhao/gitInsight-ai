@@ -155,6 +155,7 @@ export function createReportState(ctx: ReportStateContext) {
         date: form.date,
         ...reportRange,
         reporterName: config.reporterName,
+        gitAuthorEmail: config.gitAuthorEmail,
         aiProfileId: config.activeAiProfileId,
         manualWorkContent: form.manualWorkContent.trim() || undefined,
       });

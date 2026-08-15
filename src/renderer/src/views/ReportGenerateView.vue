@@ -503,6 +503,7 @@ async function generateDraft(draftKey: string, options: { updateStatus?: boolean
       date: form.date,
       ...reportRange,
       reporterName: config.reporterName,
+      gitAuthorEmail: config.gitAuthorEmail,
       aiProfileId: config.activeAiProfileId,
       manualWorkContent: form.manualWorkContent.trim() || undefined,
     });

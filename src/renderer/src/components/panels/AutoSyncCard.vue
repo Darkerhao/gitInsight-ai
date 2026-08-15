@@ -185,14 +185,20 @@ function getTaskMessage(task: AutoSyncTaskConfig) {
             />
           </div>
           <div class="auto-sync-field">
-            <span class="auto-sync-time-label">统计窗口</span>
+            <span class="auto-sync-time-label">
+              <span>统计窗口</span>
+              <span class="config-scope-badge git">Git</span>
+            </span>
             <el-select v-model="task.timeWindowMode" placeholder="选择统计窗口">
               <el-option label="日报日期全天" value="full-day" />
               <el-option label="昨日固定时间至执行时刻" value="yesterday-start-to-run" />
             </el-select>
           </div>
           <div v-if="task.timeWindowMode === 'yesterday-start-to-run'" class="auto-sync-field">
-            <span class="auto-sync-time-label">窗口开始</span>
+            <span class="auto-sync-time-label">
+              <span>窗口开始</span>
+              <span class="config-scope-badge git">Git</span>
+            </span>
             <el-time-picker
               v-model="task.windowStartTime"
               format="HH:mm"
@@ -218,7 +224,10 @@ function getTaskMessage(task: AutoSyncTaskConfig) {
             </el-select>
           </div>
           <div class="auto-sync-field">
-            <span class="auto-sync-time-label">统计仓库</span>
+            <span class="auto-sync-time-label">
+              <span>统计仓库</span>
+              <span class="config-scope-badge git">Git</span>
+            </span>
             <el-select
               v-model="task.repoPaths"
               multiple

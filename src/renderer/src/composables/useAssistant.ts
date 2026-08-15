@@ -96,6 +96,7 @@ function createAssistant() {
     pinnedRepoPaths: [],
     repoDisplayNames: {},
     reporterName: '',
+    gitAuthorEmail: '',
     aiBaseUrl: 'https://api.openai.com/v1',
     aiApiKey: '',
     aiModel: 'gpt-4o-mini',

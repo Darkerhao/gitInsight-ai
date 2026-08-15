@@ -570,6 +570,92 @@
   font-weight: 500;
 }
 
+.config-scope-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-block);
+  background: var(--c-surface-muted);
+  padding: 14px;
+}
+
+.config-scope-group.git {
+  border-color: rgba(59, 108, 246, 0.22);
+}
+
+.config-scope-group.report {
+  border-color: rgba(22, 163, 74, 0.22);
+}
+
+.config-scope-group-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.config-scope-group-head > div:first-child,
+.config-scope-group-title {
+  min-width: 0;
+}
+
+.config-scope-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.config-scope-group-head > div > span:last-child {
+  display: block;
+  margin-top: 5px;
+  color: var(--c-text-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.config-scope-group-title strong {
+  color: var(--c-text);
+  font-size: 14px;
+}
+
+.config-scope-badge,
+.field-scope-note {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.config-scope-badge {
+  border: 1px solid transparent;
+  padding: 1px 7px;
+}
+
+.config-scope-badge.git,
+.field-scope-note {
+  border-color: rgba(59, 108, 246, 0.22);
+  background: rgba(59, 108, 246, 0.08);
+  color: var(--c-primary);
+}
+
+.config-scope-badge.report {
+  border-color: rgba(22, 163, 74, 0.22);
+  background: rgba(22, 163, 74, 0.08);
+  color: var(--tone-green);
+}
+
+.field-scope-note {
+  margin-left: 5px;
+  padding: 1px 6px;
+  font-weight: 500;
+  vertical-align: 1px;
+}
+
 .config-block-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1253,6 +1339,9 @@
 }
 
 .auto-sync-time-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
   font-weight: 500;
   color: var(--c-text-muted);

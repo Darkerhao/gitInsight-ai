@@ -34,7 +34,7 @@ export let autoSyncStarting = false;
 export let autoSyncRunningTaskId = '';
 
 function getAutoSyncKeyContext(config: AppConfig): AutoSyncKeyContext {
-  return { reporterName: config.reporterName };
+  return { reporterName: config.reporterName, gitAuthorEmail: config.gitAuthorEmail };
 }
 
 
@@ -260,6 +260,7 @@ async function runAutoSyncTask(
       startDateTime: reportWindow.startDateTime,
       endDateTime: reportWindow.endDateTime,
       reporterName: config.reporterName,
+      gitAuthorEmail: config.gitAuthorEmail,
     });
 
     if (!result.commits.length) {

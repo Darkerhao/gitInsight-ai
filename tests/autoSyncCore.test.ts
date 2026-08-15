@@ -84,6 +84,10 @@ test('legacy 单例配置迁移为 tasks[0] 且运行键逐字符保持旧格式
   assert.strictEqual(rebuiltKey, legacyKey);
   assert.strictEqual(rebuiltKey, task.lastSuccessKey);
 
+  const emailKey = buildAutoSyncTaskKey(task, { reporterName: ' 张三 ', gitAuthorEmail: ' ZhangSan@Example.com ' }, '2026-08-03');
+  assert.notStrictEqual(emailKey, legacyKey);
+  assert.match(emailKey, /张三\|zhangsan@example\.com/);
+
   // 升级当日幂等：lastSuccessKey 命中当天键 → 下一次执行排到明天
   const now = new Date(2026, 7, 3, 20, 0, 0);
   const next = getNextTaskRunDate(task, ctx, now);

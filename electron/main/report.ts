@@ -278,7 +278,7 @@ export async function generateReport(params: GenerateReportParams): Promise<Repo
   const repos = params.repoPaths.map((repoPath) => ({ name: basename(repoPath), path: repoPath }));
   const allRepoDataList = await Promise.all(params.repoPaths.map((repoPath) => collectGitData(repoPath, timeRange)));
   const repoDataList = allRepoDataList.map((item) => {
-    const commits = filterCommitsByReporter(item.commits, params.reporterName);
+    const commits = filterCommitsByReporter(item.commits, params.reporterName, params.gitAuthorEmail);
     return formatCollectedGitData(commits);
   });
   const commits = repoDataList.flatMap((item) => item.commits);
@@ -297,7 +297,7 @@ export async function generateReport(params: GenerateReportParams): Promise<Repo
 
   if (!commits.length && !rawInput.manualWorkContent) {
     const matchedTip = allCommits.length
-      ? `所选时间段存在 ${allCommits.length} 条提交记录，但没有匹配到汇报人“${params.reporterName}”的提交。`
+      ? `所选时间段存在 ${allCommits.length} 条提交记录，但没有匹配到汇报人“${params.reporterName}”或 Git 作者邮箱“${params.gitAuthorEmail?.trim() || '未配置'}”的提交。`
       : '所选时间段未采集到代码提交记录。';
     const report = [
       '今日工作内容：',
@@ -310,7 +310,7 @@ export async function generateReport(params: GenerateReportParams): Promise<Repo
       '',
       '明日计划：',
       '',
-      '1. 请确认工作日期、仓库路径、汇报人名称与 Git 作者名称后重新生成日报。',
+      '1. 请确认工作日期、仓库路径、汇报人名称或 Git 作者邮箱后重新生成日报。',
       '',
       `汇报人：${params.reporterName}`,
       `日期：${params.date}`,

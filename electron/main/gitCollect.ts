@@ -14,7 +14,7 @@ export async function collectGitData(repoPath: string, timeRange: NormalizedRepo
   const logOutput = await git.raw([
     'log',
     `--since=${coarseSince}`,
-    `--pretty=format:${marker}%H%x09%ad%x09%an%x09%s`,
+    `--pretty=format:${marker}%H%x09%ad%x09%an%x09%ae%x09%s`,
     '--date=iso-strict',
     '--name-only',
     '--no-merges',
@@ -27,13 +27,13 @@ export async function collectGitData(repoPath: string, timeRange: NormalizedRepo
     const line = rawLine.trimEnd();
     if (!line) continue;
     if (line.startsWith(marker)) {
-      const [hash, commitDate, author, message] = line.slice(marker.length).split('\t');
+      const [hash, commitDate, author, authorEmail, message] = line.slice(marker.length).split('\t');
       const authoredMs = new Date(commitDate).getTime();
       if (Number.isNaN(authoredMs) || authoredMs < timeRange.startMs || authoredMs >= timeRange.endMs) {
         current = null; // 非目标时间段创作，跳过该提交（其 --name-only 文件行也随之忽略）
         continue;
       }
-      current = { hash, date: commitDate, author, message, files: [], show: '' };
+      current = { hash, date: commitDate, author, authorEmail, message, files: [], show: '' };
       commits.push(current);
       continue;
     }
@@ -64,10 +64,15 @@ export function normalizeAuthorName(name: string) {
 }
 
 
-export function filterCommitsByReporter(commits: CommitEntry[], reporterName: string) {
+export function filterCommitsByReporter(commits: CommitEntry[], reporterName: string, gitAuthorEmail = '') {
   const normalizedReporterName = normalizeAuthorName(reporterName);
-  if (!normalizedReporterName) return commits;
-  return commits.filter((commit) => normalizeAuthorName(commit.author) === normalizedReporterName);
+  const normalizedAuthorEmail = normalizeAuthorName(gitAuthorEmail);
+  if (!normalizedReporterName && !normalizedAuthorEmail) return commits;
+  return commits.filter(
+    (commit) =>
+      (normalizedReporterName && normalizeAuthorName(commit.author) === normalizedReporterName) ||
+      (normalizedAuthorEmail && normalizeAuthorName(commit.authorEmail) === normalizedAuthorEmail),
+  );
 }
 
 
