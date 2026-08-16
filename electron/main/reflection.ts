@@ -1,4 +1,5 @@
 import type {
+  WeeklyReflectionActionStatusUpdate,
   WeeklyReflectionMetadata,
   WeeklyReflectionParams,
   WeeklyReflectionProject,
@@ -7,8 +8,10 @@ import type {
 } from '../../src/shared/types.js';
 import {
   buildWeeklyReflectionPrompt,
+  buildWeeklyReflectionPreviousContext,
   buildWeeklyReflectionSourceSnapshot,
   normalizeWeeklyReflectionParams,
+  validateWeeklyReflectionContinuity,
   validateWeeklyReflectionEvidence,
 } from '../../src/shared/weeklyReflection.js';
 import { callAiWeeklyReflection, resolveAiConfig } from './aiClient.js';
@@ -16,8 +19,10 @@ import { loadConfig } from './config.js';
 import { getDatabase, persistDatabase, recordErrorLog, rowToDailyReportRecord } from './database.js';
 import {
   queryWeeklyReflectionProjects,
+  queryPreviousWeeklyReflection,
   queryWeeklyReflectionSources,
   queryWeeklyReflections,
+  updateWeeklyReflectionImprovementStatus,
   upsertWeeklyReflection,
   type SaveWeeklyReflectionPayload,
 } from './reflectionStore.js';
@@ -36,6 +41,14 @@ export async function getWeeklyReflectionHistory(limit = 20): Promise<WeeklyRefl
   return queryWeeklyReflections(await getDatabase(), limit);
 }
 
+export async function updateWeeklyReflectionActionStatus(
+  payload: WeeklyReflectionActionStatusUpdate,
+): Promise<WeeklyReflectionRecord> {
+  const record = updateWeeklyReflectionImprovementStatus(await getDatabase(), payload);
+  await persistDatabase();
+  return record;
+}
+
 
 export async function generateWeeklyReflection(params: WeeklyReflectionParams): Promise<WeeklyReflectionRecord> {
   const normalized = normalizeWeeklyReflectionParams(params);
@@ -52,9 +65,12 @@ export async function generateWeeklyReflection(params: WeeklyReflectionParams): 
   }
 
   try {
-    const prompt = buildWeeklyReflectionPrompt(normalized, sources);
+    const previousRecord = queryPreviousWeeklyReflection(db, normalized);
+    const previous = previousRecord ? buildWeeklyReflectionPreviousContext(previousRecord) : null;
+    const prompt = buildWeeklyReflectionPrompt(normalized, sources, previous);
     const metadata: WeeklyReflectionMetadata = await callAiWeeklyReflection(aiConfig, prompt);
     validateWeeklyReflectionEvidence(metadata, sources);
+    validateWeeklyReflectionContinuity(metadata, previous, sources);
     const payload: SaveWeeklyReflectionPayload = {
       projectPath: normalized.projectPath,
       projectName: sources[0]?.projectName || '当前项目',

@@ -3,10 +3,12 @@ import test from 'node:test';
 import type { DailyReportRecord, SyncLogRecord } from '../src/shared/types.js';
 import {
   buildWeeklyReflectionPrompt,
+  buildWeeklyReflectionPreviousContext,
   getSuccessfulSyncReportIds,
   normalizeWeeklyReflectionParams,
   parseWeeklyReflectionMetadata,
   selectWeeklyReflectionSources,
+  validateWeeklyReflectionContinuity,
   validateWeeklyReflectionEvidence,
 } from '../src/shared/weeklyReflection.js';
 import { renderWeeklyReflectionMarkdown } from '../src/shared/weeklyReflectionMarkdown.js';
@@ -109,6 +111,91 @@ test('weekly reflection parser rejects unknown evidence refs and malformed JSON'
   assert.throws(
     () => parseWeeklyReflectionMetadata(JSON.stringify({ ...metadata, strengths: [{ title: 'x', detail: 'y', evidenceRefs: [] }] })),
     /evidenceRefs 不能为空/,
+  );
+  const duplicateAction = { action: '补充回归清单', reason: '减少遗漏', priority: 'high', expectedOutcome: '完成验证', evidenceRefs: ['R1'] };
+  assert.throws(
+    () => parseWeeklyReflectionMetadata(JSON.stringify({ ...metadata, improvements: [duplicateAction, duplicateAction] })),
+    /重复的改进动作/,
+  );
+});
+
+test('weekly reflection reviews previous actions without guessing when evidence is missing', () => {
+  const sources = selectWeeklyReflectionSources([makeRecord()], new Set<number>(), params);
+  const previous = buildWeeklyReflectionPreviousContext({
+    id: 7,
+    projectPath: 'D:/repo-a',
+    projectName: '项目 A',
+    startDate: '2026-08-03',
+    endDate: '2026-08-09',
+    sourceScope: 'all',
+    sourceReports: sources,
+    content: '',
+    structuredJson: {
+      title: '上一周反思',
+      overview: '上一周概览',
+      strengths: [],
+      problems: [{ title: '回归验证偏晚', detail: '问题在发布前才发现。', impact: '增加返工。', evidenceRefs: ['R1'] }],
+      shortcomings: [],
+      improvements: [{ action: '前置回归验证', reason: '减少返工', priority: 'high', expectedOutcome: '开发阶段完成回归', evidenceRefs: ['R1'] }],
+      previousActionReviews: [],
+      nextWeekFocus: [],
+    },
+    actionStates: [{ action: '前置回归验证', status: 'completed', updatedAt: '2026-08-09T12:00:00.000Z' }],
+    aiProfileId: 'default',
+    generatedAt: '2026-08-09T12:00:00.000Z',
+    updatedAt: '2026-08-09T12:00:00.000Z',
+  });
+  const metadata = parseWeeklyReflectionMetadata(JSON.stringify({
+    title: '本周反思',
+    overview: '本周概览',
+    strengths: [],
+    problems: [{ title: '回归验证偏晚', detail: '本周仍在发布前集中回归。', impact: '返工风险仍在。', evidenceRefs: ['R1'], previousProblemRef: 'P1' }],
+    shortcomings: [],
+    improvements: [],
+    previousActionReviews: [{
+      actionRef: 'A1',
+      action: '前置回归验证',
+      previousStatus: 'completed',
+      suggestedStatus: 'completed',
+      assessment: '日报明确记录了开发阶段回归。',
+      evidenceRefs: ['R1'],
+    }],
+    nextWeekFocus: [],
+  }));
+
+  validateWeeklyReflectionContinuity(metadata, previous, sources);
+  const prompt = buildWeeklyReflectionPrompt(params, sources, previous);
+  assert.match(prompt, /<previous_reflection>/);
+  assert.match(prompt, /前置回归验证/);
+  assert.doesNotMatch(prompt, /D:\/repo-a/);
+
+  const pending = parseWeeklyReflectionMetadata(JSON.stringify({
+    ...metadata,
+    problems: [],
+    previousActionReviews: [{ ...metadata.previousActionReviews[0], suggestedStatus: 'pending', evidenceRefs: [] }],
+  }));
+  validateWeeklyReflectionContinuity(pending, previous, sources);
+
+  assert.throws(
+    () => validateWeeklyReflectionContinuity({
+      ...pending,
+      previousActionReviews: [{ ...pending.previousActionReviews[0], suggestedStatus: 'completed' }],
+    }, previous, sources),
+    /已完成或未完成建议必须引用本期日报证据/,
+  );
+  assert.throws(
+    () => validateWeeklyReflectionContinuity({
+      ...metadata,
+      problems: [{ ...metadata.problems[0], previousProblemRef: 'P9' }],
+    }, previous, sources),
+    /不存在的上一期问题/,
+  );
+  assert.throws(
+    () => validateWeeklyReflectionContinuity({
+      ...metadata,
+      previousActionReviews: [{ ...metadata.previousActionReviews[0], actionRef: 'A9' }],
+    }, previous, sources),
+    /不存在的上一期动作/,
   );
 });
 

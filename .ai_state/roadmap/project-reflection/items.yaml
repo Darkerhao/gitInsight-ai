@@ -1,6 +1,6 @@
 roadmap_slug: project-reflection
 created: 2026-08-16
-total_items: 2
+total_items: 3
 items:
   - slug: weekly-reflection-generate
     title: "周反思生成闭环"
@@ -16,3 +16,10 @@ items:
     blocked_by: [weekly-reflection-generate]
     estimated_complexity: M
     notes: "同范围覆盖、历史恢复、来源详情、复制和 Markdown 导出。"
+  - slug: weekly-reflection-action-loop
+    title: "改进动作状态与跨周复盘闭环"
+    status: completed
+    sprint_slug: "weekly-reflection-action-loop-v1"
+    blocked_by: [weekly-reflection-history-export]
+    estimated_complexity: L
+    notes: "用户确认动作状态；下一期 AI 基于当前日报复盘上一期动作并标记重复问题。"

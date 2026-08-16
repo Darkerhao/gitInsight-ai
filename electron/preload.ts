@@ -31,6 +31,7 @@ import type {
   StorageInfo,
   SyncLogRecord,
   SyncFeishuDailyPayload,
+  WeeklyReflectionActionStatusUpdate,
   WeeklyReflectionParams,
   WeeklyReflectionProject,
   WeeklyReflectionRecord,
@@ -72,6 +73,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('weekly-reflection:list', limit) as Promise<WeeklyReflectionRecord[]>,
   generateWeeklyReflection: (params: WeeklyReflectionParams) =>
     ipcRenderer.invoke('weekly-reflection:generate', params) as Promise<WeeklyReflectionRecord>,
+  updateWeeklyReflectionImprovementStatus: (payload: WeeklyReflectionActionStatusUpdate) =>
+    ipcRenderer.invoke('weekly-reflection:update-improvement-status', payload) as Promise<WeeklyReflectionRecord>,
   getStorageInfo: () => ipcRenderer.invoke('storage:info') as Promise<StorageInfo>,
   getCheckinWalletSnapshot: () =>
     ipcRenderer.invoke('checkin-wallet:get-snapshot') as Promise<CheckinWalletSnapshot>,

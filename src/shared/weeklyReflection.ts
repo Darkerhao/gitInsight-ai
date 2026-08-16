@@ -1,9 +1,13 @@
 import type {
   DailyReportRecord,
   SyncLogRecord,
+  WeeklyReflectionActionStatus,
   WeeklyReflectionMetadata,
   WeeklyReflectionImprovement,
   WeeklyReflectionParams,
+  WeeklyReflectionPreviousActionReview,
+  WeeklyReflectionPreviousContext,
+  WeeklyReflectionRecord,
   WeeklyReflectionSource,
 } from './types.js';
 
@@ -113,10 +117,14 @@ function sourcePayload(source: WeeklyReflectionSource) {
 export function buildWeeklyReflectionPrompt(
   params: WeeklyReflectionParams,
   sources: WeeklyReflectionSource[],
+  previous?: WeeklyReflectionPreviousContext | null,
 ) {
   const normalized = normalizeWeeklyReflectionParams(params);
   const projectName = sources[0]?.projectName || '当前项目';
   const payload = JSON.stringify(sources.map(sourcePayload), null, 2);
+  const previousPayload = previous
+    ? `\n<previous_reflection>\n${JSON.stringify(previous, null, 2)}\n</previous_reflection>\n`
+    : '';
 
   return `你是一名严谨的软件研发项目复盘助手。
 
@@ -129,7 +137,10 @@ export function buildWeeklyReflectionPrompt(
 4. 如果证据不足，明确写“暂无足够证据”，不要把一般经验当成项目事实。
 5. problems 描述项目或交付风险，shortcomings 描述本周工作方式或执行过程的不足，两者不要混为一谈。
 6. improvements 必须是下周可以执行和验证的具体动作，禁止只写“提高效率”“加强沟通”等空泛建议。
-7. 只输出合法 JSON，不要输出 Markdown、解释文字或代码围栏。
+7. previousActionReviews 必须逐条覆盖 <previous_reflection> 中的全部动作，actionRef、action、previousStatus 必须与上一期一致；没有上一期时输出空数组。
+8. 建议 completed 或 not_completed 时必须引用本期日报证据；证据不足时只能建议 pending，此时 evidenceRefs 可以为空。
+9. 本期问题与上一期问题实质相同时填写 previousProblemRef，只能引用真实存在的 P 编号；否则不要填写。
+10. 只输出合法 JSON，不要输出 Markdown、解释文字或代码围栏。
 
 项目：${projectName}
 日期范围：${normalized.startDate} 至 ${normalized.endDate}
@@ -138,15 +149,17 @@ export function buildWeeklyReflectionPrompt(
 <source_data>
 ${payload}
 </source_data>
+${previousPayload}
 
 JSON 结构必须严格符合：
 {
   "title": "不超过 30 字的标题",
   "overview": "本周工作概览",
   "strengths": [{"title":"做得好的地方","detail":"事实和价值","evidenceRefs":["R1"]}],
-  "problems": [{"title":"发现的问题","detail":"问题事实","impact":"影响","evidenceRefs":["R1"]}],
+  "problems": [{"title":"发现的问题","detail":"问题事实","impact":"影响","evidenceRefs":["R1"],"previousProblemRef":"P1（仅重复问题填写）"}],
   "shortcomings": [{"title":"工作不足","detail":"执行方式上的不足","evidenceRefs":["R1"]}],
   "improvements": [{"action":"具体动作","reason":"调整原因","priority":"high|medium|low","expectedOutcome":"预期结果","evidenceRefs":["R1"]}],
+  "previousActionReviews": [{"actionRef":"A1","action":"上一期动作原文","previousStatus":"pending|completed|not_completed","suggestedStatus":"pending|completed|not_completed","assessment":"基于本期证据的评估","evidenceRefs":["R1"]}],
   "nextWeekFocus": ["下一周重点"]
 }`;
 }
@@ -161,9 +174,9 @@ function readStringArray(value: unknown, field: string) {
   return value.map((item) => readString(item, field));
 }
 
-function readEvidenceRefs(value: unknown) {
+function readEvidenceRefs(value: unknown, allowEmpty = false) {
   const refs = [...new Set(readStringArray(value, 'evidenceRefs'))];
-  if (!refs.length) throw new Error('AI 周反思字段 evidenceRefs 不能为空');
+  if (!allowEmpty && !refs.length) throw new Error('AI 周反思字段 evidenceRefs 不能为空');
   return refs;
 }
 
@@ -179,8 +192,12 @@ function readPoint(value: unknown, field: string) {
 
 function readProblem(value: unknown) {
   const point = readPoint(value, 'problems');
-  const impact = readString((value as Record<string, unknown>).impact, 'problems.impact');
-  return { ...point, impact };
+  const item = value as Record<string, unknown>;
+  const impact = readString(item.impact, 'problems.impact');
+  const previousProblemRef = typeof item.previousProblemRef === 'string' && item.previousProblemRef.trim()
+    ? item.previousProblemRef.trim()
+    : undefined;
+  return { ...point, impact, ...(previousProblemRef ? { previousProblemRef } : {}) };
 }
 
 function readImprovement(value: unknown): WeeklyReflectionImprovement {
@@ -196,6 +213,26 @@ function readImprovement(value: unknown): WeeklyReflectionImprovement {
     priority,
     expectedOutcome: readString(item.expectedOutcome, 'improvements.expectedOutcome'),
     evidenceRefs: readEvidenceRefs(item.evidenceRefs),
+  };
+}
+
+function readActionStatus(value: unknown, field: string): WeeklyReflectionActionStatus {
+  if (value !== 'pending' && value !== 'completed' && value !== 'not_completed') {
+    throw new Error(`AI 周反思字段 ${field} 无效`);
+  }
+  return value;
+}
+
+function readPreviousActionReview(value: unknown): WeeklyReflectionPreviousActionReview {
+  if (!value || typeof value !== 'object') throw new Error('AI 周反思字段 previousActionReviews 无效');
+  const item = value as Record<string, unknown>;
+  return {
+    actionRef: readString(item.actionRef, 'previousActionReviews.actionRef'),
+    action: readString(item.action, 'previousActionReviews.action'),
+    previousStatus: readActionStatus(item.previousStatus, 'previousActionReviews.previousStatus'),
+    suggestedStatus: readActionStatus(item.suggestedStatus, 'previousActionReviews.suggestedStatus'),
+    assessment: readString(item.assessment, 'previousActionReviews.assessment'),
+    evidenceRefs: readEvidenceRefs(item.evidenceRefs, true),
   };
 }
 
@@ -215,6 +252,12 @@ export function parseWeeklyReflectionMetadata(content: string): WeeklyReflection
   if (!Array.isArray(value.improvements) || !Array.isArray(value.nextWeekFocus)) {
     throw new Error('AI 周反思缺少必要的改进计划');
   }
+  const previousActionReviews = value.previousActionReviews === undefined ? [] : value.previousActionReviews;
+  if (!Array.isArray(previousActionReviews)) throw new Error('AI 周反思字段 previousActionReviews 无效');
+  const improvements = value.improvements.map(readImprovement);
+  if (new Set(improvements.map((item) => item.action)).size !== improvements.length) {
+    throw new Error('AI 周反思包含重复的改进动作');
+  }
 
   return {
     title: readString(value.title, 'title'),
@@ -222,7 +265,8 @@ export function parseWeeklyReflectionMetadata(content: string): WeeklyReflection
     strengths: value.strengths.map((item) => readPoint(item, 'strengths')),
     problems: value.problems.map(readProblem),
     shortcomings: value.shortcomings.map((item) => readPoint(item, 'shortcomings')),
-    improvements: value.improvements.map(readImprovement),
+    improvements,
+    previousActionReviews: previousActionReviews.map(readPreviousActionReview),
     nextWeekFocus: readStringArray(value.nextWeekFocus, 'nextWeekFocus'),
   };
 }
@@ -233,6 +277,64 @@ export function validateWeeklyReflectionEvidence(metadata: WeeklyReflectionMetad
   for (const point of allPoints) {
     if (point.evidenceRefs.some((ref) => !refs.has(ref))) {
       throw new Error('AI 周反思引用了不存在的日报证据');
+    }
+  }
+}
+
+export function buildWeeklyReflectionPreviousContext(record: WeeklyReflectionRecord): WeeklyReflectionPreviousContext {
+  const states = new Map(record.actionStates.map((item) => [item.action, item.status]));
+  return {
+    reflectionId: record.id,
+    startDate: record.startDate,
+    endDate: record.endDate,
+    actions: record.structuredJson.improvements.map((item, index) => ({
+      ref: `A${index + 1}`,
+      action: item.action,
+      status: states.get(item.action) || 'pending',
+      expectedOutcome: item.expectedOutcome,
+    })),
+    problems: record.structuredJson.problems.map((item, index) => ({
+      ref: `P${index + 1}`,
+      title: item.title,
+      detail: item.detail,
+      impact: item.impact,
+    })),
+  };
+}
+
+export function validateWeeklyReflectionContinuity(
+  metadata: WeeklyReflectionMetadata,
+  previous: WeeklyReflectionPreviousContext | null | undefined,
+  sources: WeeklyReflectionSource[],
+) {
+  const sourceRefs = new Set(sources.map((source) => source.ref));
+  const previousActions = new Map(previous?.actions.map((item) => [item.ref, item]) ?? []);
+  const previousProblems = new Set(previous?.problems.map((item) => item.ref) ?? []);
+
+  if (metadata.previousActionReviews.length !== previousActions.size) {
+    throw new Error('AI 周反思没有逐条复盘全部上一期动作');
+  }
+
+  const reviewed = new Set<string>();
+  for (const review of metadata.previousActionReviews) {
+    const action = previousActions.get(review.actionRef);
+    if (!action) throw new Error('AI 周反思引用了不存在的上一期动作');
+    if (reviewed.has(review.actionRef)) throw new Error('AI 周反思重复复盘了上一期动作');
+    if (review.action !== action.action || review.previousStatus !== action.status) {
+      throw new Error('AI 周反思的上一期动作信息不一致');
+    }
+    if (review.evidenceRefs.some((ref) => !sourceRefs.has(ref))) {
+      throw new Error('AI 周反思引用了不存在的日报证据');
+    }
+    if (review.suggestedStatus !== 'pending' && !review.evidenceRefs.length) {
+      throw new Error('已完成或未完成建议必须引用本期日报证据');
+    }
+    reviewed.add(review.actionRef);
+  }
+
+  for (const problem of metadata.problems) {
+    if (problem.previousProblemRef && !previousProblems.has(problem.previousProblemRef)) {
+      throw new Error('AI 周反思引用了不存在的上一期问题');
     }
   }
 }

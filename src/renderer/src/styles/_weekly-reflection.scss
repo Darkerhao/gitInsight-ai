@@ -221,6 +221,18 @@
   font-size: 14px;
 }
 
+.reflection-problem-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 6px;
+}
+
+.reflection-problem-title strong {
+  margin-bottom: 0;
+}
+
 .reflection-point-list small,
 .reflection-improvement-list small {
   display: block;
@@ -265,6 +277,55 @@
 
 .reflection-improvement-list strong {
   font-size: 14px;
+}
+
+.reflection-improvement-head,
+.reflection-action-review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 7px;
+}
+
+.reflection-improvement-head > div,
+.reflection-action-review-head > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reflection-improvement-head .el-segmented {
+  flex: 0 0 auto;
+}
+
+.reflection-action-review-section {
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--reflection-border);
+}
+
+.reflection-action-review-list {
+  display: grid;
+  gap: 12px;
+}
+
+.reflection-action-review-list article {
+  padding: 14px 16px;
+  border-left: 3px solid var(--reflection-accent);
+  background: color-mix(in srgb, var(--reflection-accent) 5%, var(--el-bg-color));
+}
+
+.reflection-action-review-list p {
+  margin: 0;
+  color: var(--el-text-color-regular);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.reflection-action-review-list small {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 
 .reflection-focus-section ol {
@@ -475,5 +536,15 @@
 
   .reflection-result-actions .el-button {
     flex: 1 1 auto;
+  }
+
+  .reflection-improvement-head,
+  .reflection-action-review-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .reflection-improvement-head .el-segmented {
+    width: 100%;
   }
 }

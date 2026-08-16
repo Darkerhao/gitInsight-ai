@@ -25,6 +25,7 @@ import type {
   RepoInfo,
   ReportResult,
   SyncFeishuDailyPayload,
+  WeeklyReflectionActionStatusUpdate,
   WeeklyReflectionParams,
   WeeklyReflectionProject,
   WeeklyReflectionRecord,
@@ -58,6 +59,7 @@ declare global {
       listWeeklyReflectionSources: (params: WeeklyReflectionParams) => Promise<WeeklyReflectionSource[]>;
       listWeeklyReflections: (limit?: number) => Promise<WeeklyReflectionRecord[]>;
       generateWeeklyReflection: (params: WeeklyReflectionParams) => Promise<WeeklyReflectionRecord>;
+      updateWeeklyReflectionImprovementStatus: (payload: WeeklyReflectionActionStatusUpdate) => Promise<WeeklyReflectionRecord>;
       getStorageInfo: () => Promise<import('@shared/types').StorageInfo>;
       getCheckinWalletSnapshot: () => Promise<CheckinWalletSnapshot>;
       runDailyCheckin: () => Promise<CheckinResult>;

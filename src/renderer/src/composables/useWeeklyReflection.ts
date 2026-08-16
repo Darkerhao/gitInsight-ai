@@ -2,6 +2,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import type {
   WeeklyReflectionParams,
+  WeeklyReflectionActionStatus,
   WeeklyReflectionProject,
   WeeklyReflectionRecord,
   WeeklyReflectionSource,
@@ -35,6 +36,7 @@ export function useWeeklyReflection() {
   const sourcesLoading = ref(false);
   const historyLoading = ref(false);
   const generating = ref(false);
+  const savingActions = ref(new Set<string>());
   let sourceRequestSeq = 0;
 
   const selectedProject = computed(() => projects.value.find((project) => project.path === selectedProjectPath.value) ?? null);
@@ -139,6 +141,34 @@ export function useWeeklyReflection() {
     }
   }
 
+  async function updateImprovementStatus(action: string, status: WeeklyReflectionActionStatus) {
+    const record = currentRecord.value;
+    if (!record) return;
+    const saveKey = `${record.id}:${action}`;
+    if (savingActions.value.has(saveKey)) return;
+    savingActions.value = new Set(savingActions.value).add(saveKey);
+    try {
+      const updated = await window.api.updateWeeklyReflectionImprovementStatus({
+        reflectionId: record.id,
+        action,
+        status,
+      });
+      if (currentRecord.value?.id === updated.id) currentRecord.value = updated;
+      history.value = history.value.map((item) => item.id === updated.id ? updated : item);
+      ElMessage.success('改进动作状态已保存');
+    } catch (error) {
+      ElMessage.error(errorMessage(error, '改进动作状态保存失败'));
+    } finally {
+      const next = new Set(savingActions.value);
+      next.delete(saveKey);
+      savingActions.value = next;
+    }
+  }
+
+  function isActionSaving(action: string) {
+    return Boolean(currentRecord.value && savingActions.value.has(`${currentRecord.value.id}:${action}`));
+  }
+
   function selectHistory(record: WeeklyReflectionRecord) {
     currentRecord.value = record;
     selectedProjectPath.value = record.projectPath;
@@ -185,6 +215,7 @@ export function useWeeklyReflection() {
     sourcesLoading,
     historyLoading,
     generating,
+    savingActions,
     selectedProject,
     displayProjectName,
     publishedSourceCount,
@@ -194,6 +225,8 @@ export function useWeeklyReflection() {
     activeAiProfileName,
     loadSources,
     generateReflection,
+    updateImprovementStatus,
+    isActionSaving,
     selectHistory,
     copyReflection,
     exportReflection,

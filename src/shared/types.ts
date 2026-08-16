@@ -249,6 +249,7 @@ export interface WeeklyReflectionPoint {
 
 export interface WeeklyReflectionProblem extends WeeklyReflectionPoint {
   impact: string;
+  previousProblemRef?: string;
 }
 
 export interface WeeklyReflectionImprovement {
@@ -259,6 +260,47 @@ export interface WeeklyReflectionImprovement {
   evidenceRefs: string[];
 }
 
+export type WeeklyReflectionActionStatus = 'pending' | 'completed' | 'not_completed';
+
+export interface WeeklyReflectionActionState {
+  action: string;
+  status: WeeklyReflectionActionStatus;
+  updatedAt: string;
+}
+
+export interface WeeklyReflectionActionStatusUpdate {
+  reflectionId: number;
+  action: string;
+  status: WeeklyReflectionActionStatus;
+}
+
+export interface WeeklyReflectionPreviousActionReview {
+  actionRef: string;
+  action: string;
+  previousStatus: WeeklyReflectionActionStatus;
+  suggestedStatus: WeeklyReflectionActionStatus;
+  assessment: string;
+  evidenceRefs: string[];
+}
+
+export interface WeeklyReflectionPreviousContext {
+  reflectionId: number;
+  startDate: string;
+  endDate: string;
+  actions: Array<{
+    ref: string;
+    action: string;
+    status: WeeklyReflectionActionStatus;
+    expectedOutcome: string;
+  }>;
+  problems: Array<{
+    ref: string;
+    title: string;
+    detail: string;
+    impact: string;
+  }>;
+}
+
 export interface WeeklyReflectionMetadata {
   title: string;
   overview: string;
@@ -266,6 +308,7 @@ export interface WeeklyReflectionMetadata {
   problems: WeeklyReflectionProblem[];
   shortcomings: WeeklyReflectionPoint[];
   improvements: WeeklyReflectionImprovement[];
+  previousActionReviews: WeeklyReflectionPreviousActionReview[];
   nextWeekFocus: string[];
 }
 
@@ -286,6 +329,7 @@ export interface WeeklyReflectionRecord {
   sourceReports: WeeklyReflectionSource[];
   content: string;
   structuredJson: WeeklyReflectionMetadata;
+  actionStates: WeeklyReflectionActionState[];
   aiProfileId: string;
   generatedAt: string;
   updatedAt: string;

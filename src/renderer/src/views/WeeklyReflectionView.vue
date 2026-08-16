@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { BrainCog, ClipboardCopy, Download, FileSearch, History, RefreshCw, Sparkles, X } from 'lucide-vue-next';
 import PageHeader from '@/components/common/PageHeader.vue';
+import WeeklyReflectionActionPanel from '@/components/reflection/WeeklyReflectionActionPanel.vue';
 import { useWeeklyReflection } from '@/composables/useWeeklyReflection';
 
 const emit = defineEmits<{
@@ -12,7 +13,7 @@ const {
   projects, history, sources, currentRecord, selectedSource, selectedProjectPath, dateRange, sourceScope,
   projectsLoading, sourcesLoading, historyLoading, generating, displayProjectName, publishedSourceCount,
   totalCommits, totalFiles, hasMultiProjectSource, activeAiProfileName, generateReflection, selectHistory,
-  copyReflection, exportReflection,
+  updateImprovementStatus, isActionSaving, copyReflection, exportReflection,
 } = useWeeklyReflection();
 
 const metadata = computed(() => currentRecord.value?.structuredJson ?? null);
@@ -27,14 +28,6 @@ function sourceLabel(ref: string) {
 
 function openSource(ref: string) {
   selectedSource.value = currentRecord.value?.sourceReports.find((source) => source.ref === ref) ?? null;
-}
-
-function priorityLabel(priority: 'high' | 'medium' | 'low') {
-  return priority === 'high' ? '高' : priority === 'medium' ? '中' : '低';
-}
-
-function priorityType(priority: 'high' | 'medium' | 'low') {
-  return priority === 'high' ? 'danger' : priority === 'medium' ? 'warning' : 'info';
 }
 
 function formatDateTime(value: string) {
@@ -177,7 +170,10 @@ function formatDateTime(value: string) {
               <h3>发现的问题</h3>
               <div v-if="metadata.problems.length" class="reflection-point-list">
                 <article v-for="item in metadata.problems" :key="item.title">
-                  <strong>{{ item.title }}</strong>
+                  <div class="reflection-problem-title">
+                    <strong>{{ item.title }}</strong>
+                    <el-tag v-if="item.previousProblemRef" size="small" type="warning" effect="plain">重复问题</el-tag>
+                  </div>
                   <p>{{ item.detail }}</p>
                   <small>影响：{{ item.impact }}</small>
                   <div class="reflection-evidence-links">
@@ -203,22 +199,14 @@ function formatDateTime(value: string) {
             </section>
           </div>
 
-          <section class="reflection-improvement-section">
-            <h3>后续改进动作</h3>
-            <div v-if="metadata.improvements.length" class="reflection-improvement-list">
-              <article v-for="item in metadata.improvements" :key="item.action">
-                <div>
-                  <el-tag :type="priorityType(item.priority)" size="small" effect="plain">{{ priorityLabel(item.priority) }}优先级</el-tag>
-                  <strong>{{ item.action }}</strong>
-                </div>
-                <p>{{ item.reason }}</p>
-                <small>预期结果：{{ item.expectedOutcome }}</small>
-                <div class="reflection-evidence-links">
-                  <el-button v-for="ref in item.evidenceRefs" :key="ref" link type="primary" @click="openSource(ref)">{{ sourceLabel(ref) }}</el-button>
-                </div>
-              </article>
-            </div>
-          </section>
+          <WeeklyReflectionActionPanel
+            v-if="currentRecord"
+            aria-label="后续改进动作"
+            :record="currentRecord"
+            :saving="isActionSaving"
+            @open-source="openSource"
+            @update-status="updateImprovementStatus"
+          />
 
           <section class="reflection-focus-section">
             <h3>下周重点</h3>
