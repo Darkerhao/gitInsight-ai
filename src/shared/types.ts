@@ -214,6 +214,81 @@ export interface DailyReportRecord {
   generatedAt: string;
   updatedAt: string;
   manualWorkContent?: string;
+  structuredJson?: StructuredReportMetadata;
+}
+
+export type WeeklyReflectionSourceScope = 'all' | 'published';
+
+export interface WeeklyReflectionParams {
+  projectPath: string;
+  startDate: string;
+  endDate: string;
+  sourceScope?: WeeklyReflectionSourceScope;
+  aiProfileId?: string;
+}
+
+export interface WeeklyReflectionSource {
+  ref: string;
+  reportId: number;
+  date: string;
+  projectName: string;
+  report: string;
+  reportStatus: DailyReportRecord['status'];
+  published: boolean;
+  multiProject: boolean;
+  commitsCount: number;
+  filesCount: number;
+  structuredJson?: StructuredReportMetadata;
+}
+
+export interface WeeklyReflectionPoint {
+  title: string;
+  detail: string;
+  evidenceRefs: string[];
+}
+
+export interface WeeklyReflectionProblem extends WeeklyReflectionPoint {
+  impact: string;
+}
+
+export interface WeeklyReflectionImprovement {
+  action: string;
+  reason: string;
+  priority: 'high' | 'medium' | 'low';
+  expectedOutcome: string;
+  evidenceRefs: string[];
+}
+
+export interface WeeklyReflectionMetadata {
+  title: string;
+  overview: string;
+  strengths: WeeklyReflectionPoint[];
+  problems: WeeklyReflectionProblem[];
+  shortcomings: WeeklyReflectionPoint[];
+  improvements: WeeklyReflectionImprovement[];
+  nextWeekFocus: string[];
+}
+
+export interface WeeklyReflectionProject {
+  path: string;
+  name: string;
+  reportCount: number;
+  publishedCount: number;
+}
+
+export interface WeeklyReflectionRecord {
+  id: number;
+  projectPath: string;
+  projectName: string;
+  startDate: string;
+  endDate: string;
+  sourceScope: WeeklyReflectionSourceScope;
+  sourceReports: WeeklyReflectionSource[];
+  content: string;
+  structuredJson: WeeklyReflectionMetadata;
+  aiProfileId: string;
+  generatedAt: string;
+  updatedAt: string;
 }
 
 export interface SyncLogRecord {

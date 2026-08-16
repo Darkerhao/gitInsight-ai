@@ -31,6 +31,10 @@ import type {
   StorageInfo,
   SyncLogRecord,
   SyncFeishuDailyPayload,
+  WeeklyReflectionParams,
+  WeeklyReflectionProject,
+  WeeklyReflectionRecord,
+  WeeklyReflectionSource,
 } from '../src/shared/types.js';
 
 contextBridge.exposeInMainWorld('api', {
@@ -61,6 +65,13 @@ contextBridge.exposeInMainWorld('api', {
   listErrorLogs: (limit?: number) => ipcRenderer.invoke('error-log:list', limit) as Promise<ErrorLogRecord[]>,
   queryHistoryLogs: (query?: HistoryLogQuery) => ipcRenderer.invoke('history-log:query', query) as Promise<HistoryLogPage>,
   listHistoryProjects: () => ipcRenderer.invoke('history-log:list-projects') as Promise<string[]>,
+  listWeeklyReflectionProjects: () => ipcRenderer.invoke('weekly-reflection:list-projects') as Promise<WeeklyReflectionProject[]>,
+  listWeeklyReflectionSources: (params: WeeklyReflectionParams) =>
+    ipcRenderer.invoke('weekly-reflection:list-sources', params) as Promise<WeeklyReflectionSource[]>,
+  listWeeklyReflections: (limit?: number) =>
+    ipcRenderer.invoke('weekly-reflection:list', limit) as Promise<WeeklyReflectionRecord[]>,
+  generateWeeklyReflection: (params: WeeklyReflectionParams) =>
+    ipcRenderer.invoke('weekly-reflection:generate', params) as Promise<WeeklyReflectionRecord>,
   getStorageInfo: () => ipcRenderer.invoke('storage:info') as Promise<StorageInfo>,
   getCheckinWalletSnapshot: () =>
     ipcRenderer.invoke('checkin-wallet:get-snapshot') as Promise<CheckinWalletSnapshot>,

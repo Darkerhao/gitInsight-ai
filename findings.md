@@ -1,5 +1,24 @@
 # 产品化优化修复发现记录
 
+## 2026-08-16 项目周反思 v1
+
+- `daily_reports.status = failed` 不能直接表示日报无效：无 Git 提交但有 `manualWorkContent` 的有效日报也会被记录为 failed；来源选择必须结合正文、手工内容和成功同步状态判断。
+- 同一天重复生成会放大 AI 证据；每个项目每天只取一份，优先单项目日报，再按 `updatedAt/id` 取最新记录。
+- 多项目合并日报只在当天没有单项目日报时纳入，并显式标记，Prompt 要求忽略无法归属当前项目的内容。
+- 月反思和年度总结是用户已确认的后续方向，因此采用通用 `project_reflections + period_type`，但第一版接口和页面仍只暴露周反思。
+- 本机绝对项目路径只用于本地精确匹配，不发送给 AI；AI 只看到项目显示名、日期和日报快照。
+- AI 返回结构、证据引用或改进动作证据不合法时直接失败，不保存本地模板或伪反思。
+
+### 本轮错误
+
+| 错误 | 次数 | 处理 |
+| --- | --- | --- |
+| 解析函数将 `priority` 扩宽为普通 string | 1 | 显式声明 `WeeklyReflectionImprovement` 返回类型，专项测试转绿 |
+| 旧周报页面 smoke 硬编码 `generate|weekly|history` 路由顺序 | 1 | 更新为新增周反思后的完整路由契约，不改运行逻辑 |
+| 冷启动只恢复最近结果、筛选范围仍停留在默认项目 | 1 | `loadHistory()` 复用 `selectHistory()`，统一恢复项目、日期和来源范围 |
+| 后台 Electron 的路由过渡因计时节流停在 leave-active | 1 | 仅在验证启动参数中关闭后台节流，确认不是生产业务回归 |
+| 全量测试首次清理临时目录时出现 Windows `ENOTEMPTY` | 1 | 生产构建完成后串行重跑，全量 44/44 通过 |
+
 ## 2026-08-16 一周日报批量工作台
 
 - 现有 `window.api.generateReport` 接受单个 `date + repoPaths`，`saveDailyReport` 支持编辑后覆盖保存，`syncFeishuDaily` 每次提交一条飞书明细；因此新模块可以在 renderer 编排“日期 × 项目”草稿，不需要新增 IPC 或后端 schema。

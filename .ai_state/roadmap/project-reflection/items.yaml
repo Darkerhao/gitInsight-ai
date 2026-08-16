@@ -1,0 +1,18 @@
+roadmap_slug: project-reflection
+created: 2026-08-16
+total_items: 2
+items:
+  - slug: weekly-reflection-generate
+    title: "周反思生成闭环"
+    status: completed
+    sprint_slug: "project-weekly-reflection-v1"
+    blocked_by: []
+    estimated_complexity: L
+    notes: "来源筛选、当前 AI 配置、严格 JSON、证据校验、通用反思表、IPC/preload 和生成页面。"
+  - slug: weekly-reflection-history-export
+    title: "历史查看、复制与导出"
+    status: completed
+    sprint_slug: "project-weekly-reflection-v1"
+    blocked_by: [weekly-reflection-generate]
+    estimated_complexity: M
+    notes: "同范围覆盖、历史恢复、来源详情、复制和 Markdown 导出。"

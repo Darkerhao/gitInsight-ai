@@ -12,6 +12,7 @@ import type {
   HistoryLogQuery,
   SaveDailyReportPayload,
   SyncFeishuDailyPayload,
+  WeeklyReflectionParams,
 } from '../../src/shared/types.js';
 import { getAutoSyncState, runAutoSync, saveConfigAndReschedule, validateAutoSync } from './autoSync.js';
 import { getCheckinWalletSnapshot, importCheckinWallet, runDailyCheckin, spendCheckinCoins } from './checkinWallet.js';
@@ -25,6 +26,7 @@ import { generateReport } from './report.js';
 import { scanRepositories } from './repoScan.js';
 import { getMainWindow } from './windows.js';
 import { testAiConnection } from './aiClient.js';
+import { generateWeeklyReflection, getWeeklyReflectionHistory, getWeeklyReflectionProjects, getWeeklyReflectionSources } from './reflection.js';
 
 export function registerIpcHandlers() {
   ipcMain.handle('app:load-config', async () => loadConfig());
@@ -48,6 +50,10 @@ export function registerIpcHandlers() {
   ipcMain.handle('error-log:list', async (_event, limit?: number) => listErrorLogs(limit));
   ipcMain.handle('history-log:query', async (_event, query?: HistoryLogQuery) => queryHistoryLogs(query));
   ipcMain.handle('history-log:list-projects', async () => listHistoryProjects());
+  ipcMain.handle('weekly-reflection:list-projects', async () => getWeeklyReflectionProjects());
+  ipcMain.handle('weekly-reflection:list-sources', async (_event, params: WeeklyReflectionParams) => getWeeklyReflectionSources(params));
+  ipcMain.handle('weekly-reflection:list', async (_event, limit?: number) => getWeeklyReflectionHistory(limit));
+  ipcMain.handle('weekly-reflection:generate', async (_event, params: WeeklyReflectionParams) => generateWeeklyReflection(params));
   ipcMain.handle('storage:info', async () => getStorageInfo());
   ipcMain.handle('checkin-wallet:get-snapshot', async () => getCheckinWalletSnapshot());
   ipcMain.handle('checkin-wallet:daily-checkin', async () => runDailyCheckin());

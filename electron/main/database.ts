@@ -19,8 +19,10 @@ import type {
   SaveDailyReportPayload,
   StorageInfo,
   SyncLogRecord,
+  StructuredReportMetadata,
 } from '../../src/shared/types.js';
 import { ensureConfigDir, getConfigPath, getDatabasePath, getSecretsPath } from './paths.js';
+import { ensureReflectionSchema } from './reflectionStore.js';
 import { backfillTimelineSnapshots, ensureTimelineSchema, upsertTimelineSnapshot } from './timeline.js';
 
 export let sqlDatabase: import('sql.js').Database | null = null;
@@ -153,6 +155,7 @@ export async function getDatabase() {
 
   `);
   ensureDailyReportTimeRangeColumns(sqlDatabase);
+  ensureReflectionSchema(sqlDatabase);
   ensureJiaziFarmPlots(sqlDatabase);
   ensureTimelineSchema(sqlDatabase);
   await backfillTimelineSnapshots(sqlDatabase);
@@ -186,6 +189,17 @@ export function parseManualWorkContent(value: unknown) {
     return typeof parsed.manualWorkContent === 'string' && parsed.manualWorkContent.trim()
       ? parsed.manualWorkContent.trim()
       : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+
+export function parseStructuredReportMetadata(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  try {
+    const parsed = JSON.parse(value) as StructuredReportMetadata;
+    return parsed && typeof parsed === 'object' ? parsed : undefined;
   } catch {
     return undefined;
   }
@@ -270,6 +284,7 @@ export function rowToDailyReportRecord(row: Record<string, unknown>): DailyRepor
     generatedAt: String(row.generated_at || ''),
     updatedAt: String(row.updated_at || ''),
     manualWorkContent: parseManualWorkContent(row.raw_input_json),
+    structuredJson: parseStructuredReportMetadata(row.structured_json),
   };
 }
 

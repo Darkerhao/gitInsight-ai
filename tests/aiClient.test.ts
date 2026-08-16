@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { testAiConnection } from '../electron/main/aiClient.js';
+import { callAiWeeklyReflection, testAiConnection } from '../electron/main/aiClient.js';
 
 test('testAiConnection 使用当前配置调用模型并返回连接耗时', async () => {
   const originalFetch = globalThis.fetch;
@@ -130,6 +130,35 @@ test('testAiConnection 将服务端 524 转换为上游超时提示', async () =
     const result = await testAiConnection({ baseUrl: 'https://api.example.com', apiKey: 'key', model: 'demo-model' });
     assert.equal(result.success, false);
     assert.match(result.message, /上游响应超时/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('callAiWeeklyReflection 使用当前模型并解析严格 JSON', async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedBody: Record<string, unknown> = {};
+  globalThis.fetch = async (_input, init) => {
+    requestedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({
+        title: '项目周反思', overview: '完成核心功能。',
+        strengths: [{ title: '交付完整', detail: '完成开发和验证。', evidenceRefs: ['R1'] }],
+        problems: [], shortcomings: [],
+        improvements: [{ action: '补充回归清单', reason: '减少遗漏', priority: 'high', expectedOutcome: '发布前完成验证', evidenceRefs: ['R1'] }],
+        nextWeekFocus: ['执行回归清单'],
+      }) } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  try {
+    const result = await callAiWeeklyReflection(
+      { aiBaseUrl: 'https://api.example.com/v1', aiApiKey: 'key', aiModel: 'demo-model' },
+      'reflection prompt',
+    );
+    assert.equal(result.title, '项目周反思');
+    assert.equal(requestedBody.model, 'demo-model');
+    assert.equal(requestedBody.temperature, 0.2);
   } finally {
     globalThis.fetch = originalFetch;
   }

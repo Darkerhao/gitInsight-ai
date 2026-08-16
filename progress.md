@@ -2,6 +2,16 @@
 
 ## 2026-08-16
 
+- 用户确认先实现项目周反思 v1，后续再扩展月反思和年度总结。
+- 分诊为跨数据库、AI、Electron IPC 和 Vue renderer 的大型 Feature，建立 `.ai_state/roadmap/project-reflection/` 两个纵向条目。
+- 已完成日报来源纯函数：最多 7 天、精确项目路径、全部/仅已提交、每天去重、单项目优先、手工日报和已提交日报有效性处理。
+- 已完成严格 JSON 解析、所有分析项证据引用校验、Markdown 投影和纯函数/SQL.js 存储专项测试，当前 8/8 通过。
+- 持久化采用通用 `project_reflections(period_type=week)`，不保存重复可变 Markdown；读取时由结构化结果投影。
+- 已接入主进程编排、AI 调用、IPC/preload、周反思页面、历史记录、来源日报抽屉、复制与导出。
+- 真实 Electron + 活动 AI 配置生成成功：2 天来源、约 45 秒，生成 3 条优点、3 条问题、2 条不足、4 条改进动作和 4 项下周重点；全部分析项含有效日报证据。
+- 运行验证发现冷启动仅恢复结果、未恢复筛选范围；`loadHistory()` 改为复用 `selectHistory()`，冷启动已恢复项目、日期、来源和生成按钮。
+- 最终门禁：周反思 8/8 + 页面 smoke、全量 44/44 + 两个页面 smoke、typecheck、build、diff check 全部通过；复制与来源抽屉已在真实 Electron 中验证。
+
 - 收到新增独立“一周日报”模块需求，确认现有链路已支持单日期/多项目生成、日报保存编辑和飞书单条同步，可直接编排复用。
 - 分诊结论：新增 renderer 页面与纯函数工时分配测试，不新增数据库/飞书协议，不改现有单日生成与自动同步。
 - 已确认 quantum-codegen 所需 `docs/ai/convention-pack` 在本仓库不存在；按真实 Electron/Vue 结构实现，并将约定缺失记录到 findings。

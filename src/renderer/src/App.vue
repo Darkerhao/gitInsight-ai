@@ -8,6 +8,7 @@ import WelcomeGate from '@/components/WelcomeGate.vue';
 import ReportConfigView from '@/views/ReportConfigView.vue';
 import ReportGenerateView from '@/views/ReportGenerateView.vue';
 import WeeklyReportsView from '@/views/WeeklyReportsView.vue';
+import WeeklyReflectionView from '@/views/WeeklyReflectionView.vue';
 import HistoryLogsView from '@/views/HistoryLogsView.vue';
 import JiaziTimelineView from '@/views/JiaziTimelineView.vue';
 import SystemSettingsView from '@/views/SystemSettingsView.vue';
@@ -53,6 +54,7 @@ const viewMap = {
   config: ReportConfigView,
   generate: ReportGenerateView,
   weekly: WeeklyReportsView,
+  reflection: WeeklyReflectionView,
   history: HistoryLogsView,
   timeline: JiaziTimelineView,
   ai: ReportConfigView,
