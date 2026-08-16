@@ -1,5 +1,22 @@
 # 产品化优化修复发现记录
 
+## 2026-08-16 一周日报批量工作台
+
+- 现有 `window.api.generateReport` 接受单个 `date + repoPaths`，`saveDailyReport` 支持编辑后覆盖保存，`syncFeishuDaily` 每次提交一条飞书明细；因此新模块可以在 renderer 编排“日期 × 项目”草稿，不需要新增 IPC 或后端 schema。
+- 现有日报页的项目工时算法依据提交数/文件数；本需求明确要求依据工作内容，新增模块采用同一天内各项目“今日工作内容”条目数与内容长度计算权重，以默认日工时按 0.5 小时分配，缺少内容时保留默认值。
+- quantum-codegen page mode 要求的 `docs/ai/convention-pack` 不存在；不能使用其脚手架模板，改按当前仓库的 Vue 3 + Element Plus + vue-router 真实结构实现。
+- 新模块不把草稿另存为临时后端实体：生成接口本身已持久化生成记录，编辑保存时以 `historyId` 覆盖同一条日报；批量发布只逐条复用现有飞书提交接口，失败状态留在对应草稿。
+- 运行时验证：`node tests/ui-shell.smoke.mjs` 仍因既有 `src/renderer/src/components/rewards/effects/CodeMaterializeEffect.vue` 的 emoji 断言失败；新页面静态契约检查通过，未修改无关奖励组件。
+- 运行时验证：当前无 Playwright 配置/依赖，也没有用户授权的飞书账号与可写测试数据，因此真实 Electron/飞书 POST 标记为 BLOCKED，不宣称已联调成功。
+
+### 本轮错误
+
+| 错误 | 次数 | 处理 |
+| --- | --- | --- |
+| NodeNext 类型导入缺少 `.js` 扩展名 | 1 | 修正 `src/shared/weeklyReport.ts` 为 `./types.js`，focused test 转绿 |
+| PowerShell `node -e` 引号转义导致静态契约脚本语法错误 | 1 | 改用 `rg --fixed-strings` 逐项检查 |
+| 既有 UI shell emoji 断言失败 | 1 | 隔离为基线 blocker，不修改无关奖励组件 |
+
 ## 2026-07-25 Signal Atelier
 
 - 当前视觉令牌和 shell 样式以 Element Plus 默认后台语法为主；新增单独 atelier 覆盖层比重写 2600+ 行旧样式更安全。

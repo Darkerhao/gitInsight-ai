@@ -1,5 +1,20 @@
 # 产品化优化修复进度
 
+## 2026-08-16
+
+- 收到新增独立“一周日报”模块需求，确认现有链路已支持单日期/多项目生成、日报保存编辑和飞书单条同步，可直接编排复用。
+- 分诊结论：新增 renderer 页面与纯函数工时分配测试，不新增数据库/飞书协议，不改现有单日生成与自动同步。
+- 已确认 quantum-codegen 所需 `docs/ai/convention-pack` 在本仓库不存在；按真实 Electron/Vue 结构实现，并将约定缺失记录到 findings。
+- 已新增 `WeeklyReportsView.vue` 与 `_weekly-report.scss`，在日报中心增加 `/weekly` 菜单/路由；按日期×项目生成草稿，支持逐条编辑保存、单独提交和逐条批量提交。
+- 已新增 `src/shared/weeklyReport.ts` 的日期切片与工作内容工时分配纯函数及 3 个测试；工时按同日“今日工作内容”权重以 0.5 小时粒度分配，手动工时可保留或强制重算。
+- `npm run test:weekly-report` 3/3、`npm test` 23/23 已通过；准备复跑最终类型检查、构建和 diff 检查。
+- Review Pass 2 的手动工时容量、超容量发布、模块大小和行为测试问题已全部修复；Spec Compliance 为 PASS。
+- 修正动作模块拆分后的页面 smoke 检查位置；`npm run test:weekly-report` 10/10 + smoke、`npm test` 33/33、`npm run typecheck`、`npm run build`、`git diff --check` 全部通过。
+- `node tests/ui-shell.smoke.mjs` 仍在既有 `CodeMaterializeEffect.vue` emoji 断言处失败；真实飞书提交因无授权账号和可写测试数据未执行。
+- Pass 3/4 继续修复模块职责、函数/文件长度、外部错误脱敏和动态日工时测试；周报模块所有函数不超过 40 行、文件不超过 300 行。
+- 最终门禁更新为周报 12/12 + 页面 smoke、全量 35/35、typecheck、build、diff check 全绿；构建仅保留既有 Element Plus PURE 注释告警。
+- 复用已运行的本项目 `electron-vite dev` 验证 `#/weekly`：实际 DOM 已渲染一周日报完整四段工作流；浏览器因缺少 Electron preload API 被既有启动遮罩覆盖，未将截图标为视觉验收通过。
+
 ## 2026-08-04
 
 - 多任务自动同步（方案 B）：分诊、A/B 决策与设计文档在前一会话完成；`_index.md` 已路由 stage=impl、红区、worktree 写者。

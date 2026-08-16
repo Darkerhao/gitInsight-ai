@@ -7,6 +7,7 @@ import AppTopbar from '@/components/AppTopbar.vue';
 import WelcomeGate from '@/components/WelcomeGate.vue';
 import ReportConfigView from '@/views/ReportConfigView.vue';
 import ReportGenerateView from '@/views/ReportGenerateView.vue';
+import WeeklyReportsView from '@/views/WeeklyReportsView.vue';
 import HistoryLogsView from '@/views/HistoryLogsView.vue';
 import JiaziTimelineView from '@/views/JiaziTimelineView.vue';
 import SystemSettingsView from '@/views/SystemSettingsView.vue';
@@ -51,6 +52,7 @@ const legacyNavMap: Record<string, NavKey> = {
 const viewMap = {
   config: ReportConfigView,
   generate: ReportGenerateView,
+  weekly: WeeklyReportsView,
   history: HistoryLogsView,
   timeline: JiaziTimelineView,
   ai: ReportConfigView,

@@ -1,7 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
 
-export const navKeys = ['config', 'generate', 'history', 'timeline', 'ai', 'system'] as const;
+export const navKeys = ['config', 'generate', 'weekly', 'history', 'timeline', 'ai', 'system'] as const;
 export type NavKey = (typeof navKeys)[number];
 
 const EmptyRouteView = {
@@ -31,7 +31,7 @@ const routes: RouteRecordRaw[] = [
     redirect: '/timeline',
   },
   {
-    path: '/:nav(config|generate|history|timeline|ai|system)',
+    path: '/:nav(config|generate|weekly|history|timeline|ai|system)',
     component: EmptyRouteView,
   },
   {

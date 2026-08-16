@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
-import { Bot, BrainCog, FileCog, FileText, FolderKanban, History, Settings, Sparkles, Sprout } from 'lucide-vue-next';
+import { Bot, BrainCog, CalendarDays, FileCog, FileText, FolderKanban, History, Settings, Sparkles, Sprout } from 'lucide-vue-next';
 
 const props = defineProps<{
   activeNav: string;
@@ -21,6 +21,7 @@ const navGroups: NavGroup[] = [
     icon: FolderKanban,
     children: [
       { key: 'generate', label: '日报生成', icon: FileText, enabled: true },
+      { key: 'weekly', label: '一周日报', icon: CalendarDays, enabled: true },
       { key: 'config', label: '日报配置', icon: FileCog, enabled: true },
       { key: 'history', label: '历史日志', icon: History, enabled: true },
     ],
@@ -144,7 +145,7 @@ onBeforeUnmount(() => {
         <Sparkles :size="14" />
         <span>简洁版提示</span>
       </div>
-      <p class="sidebar-tip-desc">保留日报配置、日报生成与历史查看，聚焦你最常用的主流程。</p>
+      <p class="sidebar-tip-desc">保留日报配置、单日生成、一周日报与历史查看，聚焦你最常用的主流程。</p>
       <el-button class="sidebar-tip-btn" @click="emit('update:activeNav', 'generate')">开始生成日报</el-button>
     </div>
   </aside>
