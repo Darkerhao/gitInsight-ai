@@ -1,16 +1,16 @@
 # AI State Index
 
-本轮唯一入口：周反思改进动作闭环——用户确认动作状态，下一期 AI 基于日报复盘执行效果并标记重复问题。
+本轮唯一入口：将应用发布版本从 3.7.5 升级到 3.8.0，并提交版本元数据。
 
 ## 当前路由
 
 - stage: ship
-- route: 红区 / 延续现有周反思的数据、AI、IPC 与 renderer Refactor/Feature
-- design: project_reflections 增加独立 action_state_json；AI 只建议状态，用户确认状态
-- writer: 实现代理完成产品代码，主线程完成审查修复、门禁与真实 Electron 验证
-- confidence: 0.93
-- current_roadmap_slug: project-reflection
-- current_sprint_slug: weekly-reflection-action-loop-v1
+- route: 绿区 / Quick，3 个文件且仅版本元数据与状态索引
+- design: package.json 与 package-lock.json 顶层/根包版本统一为 3.8.0
+- writer: 主线程直接执行
+- confidence: 0.99
+- current_roadmap_slug: none
+- current_sprint_slug: none
 
 ## route_history
 
