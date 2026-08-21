@@ -17,5 +17,7 @@ assert.match(actions, /for \(const draft of drafts\)/, 'batch publish should con
 assert.match(state, /draft\.publishStatus !== 'success'/, 'batch retry should skip successful Feishu submissions');
 assert.match(actions, /draft\.workHoursSource === 'unresolved'/, 'unresolved automatic hours should block Feishu publishing');
 assert.match(page, /:disabled="loading \|\| pushing"/, 'range controls should be locked during generation and publishing');
+assert.match(page, /@click="generateCurrent"[\s\S]*重新生成当前项目/, 'the active date-project draft should support independent regeneration');
+assert.match(workflow, /\.\.\.state, \.\.\.mutations, \.\.\.commands/, 'weekly commands should be exposed to the page');
 
 console.log('weekly report page smoke: pass');

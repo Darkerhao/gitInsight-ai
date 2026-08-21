@@ -77,6 +77,38 @@ test('dirty draft saves with history id before Feishu publishing', async () => {
   assert.equal(publishedReportId, 99);
 });
 
+test('save payload contains structured-cloneable plain objects for IPC', async () => {
+  const api: WeeklyReportApi = {
+    generateReport: async () => makeResult(),
+    saveDailyReport: async (payload) => {
+      assert.doesNotThrow(() => structuredClone(payload));
+      return makeRecord(99);
+    },
+    syncFeishuDaily: async () => true,
+  };
+  const result = makeResult();
+  const draft = makeDraft({
+    result: {
+      ...result,
+      timeRange: new Proxy(result.timeRange!, {}),
+      rawInput: new Proxy(result.rawInput, {}),
+      structuredJson: new Proxy({
+        title: '测试',
+        workItems: new Proxy([new Proxy({ module: '日报', description: '保存', workType: 'Bug 修复' as const }, {})], {}),
+        achievements: new Proxy(['可保存'], {}),
+        techTags: new Proxy(['Electron'], {}),
+        risks: new Proxy([], {}),
+        tomorrowPlan: new Proxy(['提交飞书'], {}),
+        milestone: false,
+      }, {}),
+    },
+    dirty: true,
+  });
+  const actions = createWeeklyReportActions({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo' });
+
+  assert.equal(await actions.saveDraft(draft), true);
+});
+
 test('save failure and unresolved hours both prevent Feishu publishing', async () => {
   let syncCount = 0;
   const api: WeeklyReportApi = {
@@ -109,6 +141,31 @@ test('external failures use stable user-facing messages', async () => {
   assert.equal(saveDraft.message, '保存日报失败，请稍后重试');
   assert.equal(await actions.publishDraft(publishDraft), false);
   assert.equal(publishDraft.message, '提交飞书失败，请稍后重试');
+});
+
+test('a failed project draft can be generated again independently', async () => {
+  let generateCount = 0;
+  const api: WeeklyReportApi = {
+    generateReport: async () => {
+      generateCount += 1;
+      return makeResult();
+    },
+    saveDailyReport: async () => makeRecord(42),
+    syncFeishuDaily: async () => true,
+  };
+  const draft = makeDraft({
+    report: 'AI提示：AI接口调用失败：502',
+    result: null,
+    generateStatus: 'failed',
+    message: '生成日报失败，请稍后重试',
+  });
+  const actions = createWeeklyReportActions({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo' });
+
+  assert.equal(await actions.generateDraft(draft), true);
+  assert.equal(generateCount, 1);
+  assert.equal(draft.generateStatus, 'success');
+  assert.equal(draft.report, makeResult().report);
+  assert.equal(draft.message, '');
 });
 
 test('runWeeklyPublishBatch continues after an item fails', async () => {

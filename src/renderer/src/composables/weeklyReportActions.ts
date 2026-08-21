@@ -10,6 +10,7 @@ import type {
 } from '../../../shared/types.js';
 import { countWeeklyReportFiles } from '../../../shared/weeklyReport.js';
 import { shiftLocalDate } from './assistant/dateUtils.js';
+import { toPlainRawInput, toPlainReportTimeRange, toPlainStructuredJson } from './assistant/reportIpcPayload.js';
 
 export type WeeklyGenerateStatus = 'idle' | 'generating' | 'success' | 'failed';
 export type WeeklyPublishStatus = 'idle' | 'publishing' | 'success' | 'failed';
@@ -69,7 +70,9 @@ async function generateWeeklyDraft(ctx: WeeklyReportActionContext, draft: Weekly
 }
 
 function getDraftTimeRange(draft: WeeklyReportDraft) {
-  return draft.result?.timeRange ?? {
+  const timeRange = toPlainReportTimeRange(draft.result?.timeRange);
+  if (timeRange) return timeRange;
+  return {
     startDateTime: `${draft.date}T00:00:00`,
     endDateTime: `${shiftLocalDate(draft.date, 1)}T00:00:00`,
     label: `${draft.date} 00:00 至 ${shiftLocalDate(draft.date, 1)} 00:00`,
@@ -90,8 +93,8 @@ function buildSavePayload(ctx: WeeklyReportActionContext, draft: WeeklyReportDra
     commitsCount: result?.commits.length ?? 0,
     filesCount: countWeeklyReportFiles(result),
     generatedAt: result?.generatedAt,
-    rawInput: result?.rawInput,
-    structuredJson: result?.structuredJson,
+    rawInput: toPlainRawInput(result?.rawInput),
+    structuredJson: toPlainStructuredJson(result?.structuredJson),
   };
 }
 

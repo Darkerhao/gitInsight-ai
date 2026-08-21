@@ -1,16 +1,16 @@
 # AI State Index
 
-本轮唯一入口：将应用发布版本从 3.7.5 升级到 3.8.0，并提交版本元数据。
+本轮唯一入口：修复一周日报保存时 Vue Proxy 无法通过 Electron IPC，导致后续飞书提交被阻断的问题。
 
 ## 当前路由
 
 - stage: ship
-- route: 绿区 / Quick，3 个文件且仅版本元数据与状态索引
-- design: package.json 与 package-lock.json 顶层/根包版本统一为 3.8.0
+- route: 绿区 / Bugfix，renderer IPC payload 边界的定点修复
+- design: 日报保存前统一复制为可结构化克隆的普通对象
 - writer: 主线程直接执行
-- confidence: 0.99
+- confidence: 0.98
 - current_roadmap_slug: none
-- current_sprint_slug: none
+- current_sprint_slug: weekly-report-save-ipc
 
 ## route_history
 
@@ -22,6 +22,7 @@
 - 2026-08-16 一周日报批量工作台：独立 renderer 模块编排现有生成/保存/飞书单条接口，按日期×项目维护可编辑草稿并按工作内容估算工时；不新增数据库/飞书协议
 - 2026-08-16 项目周反思 v1：跨数据库、AI、IPC 与 renderer；采用通用反思表和日期范围，为已确认的月/年扩展避免迁表，但本轮只实现周反思
 - 2026-08-16 周反思动作闭环：红区 Refactor/Feature；状态与 AI 结果分离，紧邻上一期作为受控上下文，置信度 0.93
+- 2026-08-21 一周日报保存失败：Vue 响应式结果直接进入 Electron IPC，结构化克隆抛出 DataCloneError；采用统一普通对象 payload 边界修复，置信度 0.98
 
 ## 验收入口
 
@@ -38,5 +39,6 @@
 
 ## 交付证据
 
+- 本轮 Bugfix：一周日报深层 Proxy IPC 回归测试 13/13、全量测试 48/48、typecheck、build、diff check 通过；独立 Review Pass 1 = PASS
 - 最终证据：周反思 11/11、全量 48/48、两个页面 smoke、typecheck、build、diff check 全部通过
 - Electron 证据：真实 AI 跨周生成成功；上一期动作复盘 3/3、重复问题 2 条、页面状态和 Markdown 持久化通过

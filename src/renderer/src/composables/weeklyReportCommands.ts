@@ -42,6 +42,24 @@ async function generateAll(ctx: WeeklyReportCommandContext) {
   }
 }
 
+async function generateCurrent(ctx: WeeklyReportCommandContext) {
+  const draft = ctx.state.activeDraft.value;
+  if (!draft) return;
+  if (!ctx.assistant.config.reporterName.trim()) return ElMessage.warning('请先在日报配置中填写汇报人');
+
+  ctx.state.status.value = `正在重新生成 ${ctx.state.displayRepoName(draft.repo)} ${draft.date} 日报`;
+  const success = await ctx.actions.generateDraft(draft);
+  if (success) {
+    ctx.mutations.recalculateWorkHours();
+    await ctx.assistant.refreshLocalData();
+    ctx.state.status.value = `${ctx.state.displayRepoName(draft.repo)} ${draft.date} 日报已重新生成`;
+    ElMessage.success(ctx.state.status.value);
+  } else {
+    ctx.state.status.value = `${ctx.state.displayRepoName(draft.repo)} ${draft.date} 日报重新生成失败`;
+    ElMessage.error(draft.message || '重新生成日报失败');
+  }
+}
+
 async function saveCurrent(ctx: WeeklyReportCommandContext) {
   const draft = ctx.state.activeDraft.value;
   if (!draft) return;
@@ -92,6 +110,7 @@ async function publishAll(ctx: WeeklyReportCommandContext) {
 export function createWeeklyReportCommands(ctx: WeeklyReportCommandContext) {
   return {
     generateAll: () => generateAll(ctx),
+    generateCurrent: () => generateCurrent(ctx),
     saveCurrent: () => saveCurrent(ctx),
     saveAll: () => saveAll(ctx),
     publishCurrent: () => publishCurrent(ctx),

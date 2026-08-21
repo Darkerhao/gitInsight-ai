@@ -1,6 +1,6 @@
 import type { ComputedRef, Ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import { allocateWeeklyDayWorkHours } from '../../../shared/weeklyReport.js';
+import { allocateWeeklyDayWorkHours, countWeeklyReportFiles } from '../../../shared/weeklyReport.js';
 import type { WeeklyReportDraft } from './weeklyReportActions.js';
 
 export interface WeeklyReportHoursState {
@@ -11,7 +11,17 @@ export interface WeeklyReportHoursState {
 
 function allocateDayWorkHours(state: WeeklyReportHoursState, date: string, dailyHours: number, force: boolean) {
   const dayDrafts = state.drafts.value.filter((draft) => draft.date === date && draft.report.trim());
-  const result = allocateWeeklyDayWorkHours(dayDrafts.map((draft) => ({
+  const inactiveDrafts = dayDrafts.filter((draft) => (
+    draft.result !== null
+    && draft.result.commits.length === 0
+    && countWeeklyReportFiles(draft.result) === 0
+  ));
+  for (const draft of inactiveDrafts) {
+    draft.workHours = 0;
+    draft.workHoursSource = 'estimated';
+  }
+  const inactiveKeys = new Set(inactiveDrafts.map((draft) => draft.key));
+  const result = allocateWeeklyDayWorkHours(dayDrafts.filter((draft) => !inactiveKeys.has(draft.key)).map((draft) => ({
     key: draft.key, report: draft.report, workHours: draft.workHours, manual: draft.workHoursSource === 'manual',
   })), dailyHours, force);
   for (const key of result.unresolvedKeys) {
@@ -24,7 +34,7 @@ function allocateDayWorkHours(state: WeeklyReportHoursState, date: string, daily
     draft.workHours = allocation.workHours;
     draft.workHoursSource = 'estimated';
   }
-  return { estimatedCount: result.allocations.length, capacityExceeded: result.unresolvedKeys.length > 0 };
+  return { estimatedCount: inactiveDrafts.length + result.allocations.length, capacityExceeded: result.unresolvedKeys.length > 0 };
 }
 
 function recalculateWorkHours(state: WeeklyReportHoursState, dailyHours: number, force = false) {

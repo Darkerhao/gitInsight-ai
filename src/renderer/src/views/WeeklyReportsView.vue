@@ -12,7 +12,7 @@ const {
   activeDraftKey, loading, pushing, status, selectedRepos, activeDraft, activeReportModel, draftGroups,
   generatedDrafts, dirtyDrafts, pendingPublishDrafts, publishableDrafts, generatedHoursTotal, dateRangeLabel,
   displayRepoName, handleDateRangeChange, formatDateLabel, getStatusLabel, getStatusType, getHoursSourceLabel,
-  updateDraftProject, updateDraftHours, recalculateWorkHours, generateAll, saveCurrent, saveAll, publishCurrent,
+  updateDraftProject, updateDraftHours, recalculateWorkHours, generateAll, generateCurrent, saveCurrent, saveAll, publishCurrent,
   publishAll, openSubmissionRecords, loadFeishuProjects, countWeeklyReportFiles,
 } = useWeeklyReports();
 </script>
@@ -171,7 +171,7 @@ const {
               <div class="weekly-hours-control">
                 <el-input-number
                   :model-value="activeDraft.workHours"
-                  :min="0.5"
+                  :min="0"
                   :max="24"
                   :step="0.5"
                   :precision="1"
@@ -183,6 +183,15 @@ const {
             </div>
           </div>
           <div class="weekly-editor-actions">
+            <el-button
+              :icon="RefreshCw"
+              plain
+              :loading="activeDraft.generateStatus === 'generating'"
+              :disabled="loading || pushing"
+              @click="generateCurrent"
+            >
+              重新生成当前项目
+            </el-button>
             <el-button :icon="Save" plain :disabled="!activeDraft.report.trim()" @click="saveCurrent">保存当前日报</el-button>
             <el-button :icon="Send" type="primary" :loading="pushing" :disabled="!activeDraft.report.trim()" @click="publishCurrent">单独提交飞书</el-button>
           </div>

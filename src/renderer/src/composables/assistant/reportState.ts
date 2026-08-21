@@ -3,6 +3,9 @@ import type { AppConfig, RepoInfo, ReportResult, ReportTimeRange } from '@shared
 import type { ComputedRef, Ref } from 'vue';
 import { buildDateTime, shiftLocalDate } from './dateUtils';
 import { normalizeWorkHours } from './normalizers';
+import { toPlainRawInput, toPlainReportTimeRange } from './reportIpcPayload';
+
+export { toPlainRawInput, toPlainReportTimeRange } from './reportIpcPayload';
 
 type ReportRangeForm = { startDateTime: string; endDateTime: string };
 
@@ -50,25 +53,6 @@ export function resolveReportTimeRange(
   return {
     ...payload,
     label,
-  };
-}
-
-export function toPlainReportTimeRange(timeRange?: ReportTimeRange): ReportTimeRange | undefined {
-  if (!timeRange) return undefined;
-  return {
-    startDateTime: timeRange.startDateTime,
-    endDateTime: timeRange.endDateTime,
-    label: timeRange.label,
-  };
-}
-
-export function toPlainRawInput(rawInput?: ReportResult['rawInput']): ReportResult['rawInput'] | undefined {
-  if (!rawInput) return undefined;
-  return {
-    gitLogs: rawInput.gitLogs,
-    files: rawInput.files,
-    diff: rawInput.diff,
-    ...(rawInput.manualWorkContent ? { manualWorkContent: rawInput.manualWorkContent } : {}),
   };
 }
 
