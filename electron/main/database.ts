@@ -23,6 +23,7 @@ import type {
 } from '../../src/shared/types.js';
 import { ensureConfigDir, getConfigPath, getDatabasePath, getSecretsPath } from './paths.js';
 import { ensureReflectionSchema } from './reflectionStore.js';
+import { ensureWeeklySummarySchema } from './weeklySummaryStore.js';
 import { backfillTimelineSnapshots, ensureTimelineSchema, upsertTimelineSnapshot } from './timeline.js';
 
 export let sqlDatabase: import('sql.js').Database | null = null;
@@ -156,6 +157,7 @@ export async function getDatabase() {
   `);
   ensureDailyReportTimeRangeColumns(sqlDatabase);
   ensureReflectionSchema(sqlDatabase);
+  ensureWeeklySummarySchema(sqlDatabase);
   ensureJiaziFarmPlots(sqlDatabase);
   ensureTimelineSchema(sqlDatabase);
   await backfillTimelineSnapshots(sqlDatabase);

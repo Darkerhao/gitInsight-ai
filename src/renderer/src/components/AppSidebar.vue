@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
-import { Bot, BrainCog, CalendarDays, FileCog, FileText, FolderKanban, History, Lightbulb, Settings, Sparkles, Sprout } from 'lucide-vue-next';
+import { Bot, BrainCog, CalendarDays, FileCog, FileText, FolderKanban, History, Lightbulb, Settings, Sparkles, Sprout, ClipboardList } from 'lucide-vue-next';
 
 const props = defineProps<{
   activeNav: string;
@@ -22,6 +22,7 @@ const navGroups: NavGroup[] = [
     children: [
       { key: 'generate', label: '日报生成', icon: FileText, enabled: true },
       { key: 'weekly', label: '一周日报', icon: CalendarDays, enabled: true },
+      { key: 'summary', label: '会议周报', icon: ClipboardList, enabled: true },
       { key: 'reflection', label: '项目周反思', icon: Lightbulb, enabled: true },
       { key: 'config', label: '日报配置', icon: FileCog, enabled: true },
       { key: 'history', label: '历史日志', icon: History, enabled: true },

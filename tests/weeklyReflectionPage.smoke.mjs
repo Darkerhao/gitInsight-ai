@@ -9,7 +9,7 @@ const app = await readFile(new URL('../src/renderer/src/App.vue', import.meta.ur
 const sidebar = await readFile(new URL('../src/renderer/src/components/AppSidebar.vue', import.meta.url), 'utf8');
 const preload = await readFile(new URL('../electron/preload.ts', import.meta.url), 'utf8');
 
-assert.match(router, /weekly\|reflection\|history/, 'reflection route should be registered beside report routes');
+assert.match(router, /weekly\|(?:summary\|)?reflection\|history/, 'reflection route should be registered beside report routes');
 assert.match(app, /reflection: WeeklyReflectionView/, 'reflection view should be mounted by the app shell');
 assert.match(sidebar, /key: 'reflection'.+label: '项目周反思'/, 'reflection page should have a report-center menu item');
 assert.match(page, /useWeeklyReflection/, 'reflection page should use the dedicated workflow composable');

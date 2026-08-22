@@ -14,6 +14,8 @@ import type {
   SyncFeishuDailyPayload,
   WeeklyReflectionActionStatusUpdate,
   WeeklyReflectionParams,
+  SaveWeeklySummaryPayload,
+  WeeklySummaryParams,
 } from '../../src/shared/types.js';
 import { getAutoSyncState, runAutoSync, saveConfigAndReschedule, validateAutoSync } from './autoSync.js';
 import { getCheckinWalletSnapshot, importCheckinWallet, runDailyCheckin, spendCheckinCoins } from './checkinWallet.js';
@@ -28,6 +30,7 @@ import { scanRepositories } from './repoScan.js';
 import { getMainWindow } from './windows.js';
 import { testAiConnection } from './aiClient.js';
 import { generateWeeklyReflection, getWeeklyReflectionHistory, getWeeklyReflectionProjects, getWeeklyReflectionSources, updateWeeklyReflectionActionStatus } from './reflection.js';
+import { generateWeeklySummary, getWeeklySummary, getWeeklySummaryHistory, getWeeklySummarySources, saveWeeklySummary } from './weeklySummary.js';
 
 export function registerIpcHandlers() {
   ipcMain.handle('app:load-config', async () => loadConfig());
@@ -58,6 +61,11 @@ export function registerIpcHandlers() {
   ipcMain.handle('weekly-reflection:update-improvement-status', async (_event, payload: WeeklyReflectionActionStatusUpdate) =>
     updateWeeklyReflectionActionStatus(payload),
   );
+  ipcMain.handle('weekly-summary:list-sources', async (_event, params: WeeklySummaryParams) => getWeeklySummarySources(params));
+  ipcMain.handle('weekly-summary:list', async (_event, limit?: number) => getWeeklySummaryHistory(limit));
+  ipcMain.handle('weekly-summary:get', async (_event, id: number) => getWeeklySummary(id));
+  ipcMain.handle('weekly-summary:generate', async (_event, params: WeeklySummaryParams) => generateWeeklySummary(params));
+  ipcMain.handle('weekly-summary:save', async (_event, payload: SaveWeeklySummaryPayload) => saveWeeklySummary(payload));
   ipcMain.handle('storage:info', async () => getStorageInfo());
   ipcMain.handle('checkin-wallet:get-snapshot', async () => getCheckinWalletSnapshot());
   ipcMain.handle('checkin-wallet:daily-checkin', async () => runDailyCheckin());

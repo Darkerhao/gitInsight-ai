@@ -335,6 +335,61 @@ export interface WeeklyReflectionRecord {
   updatedAt: string;
 }
 
+export type WeeklySummaryScopeType = 'all' | 'project';
+
+export interface WeeklySummaryParams {
+  startDate: string;
+  endDate: string;
+  projectPath?: string;
+  aiProfileId?: string;
+}
+
+export interface WeeklySummarySource {
+  ref: string;
+  reportId: number;
+  date: string;
+  projectName: string;
+  report: string;
+  commitsCount: number;
+  filesCount: number;
+  multiProject: boolean;
+  manualWorkContent?: string;
+  structuredJson?: StructuredReportMetadata;
+}
+
+export interface WeeklySummaryItem {
+  text: string;
+  evidenceRefs: string[];
+}
+
+export interface WeeklySummaryMetadata {
+  summary: string;
+  completed: WeeklySummaryItem[];
+  highlights: WeeklySummaryItem[];
+  blockers: WeeklySummaryItem[];
+  nextWeek: WeeklySummaryItem[];
+}
+
+export interface WeeklySummaryRecord {
+  id: number;
+  startDate: string;
+  endDate: string;
+  scopeType: WeeklySummaryScopeType;
+  projectPath: string;
+  projectName: string;
+  sourceReports: WeeklySummarySource[];
+  content: string;
+  structuredJson: WeeklySummaryMetadata;
+  aiProfileId: string;
+  generatedAt: string;
+  updatedAt: string;
+}
+
+export interface SaveWeeklySummaryPayload {
+  id: number;
+  content: string;
+}
+
 export interface SyncLogRecord {
   id: number;
   reportId?: number;

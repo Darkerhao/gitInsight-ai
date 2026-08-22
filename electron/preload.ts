@@ -36,6 +36,10 @@ import type {
   WeeklyReflectionProject,
   WeeklyReflectionRecord,
   WeeklyReflectionSource,
+  SaveWeeklySummaryPayload,
+  WeeklySummaryParams,
+  WeeklySummaryRecord,
+  WeeklySummarySource,
 } from '../src/shared/types.js';
 
 contextBridge.exposeInMainWorld('api', {
@@ -75,6 +79,15 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('weekly-reflection:generate', params) as Promise<WeeklyReflectionRecord>,
   updateWeeklyReflectionImprovementStatus: (payload: WeeklyReflectionActionStatusUpdate) =>
     ipcRenderer.invoke('weekly-reflection:update-improvement-status', payload) as Promise<WeeklyReflectionRecord>,
+  listWeeklySummarySources: (params: WeeklySummaryParams) =>
+    ipcRenderer.invoke('weekly-summary:list-sources', params) as Promise<WeeklySummarySource[]> ,
+  listWeeklySummaries: (limit?: number) =>
+    ipcRenderer.invoke('weekly-summary:list', limit) as Promise<WeeklySummaryRecord[]>,
+  getWeeklySummary: (id: number) => ipcRenderer.invoke('weekly-summary:get', id) as Promise<WeeklySummaryRecord | null>,
+  generateWeeklySummary: (params: WeeklySummaryParams) =>
+    ipcRenderer.invoke('weekly-summary:generate', params) as Promise<WeeklySummaryRecord>,
+  saveWeeklySummary: (payload: SaveWeeklySummaryPayload) =>
+    ipcRenderer.invoke('weekly-summary:save', payload) as Promise<WeeklySummaryRecord>,
   getStorageInfo: () => ipcRenderer.invoke('storage:info') as Promise<StorageInfo>,
   getCheckinWalletSnapshot: () =>
     ipcRenderer.invoke('checkin-wallet:get-snapshot') as Promise<CheckinWalletSnapshot>,

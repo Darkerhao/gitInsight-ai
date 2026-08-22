@@ -4,6 +4,92 @@
   gap: 18px;
 }
 
+.weekly-workflow-rail {
+  position: sticky;
+  z-index: 4;
+  top: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+  border: 1px solid var(--weekly-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--el-bg-color) 92%, transparent);
+  padding: 7px;
+  backdrop-filter: blur(10px);
+}
+
+.weekly-workflow-step {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  padding: 8px 10px;
+  color: var(--el-text-color-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.weekly-workflow-step:hover,
+.weekly-workflow-step.active {
+  border-color: color-mix(in srgb, var(--weekly-accent) 38%, var(--weekly-border));
+  background: color-mix(in srgb, var(--weekly-accent) 9%, transparent);
+}
+
+.weekly-workflow-step > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--weekly-accent) 12%, transparent);
+  color: var(--weekly-accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.weekly-workflow-step.is-done > span { background: #36a269; color: #fff; }
+.weekly-workflow-step.is-warning > span { background: #d64545; color: #fff; }
+.weekly-workflow-step strong,
+.weekly-workflow-step small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.weekly-workflow-step strong { color: var(--el-text-color-primary); font-size: 13px; }
+.weekly-workflow-step small { grid-column: 2; margin-top: -4px; color: var(--el-text-color-secondary); font-size: 11px; }
+
+.weekly-generation-progress {
+  display: grid;
+  gap: 9px;
+  margin-top: 18px;
+  border-top: 1px solid var(--weekly-border);
+  padding-top: 16px;
+}
+
+.weekly-generation-progress-head { display: flex; justify-content: space-between; gap: 12px; color: var(--el-text-color-secondary); font-size: 12px; }
+.weekly-generation-progress-head strong { color: var(--el-text-color-primary); font-size: 13px; }
+.weekly-generation-items { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 7px 14px; }
+.weekly-generation-item { min-width: 0; display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 7px; color: var(--el-text-color-secondary); font-size: 12px; }
+.weekly-generation-item > span { width: 7px; height: 7px; border-radius: 50%; background: var(--el-border-color); }
+.weekly-generation-item > span.is-generating { background: #e6a23c; }
+.weekly-generation-item > span.is-success { background: #36a269; }
+.weekly-generation-item > span.is-failed { background: #d64545; }
+.weekly-generation-item strong { overflow: hidden; color: var(--el-text-color-primary); text-overflow: ellipsis; white-space: nowrap; }
+
+.weekly-no-commits-guide { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; border-radius: 8px; background: color-mix(in srgb, #e6a23c 10%, transparent); padding: 10px 12px; color: var(--el-text-color-secondary); font-size: 12px; line-height: 1.5; }
+.weekly-no-commits-guide svg { flex: 0 0 auto; color: #c88900; }
+
+.weekly-publish-check-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+.weekly-publish-check-stats div { border: 1px solid var(--weekly-border); border-radius: 8px; padding: 10px 8px; text-align: center; }
+.weekly-publish-check-stats strong, .weekly-publish-check-stats span { display: block; }
+.weekly-publish-check-stats strong { font-size: 16px; }
+.weekly-publish-check-stats span { margin-top: 3px; color: var(--el-text-color-secondary); font-size: 11px; }
+.weekly-publish-check-issues { border-radius: 8px; background: #fff8e6; padding: 10px 12px; }
+.weekly-publish-check-issues strong { color: #c88900; font-size: 13px; }
+.weekly-publish-check-issues p { margin: 6px 0 0; color: var(--el-text-color-secondary); font-size: 12px; }
+.weekly-publish-check-ready { margin: 0; border-radius: 8px; background: #effaf3; padding: 12px; color: #26834d; font-size: 13px; }
+
 .weekly-setup-card,
 .weekly-draft-list,
 .weekly-editor-panel,

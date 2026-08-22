@@ -30,6 +30,10 @@ import type {
   WeeklyReflectionProject,
   WeeklyReflectionRecord,
   WeeklyReflectionSource,
+  SaveWeeklySummaryPayload,
+  WeeklySummaryParams,
+  WeeklySummaryRecord,
+  WeeklySummarySource,
 } from '@shared/types';
 
 declare global {
@@ -60,6 +64,11 @@ declare global {
       listWeeklyReflections: (limit?: number) => Promise<WeeklyReflectionRecord[]>;
       generateWeeklyReflection: (params: WeeklyReflectionParams) => Promise<WeeklyReflectionRecord>;
       updateWeeklyReflectionImprovementStatus: (payload: WeeklyReflectionActionStatusUpdate) => Promise<WeeklyReflectionRecord>;
+      listWeeklySummarySources: (params: WeeklySummaryParams) => Promise<WeeklySummarySource[]>;
+      listWeeklySummaries: (limit?: number) => Promise<WeeklySummaryRecord[]>;
+      getWeeklySummary: (id: number) => Promise<WeeklySummaryRecord | null>;
+      generateWeeklySummary: (params: WeeklySummaryParams) => Promise<WeeklySummaryRecord>;
+      saveWeeklySummary: (payload: SaveWeeklySummaryPayload) => Promise<WeeklySummaryRecord>;
       getStorageInfo: () => Promise<import('@shared/types').StorageInfo>;
       getCheckinWalletSnapshot: () => Promise<CheckinWalletSnapshot>;
       runDailyCheckin: () => Promise<CheckinResult>;

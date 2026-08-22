@@ -8,7 +8,7 @@ const state = await readFile(new URL('../src/renderer/src/composables/useWeeklyR
 const router = await readFile(new URL('../src/renderer/src/router.ts', import.meta.url), 'utf8');
 const sidebar = await readFile(new URL('../src/renderer/src/components/AppSidebar.vue', import.meta.url), 'utf8');
 
-assert.match(router, /generate\|weekly\|reflection\|history/, 'weekly and reflection routes should be registered beside report routes');
+assert.match(router, /generate\|weekly\|(?:summary\|)?reflection\|history/, 'weekly and reflection routes should be registered beside report routes');
 assert.match(sidebar, /key: 'weekly'.+label: '一周日报'/, 'weekly page should have a dedicated menu item');
 assert.match(page, /useWeeklyReports/, 'weekly page should use the dedicated workflow composable');
 assert.match(actions, /id: draft\.reportId \?\? undefined/, 'editing should overwrite the generated history record');

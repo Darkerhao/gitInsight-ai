@@ -5,8 +5,10 @@ import type {
   ReportTimeRange,
   StructuredReportMetadata,
   WeeklyReflectionMetadata,
+  WeeklySummaryMetadata,
 } from '../../src/shared/types.js';
 import { parseWeeklyReflectionMetadata } from '../../src/shared/weeklyReflection.js';
+import { parseWeeklySummaryMetadata } from '../../src/shared/weeklySummary.js';
 
 type AiRuntimeConfig = {
   aiBaseUrl: string;
@@ -483,4 +485,36 @@ export async function callAiWeeklyReflection(
     throw new Error('AI接口未返回有效的周反思内容');
   }
   return parseWeeklyReflectionMetadata(content);
+}
+
+export async function callAiWeeklySummary(
+  config: AiRuntimeConfig,
+  prompt: string,
+): Promise<WeeklySummaryMetadata> {
+  const chatCompletionsUrl = getChatCompletionsUrl(config.aiBaseUrl);
+  const response = await fetchAi(chatCompletionsUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.aiApiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.aiModel,
+      messages: [
+        { role: 'system', content: '你是一名严谨的中文研发周报助手，只输出合法 JSON。' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.2,
+    }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(await buildAiErrorMessage(config, response, detail));
+  }
+  const data = (await readAiJsonResponse(response, chatCompletionsUrl)) as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+  };
+  const content = data.choices?.[0]?.message?.content;
+  if (typeof content !== 'string' || !content.trim()) throw new Error('AI接口未返回有效的周报内容');
+  return parseWeeklySummaryMetadata(content);
 }

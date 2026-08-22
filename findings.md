@@ -1,5 +1,25 @@
 # 产品化优化修复发现记录
 
+## 2026-08-22 会议汇报周报实现
+
+- 设计文档定义的是独立“周报”模块，不应扩展现有“一周日报”或“周反思”。
+- 当前仓库已有日报查询、AI Client、Electron IPC/preload 和 Vue 路由基础设施，可复用现有调用链。
+- `quantum-codegen` 所需 `docs/ai/convention-pack` 在本仓库不存在；本轮按真实 Electron + Vue 结构实现，不创建虚假的约定包。
+
+### 本轮错误
+
+| 错误 | 次数 | 处理 |
+| --- | --- | --- |
+| 主进程入口误定位为 `electron/main/index.ts` | 1 | 核对 `electron.vite.config.ts` 后改用真实 `electron/main.ts` 与 `electron/main/ipc.ts` |
+| PowerShell 无全局 `tsc` 命令 | 1 | 改用仓库依赖 `npm exec -- tsc` |
+| 重新生成仍保留旧 Markdown，结构化结果与正文不一致 | 1 | 生成时始终从新结构化结果投影正文；只有显式保存时保留人工编辑内容 |
+
+## 2026-08-22 周报 IPC 报错
+
+- 截图中的 `No handler registered for 'weekly-summary:list-sources'` 不是源码缺少注册：`electron/main/ipc.ts` 和 `out/main/main.js` 均已包含该 handler。
+- 实际原因是旧的 `electron-vite dev`/Electron 进程在周报 IPC 实现前启动，renderer/Preload 已更新而主进程未重载，形成版本错位。
+- 已停止并重启当前仓库的 dev/Electron 进程；新进程重新构建 main、preload 并加载周报 handler。
+
 ## 2026-08-16 项目周反思 v1
 
 - `daily_reports.status = failed` 不能直接表示日报无效：无 Git 提交但有 `manualWorkContent` 的有效日报也会被记录为 failed；来源选择必须结合正文、手工内容和成功同步状态判断。
