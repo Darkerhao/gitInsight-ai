@@ -22,6 +22,11 @@ test('getWeeklyWorkContentWeight uses the work section instead of plan text', ()
   assert.ok(getWeeklyWorkContentWeight(long) > getWeeklyWorkContentWeight(short));
 });
 
+test('editor templates use headings recognized by work-hour allocation', () => {
+  const template = '今日工作内容：\n\n1. 完成日报编辑\n\n工作成果：\n\n1. 已保存\n\n明日计划：\n\n1. 继续验证';
+  assert.ok(getWeeklyWorkContentWeight(template) > 0);
+});
+
 test('allocateWeeklyWorkHours keeps half-hour precision and daily total', () => {
   const result = allocateWeeklyWorkHours(
     [

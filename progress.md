@@ -5,8 +5,8 @@
 - 第二阶段已完成：日报质量检查、提交记录证据抽屉、当前项目局部补写、重复内容提醒和三种日报模板。
 - 第三阶段已完成：沿用上次日期/项目配置、最近使用仓库、`Ctrl+S` 保存、`Ctrl+Enter` 提交、仅重试生成失败项、生成并提交。
 - 新增 `src/shared/weeklyReportQuality.ts` 及 3 条质量/重复检测测试，均通过。
-- 页面能力全部限定在 `WeeklyReportsView.vue`，未改单日报页和后端接口。
-- 最终验证：周报专项 19/19、全量测试、页面 smoke、typecheck、build、diff check 已通过；构建仅有 Element Plus 第三方 PURE 注释告警。
+- 页面能力限定在周报页面及其专用 renderer 组件，未改单日报页和后端接口。
+- 最终验证：周报专项 20/20、全量测试、页面 smoke、typecheck、build、diff check 已通过；构建仅有 Element Plus 第三方 PURE 注释告警。
 
 ## 2026-08-22 一周日报第一阶段交互优化
 

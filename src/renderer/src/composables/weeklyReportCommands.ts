@@ -2,6 +2,7 @@ import { ElMessage } from 'element-plus';
 import type { useAssistant } from './useAssistant';
 import { runWeeklyPublishBatch, type createWeeklyReportActions } from './weeklyReportActions';
 import type { createWeeklyReportMutations, WeeklyReportState } from './useWeeklyReportState';
+import type { WeeklyReportDraft } from './weeklyReportActions';
 
 type Assistant = ReturnType<typeof useAssistant>;
 type Actions = ReturnType<typeof createWeeklyReportActions>;
@@ -16,15 +17,16 @@ interface WeeklyReportCommandContext {
 
 async function generateAll(ctx: WeeklyReportCommandContext) {
   const { assistant, state, actions, mutations } = ctx;
-  if (!state.availableDates.value.length) return ElMessage.warning('请选择有效日期范围');
-  if (!state.selectedRepos.value.length) return ElMessage.warning('请至少选择一个项目');
-  if (!assistant.config.reporterName.trim()) return ElMessage.warning('请先在日报配置中填写汇报人');
+  if (!state.availableDates.value.length) { ElMessage.warning('请选择有效日期范围'); return null; }
+  if (!state.selectedRepos.value.length) { ElMessage.warning('请至少选择一个项目'); return null; }
+  if (!assistant.config.reporterName.trim()) { ElMessage.warning('请先在日报配置中填写汇报人'); return null; }
   state.loading.value = true;
   state.status.value = `正在生成 ${state.drafts.value.length} 条项目日报`;
+  let failedCount = 0;
   try {
     const results = await Promise.allSettled(state.drafts.value.map(actions.generateDraft));
     const successCount = results.filter((result) => result.status === 'fulfilled' && result.value).length;
-    const failedCount = results.length - successCount;
+    failedCount = results.length - successCount;
     const allocation = mutations.recalculateWorkHours();
     await assistant.refreshLocalData();
     if (failedCount) {
@@ -40,6 +42,7 @@ async function generateAll(ctx: WeeklyReportCommandContext) {
   } finally {
     state.loading.value = false;
   }
+  return state.drafts.value.filter((draft) => draft.generateStatus === 'success' && draft.report.trim());
 }
 
 async function generateCurrent(ctx: WeeklyReportCommandContext) {
@@ -90,8 +93,8 @@ async function publishCurrent(ctx: WeeklyReportCommandContext) {
   else ElMessage.error(draft.message || '提交飞书失败');
 }
 
-async function publishAll(ctx: WeeklyReportCommandContext) {
-  const targets = ctx.state.pendingPublishDrafts.value;
+async function publishAll(ctx: WeeklyReportCommandContext, requestedTargets?: WeeklyReportDraft[]) {
+  const targets = requestedTargets ?? ctx.state.pendingPublishDrafts.value;
   if (!targets.length) {
     return ElMessage.info(ctx.state.generatedDrafts.value.length ? '全部已生成日报均已提交成功' : '请先生成至少一条日报');
   }
@@ -119,8 +122,8 @@ async function retryFailed(ctx: WeeklyReportCommandContext) {
 }
 
 async function generateAndPublish(ctx: WeeklyReportCommandContext) {
-  await generateAll(ctx);
-  if (ctx.state.generatedDrafts.value.some((draft) => draft.report.trim())) await publishAll(ctx);
+  const generated = await generateAll(ctx);
+  if (generated?.length) await publishAll(ctx, generated);
 }
 
 export function createWeeklyReportCommands(ctx: WeeklyReportCommandContext) {

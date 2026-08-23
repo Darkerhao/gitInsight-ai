@@ -25,4 +25,3 @@ test('duplicate detection ignores punctuation and whitespace', () => {
   ]);
   assert.deepEqual([...duplicates].sort(), ['a', 'b']);
 });
-

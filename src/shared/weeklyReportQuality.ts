@@ -39,4 +39,3 @@ export function findWeeklyDuplicateKeys(drafts: WeeklyQualityDraft[]) {
   }
   return new Set([...groups.values()].filter((keys) => keys.length > 1).flat());
 }
-

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const page = await readFile(new URL('../src/renderer/src/views/WeeklyReportsView.vue', import.meta.url), 'utf8');
+const setup = await readFile(new URL('../src/renderer/src/components/weekly/WeeklyReportSetupSection.vue', import.meta.url), 'utf8');
+const editor = await readFile(new URL('../src/renderer/src/components/weekly/WeeklyReportEditorSection.vue', import.meta.url), 'utf8');
 const workflow = await readFile(new URL('../src/renderer/src/composables/useWeeklyReports.ts', import.meta.url), 'utf8');
 const actions = await readFile(new URL('../src/renderer/src/composables/weeklyReportActions.ts', import.meta.url), 'utf8');
 const state = await readFile(new URL('../src/renderer/src/composables/useWeeklyReportState.ts', import.meta.url), 'utf8');
@@ -16,8 +18,8 @@ assert.match(actions, /draft\.dirty \|\| !draft\.reportId/, 'publishing a dirty 
 assert.match(actions, /for \(const draft of drafts\)/, 'batch publish should continue item by item');
 assert.match(state, /draft\.publishStatus !== 'success'/, 'batch retry should skip successful Feishu submissions');
 assert.match(actions, /draft\.workHoursSource === 'unresolved'/, 'unresolved automatic hours should block Feishu publishing');
-assert.match(page, /:disabled="loading \|\| pushing"/, 'range controls should be locked during generation and publishing');
-assert.match(page, /@click="generateCurrent"[\s\S]*重新生成当前项目/, 'the active date-project draft should support independent regeneration');
+assert.match(setup, /:disabled="loading \|\| pushing"/, 'range controls should be locked during generation and publishing');
+assert.match(editor, /@click="emit\('generate-current'\)"[\s\S]*重新生成当前项目/, 'the active date-project draft should support independent regeneration');
 assert.match(workflow, /\.\.\.state, \.\.\.mutations, \.\.\.commands/, 'weekly commands should be exposed to the page');
 
 console.log('weekly report page smoke: pass');
