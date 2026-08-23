@@ -1,15 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { CalendarDays, Command, Moon, Save, Sun } from 'lucide-vue-next';
+import { CalendarDays, Command, Moon, Save, Sun, ZoomIn, ZoomOut } from 'lucide-vue-next';
 import { useAssistant } from '@/composables/useAssistant';
 import CheckinRewardCenter from '@/components/rewards/CheckinRewardCenter.vue';
 
 const props = defineProps<{
   themeMode: 'light' | 'dark';
+  zoomFactor: number;
+  canZoomOut: boolean;
+  canZoomIn: boolean;
 }>();
 
 const emit = defineEmits<{
   (event: 'toggle-theme', payload: MouseEvent): void;
+  (event: 'zoom-out'): void;
+  (event: 'zoom-in'): void;
+  (event: 'reset-zoom'): void;
 }>();
 
 const assistant = useAssistant();
@@ -19,6 +25,7 @@ const reporterName = computed(() => config.reporterName || '默认用户');
 const avatarText = computed(() => reporterName.value.trim().slice(0, 1) || '用');
 const themeIcon = computed(() => (props.themeMode === 'dark' ? Sun : Moon));
 const themeLabel = computed(() => (props.themeMode === 'dark' ? '切换浅色模式' : '切换深色模式'));
+const zoomLabel = computed(() => `${Math.round(props.zoomFactor * 100)}%`);
 const greetingText = computed(() => {
   const hour = new Date().getHours();
   if (hour < 6) return '午夜好';
@@ -56,6 +63,30 @@ const currentDateLabel = computed(() =>
 
     <div class="topbar-actions">
       <CheckinRewardCenter />
+
+      <div class="topbar-zoom" aria-label="页面缩放">
+        <el-tooltip content="缩小（Ctrl/Cmd + -）" placement="bottom">
+          <el-button
+            class="topbar-zoom-btn"
+            :icon="ZoomOut"
+            :disabled="!canZoomOut"
+            aria-label="缩小页面"
+            @click="emit('zoom-out')"
+          />
+        </el-tooltip>
+        <el-tooltip content="重置缩放（Ctrl/Cmd + 0）" placement="bottom">
+          <button class="topbar-zoom-value" type="button" @click="emit('reset-zoom')">{{ zoomLabel }}</button>
+        </el-tooltip>
+        <el-tooltip content="放大（Ctrl/Cmd + +）" placement="bottom">
+          <el-button
+            class="topbar-zoom-btn"
+            :icon="ZoomIn"
+            :disabled="!canZoomIn"
+            aria-label="放大页面"
+            @click="emit('zoom-in')"
+          />
+        </el-tooltip>
+      </div>
 
       <el-tooltip :content="themeLabel" placement="bottom">
         <el-button

@@ -570,6 +570,51 @@
   font-weight: 500;
 }
 
+.topbar-zoom {
+  height: 34px;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--c-border-strong);
+  border-radius: 9px;
+  background: var(--c-surface);
+}
+
+.topbar-zoom-btn.el-button {
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--c-text-muted);
+}
+
+.topbar-zoom-btn.el-button:hover:not(.is-disabled),
+.topbar-zoom-btn.el-button:focus-visible {
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+}
+
+.topbar-zoom-value {
+  min-width: 50px;
+  padding: 0 8px;
+  border: 0;
+  border-inline: 1px solid var(--c-border-strong);
+  background: transparent;
+  color: var(--c-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.topbar-zoom-value:hover,
+.topbar-zoom-value:focus-visible {
+  color: var(--c-primary);
+  background: var(--c-primary-soft);
+}
+
 .config-scope-group {
   display: flex;
   flex-direction: column;

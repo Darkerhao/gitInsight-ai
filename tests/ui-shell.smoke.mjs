@@ -25,6 +25,8 @@ assert.match(app, /handleScroll/, 'app shell should expose scroll progress feedb
 assert.match(sidebar, /lucide-vue-next/, 'sidebar icons must come from Lucide');
 assert.match(sidebar, /atelier-sidebar/, 'sidebar should use the atelier shell');
 assert.match(topbar, /topbar-command/, 'topbar should expose the command/status rail');
+assert.match(topbar, /topbar-zoom/, 'topbar should expose page zoom controls');
+assert.match(app, /handlePageZoomShortcut/, 'app shell should support page zoom shortcuts');
 assert.match(generate, /atelier-page/, 'report generation should opt into the atelier page treatment');
 assert.match(generate, /data-stage="scope"/, 'scope stage should be addressable for interaction styling');
 assert.match(generate, /data-stage="publish"/, 'publish stage should be addressable for interaction styling');

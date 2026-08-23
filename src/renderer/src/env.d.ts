@@ -76,6 +76,9 @@ declare global {
       spendCheckinCoins: (payload: CheckinCoinSpendPayload) => Promise<CheckinWalletSnapshot>;
       saveDailyReport: (payload: import('@shared/types').SaveDailyReportPayload) => Promise<import('@shared/types').DailyReportRecord>;
       getTimelineSnapshot: (query?: import('@shared/types').TimelineQuery) => Promise<import('@shared/types').TimelineSnapshot>;
+      getZoomFactor: () => Promise<number>;
+      setZoomFactor: (factor: number) => Promise<number>;
+      changeZoomFactor: (delta: number) => Promise<number>;
       onAutoSyncUpdated: (callback: (state: AutoSyncState) => void) => () => void;
       onCheckinWalletUpdated: (callback: (snapshot: CheckinWalletSnapshot) => void) => () => void;
       onFeishuAuthUpdated: (callback: (snapshot: FeishuAuthSnapshot) => void) => () => void;

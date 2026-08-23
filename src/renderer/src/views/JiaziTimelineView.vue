@@ -2,12 +2,13 @@
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import * as echarts from 'echarts';
 import { useRouter } from 'vue-router';
-import { Activity, Award, ChevronLeft, ChevronRight, Filter, GitCommitHorizontal, Maximize2, Minimize2, PanelRightClose, PanelRightOpen, Pause, Play, RefreshCw, Sparkles, Star, Zap } from 'lucide-vue-next';
+import { Activity, Award, ChevronLeft, ChevronRight, Filter, GitCommitHorizontal, Maximize2, Minimize2, PanelRightClose, PanelRightOpen, Pause, Play, RefreshCw, Sparkles, Star, Zap, ZoomIn, ZoomOut } from 'lucide-vue-next';
 import { useTimeline, typeOptions } from '@/composables/useTimeline';
 import { usePlayback } from '@/composables/usePlayback';
 import { useFullscreen } from '@/composables/useFullscreen';
 import { tone, formatDate, dayTitle, daySummary, displayTitle, detailSections } from '@/utils/timelineText';
 import type { TimelineScale } from '@/composables/useTimeline';
+import { usePageZoom } from '@/composables/usePageZoom';
 
 const router = useRouter();
 const timelineRoot = ref<HTMLElement | null>(null);
@@ -21,6 +22,7 @@ const {
 
 const { isPlaying, togglePlayback } = usePlayback(days, selectedDayIndex, selectDay);
 const { isFullscreen, toggleFullscreen } = useFullscreen(timelineRoot);
+const { zoomFactor, canZoomOut, canZoomIn, zoomIn, zoomOut, resetPageZoom } = usePageZoom();
 
 const detailCollapsed = ref(false);
 const isMergingToday = ref(false);
@@ -160,6 +162,11 @@ function onWheel(event: WheelEvent) {
         <button class="play" :class="{ active: isPlaying }" @click="togglePlayback"><Pause v-if="isPlaying" :size="15" /><Play v-else :size="15" />{{ isPlaying ? '暂停' : '轨迹回放' }}</button>
         <button class="refresh" :class="{ spinning: loading }" @click="forceReload()"><RefreshCw :size="16" /></button>
         <button class="detail-toggle" :title="detailCollapsed ? '展开详情' : '收起详情'" @click="detailCollapsed = !detailCollapsed"><PanelRightOpen v-if="detailCollapsed" :size="16" /><PanelRightClose v-else :size="16" /></button>
+        <div class="timeline-zoom" aria-label="页面缩放">
+          <button :disabled="!canZoomOut()" title="缩小（Ctrl/Cmd + -）" aria-label="缩小页面" @click="zoomOut"><ZoomOut :size="15" /></button>
+          <button class="timeline-zoom-value" title="重置缩放（Ctrl/Cmd + 0）" @click="resetPageZoom">{{ Math.round(zoomFactor * 100) }}%</button>
+          <button :disabled="!canZoomIn()" title="放大（Ctrl/Cmd + +）" aria-label="放大页面" @click="zoomIn"><ZoomIn :size="15" /></button>
+        </div>
         <button class="fullscreen-button" :title="isFullscreen ? '退出全屏' : '全屏查看'" @click="toggleFullscreen"><Minimize2 v-if="isFullscreen" :size="16" /><Maximize2 v-else :size="16" /><span>{{ isFullscreen ? '退出全屏' : '全屏' }}</span></button>
       </div>
     </header>
@@ -314,6 +321,18 @@ header p { margin: 0; color: var(--tl-muted); font-size: 13.5px; }
   font-size: 12px; cursor: pointer;
 }
 .fullscreen-button:hover { color: #dffaff; border-color: rgba(110, 231, 249, 0.4); background: rgba(110, 231, 249, 0.07); }
+.timeline-zoom {
+  height: 34px; display: flex; align-items: center;
+  border: 1px solid var(--tl-line); border-radius: 9px;
+  background: rgba(148, 163, 184, 0.05); overflow: hidden;
+}
+.timeline-zoom button {
+  height: 100%; min-width: 32px; padding: 0 8px; border: 0;
+  display: grid; place-items: center; color: var(--tl-faint); background: transparent; cursor: pointer;
+}
+.timeline-zoom button:hover:not(:disabled) { color: #dffaff; background: rgba(110, 231, 249, 0.1); }
+.timeline-zoom button:disabled { opacity: 0.35; cursor: default; }
+.timeline-zoom .timeline-zoom-value { min-width: 48px; border-inline: 1px solid var(--tl-line); font-size: 11px; }
 
 /* ── 概览统计 ── */
 .overview {

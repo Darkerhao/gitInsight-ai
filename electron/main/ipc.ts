@@ -31,6 +31,7 @@ import { getMainWindow } from './windows.js';
 import { testAiConnection } from './aiClient.js';
 import { generateWeeklyReflection, getWeeklyReflectionHistory, getWeeklyReflectionProjects, getWeeklyReflectionSources, updateWeeklyReflectionActionStatus } from './reflection.js';
 import { generateWeeklySummary, getWeeklySummary, getWeeklySummaryHistory, getWeeklySummarySources, saveWeeklySummary } from './weeklySummary.js';
+import { changePageZoom, clampPageZoom } from '../../src/shared/pageZoom.js';
 
 export function registerIpcHandlers() {
   ipcMain.handle('app:load-config', async () => loadConfig());
@@ -50,6 +51,17 @@ export function registerIpcHandlers() {
   ipcMain.handle('timeline:get-snapshot', async (_event, query?: TimelineQuery) =>
     getTimelineSnapshot(query, await getDatabase()),
   );
+  ipcMain.handle('view:get-zoom-factor', (event) => event.sender.getZoomFactor());
+  ipcMain.handle('view:set-zoom-factor', (event, factor: number) => {
+    const next = clampPageZoom(factor);
+    event.sender.setZoomFactor(next);
+    return next;
+  });
+  ipcMain.handle('view:change-zoom-factor', (event, delta: number) => {
+    const next = changePageZoom(event.sender.getZoomFactor(), delta);
+    event.sender.setZoomFactor(next);
+    return next;
+  });
   ipcMain.handle('sync-log:list', async (_event, limit?: number) => listSyncLogs(limit));
   ipcMain.handle('error-log:list', async (_event, limit?: number) => listErrorLogs(limit));
   ipcMain.handle('history-log:query', async (_event, query?: HistoryLogQuery) => queryHistoryLogs(query));

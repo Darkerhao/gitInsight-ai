@@ -101,6 +101,9 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('daily-report:save', payload) as Promise<DailyReportRecord>,
   getTimelineSnapshot: (query?: TimelineQuery) =>
     ipcRenderer.invoke('timeline:get-snapshot', query) as Promise<TimelineSnapshot>,
+  getZoomFactor: () => ipcRenderer.invoke('view:get-zoom-factor') as Promise<number>,
+  setZoomFactor: (factor: number) => ipcRenderer.invoke('view:set-zoom-factor', factor) as Promise<number>,
+  changeZoomFactor: (delta: number) => ipcRenderer.invoke('view:change-zoom-factor', delta) as Promise<number>,
   onAutoSyncUpdated: (callback: (state: AutoSyncState) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: AutoSyncState) => callback(state);
     ipcRenderer.on('auto-sync:updated', listener);

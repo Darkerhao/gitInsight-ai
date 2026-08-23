@@ -13,6 +13,7 @@ import WeeklyReflectionView from '@/views/WeeklyReflectionView.vue';
 import HistoryLogsView from '@/views/HistoryLogsView.vue';
 import JiaziTimelineView from '@/views/JiaziTimelineView.vue';
 import SystemSettingsView from '@/views/SystemSettingsView.vue';
+import { usePageZoom } from '@/composables/usePageZoom';
 import { navKeys } from '@/router';
 import type { NavKey } from '@/router';
 
@@ -34,6 +35,7 @@ const appRoot = ref<HTMLElement | null>(null);
 const appScroll = ref<HTMLElement | null>(null);
 const route = useRoute();
 const router = useRouter();
+const { zoomFactor, canZoomOut, canZoomIn, initializePageZoom, zoomIn, zoomOut, resetPageZoom } = usePageZoom();
 let scrollElement: HTMLElement | null = null;
 let pointerFrame = 0;
 const pointerTarget = { x: 50, y: 18 };
@@ -272,6 +274,27 @@ function handleScroll() {
   node.style.setProperty('--scroll-progress', `${Math.max(0, Math.min(1, ratio))}`);
 }
 
+function handlePageZoomShortcut(event: KeyboardEvent) {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+
+  if (event.code === 'Equal' || event.code === 'NumpadAdd' || event.key === '+') {
+    event.preventDefault();
+    void zoomIn();
+    return;
+  }
+
+  if (event.code === 'Minus' || event.code === 'NumpadSubtract' || event.key === '-') {
+    event.preventDefault();
+    void zoomOut();
+    return;
+  }
+
+  if (event.code === 'Digit0' || event.code === 'Numpad0') {
+    event.preventDefault();
+    void resetPageZoom();
+  }
+}
+
 watch(
   themeMode,
   (mode) => {
@@ -286,10 +309,12 @@ watch(
 );
 
 onMounted(async () => {
+  window.addEventListener('keydown', handlePageZoomShortcut, true);
   scrollElement = appScroll.value;
   scrollElement?.addEventListener('scroll', handleScroll, { passive: true });
   handleScroll();
 
+  await initializePageZoom();
   await assistant.init();
   assistantReady.value = true;
   if (needsOnboarding()) {
@@ -301,6 +326,7 @@ onBeforeUnmount(() => {
   if (pointerFrame) window.cancelAnimationFrame(pointerFrame);
   pointerFrame = 0;
   scrollElement?.removeEventListener('scroll', handleScroll);
+  window.removeEventListener('keydown', handlePageZoomShortcut, true);
   scrollElement = null;
   assistant.dispose();
 });
@@ -323,7 +349,16 @@ onBeforeUnmount(() => {
     <AppSidebar v-model:active-nav="activeNav" />
 
     <main class="app-main">
-      <AppTopbar :theme-mode="themeMode" @toggle-theme="toggleThemeMode" />
+      <AppTopbar
+        :theme-mode="themeMode"
+        :zoom-factor="zoomFactor"
+        :can-zoom-out="canZoomOut()"
+        :can-zoom-in="canZoomIn()"
+        @toggle-theme="toggleThemeMode"
+        @zoom-out="zoomOut"
+        @zoom-in="zoomIn"
+        @reset-zoom="resetPageZoom"
+      />
 
       <div ref="appScroll" class="app-scroll atelier-scroll" :class="{ 'is-immersive': activeNav === 'timeline' }">
         <Transition name="route-switch" mode="out-in">
