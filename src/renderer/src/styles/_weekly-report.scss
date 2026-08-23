@@ -208,6 +208,24 @@
   margin: 0;
 }
 
+.weekly-recent-repos,
+.weekly-editor-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.weekly-recent-repos {
+  margin-top: 10px;
+}
+
+.weekly-recent-repos > span,
+.weekly-shortcut-hint {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
 .weekly-action-row,
 .weekly-publish-actions {
   display: flex;
@@ -239,6 +257,66 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.weekly-editor-tools {
+  border-top: 1px solid var(--weekly-border);
+  padding-top: 14px;
+}
+
+.weekly-editor-tools .el-select {
+  width: 130px;
+}
+
+.weekly-shortcut-hint {
+  margin-left: auto;
+}
+
+.weekly-quality-issues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.weekly-quality-issues span {
+  border-radius: 999px;
+  background: color-mix(in srgb, #e6a23c 10%, transparent);
+  padding: 4px 8px;
+  color: #a86f00;
+  font-size: 11px;
+}
+
+.weekly-evidence-drawer {
+  display: grid;
+  gap: 12px;
+}
+
+.weekly-evidence-summary,
+.weekly-evidence-commit {
+  border: 1px solid var(--weekly-border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.weekly-evidence-summary strong,
+.weekly-evidence-summary span,
+.weekly-evidence-commit strong,
+.weekly-evidence-commit small {
+  display: block;
+}
+
+.weekly-evidence-summary span,
+.weekly-evidence-commit small,
+.weekly-evidence-commit p {
+  margin-top: 5px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.weekly-evidence-commit p {
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
 }
 
 .weekly-status {

@@ -4,6 +4,7 @@ import { CalendarDays, Calculator, CircleAlert, ExternalLink, FileText, RefreshC
 import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import { useWeeklyReports } from '@/composables/useWeeklyReports';
+import { checkWeeklyReportQuality, findWeeklyDuplicateKeys } from '@shared/weeklyReportQuality';
 
 const emit = defineEmits<{
   (event: 'navigate', value: string): void;
@@ -15,13 +16,31 @@ const {
   generatedDrafts, dirtyDrafts, pendingPublishDrafts, publishableDrafts, generatedHoursTotal, dateRangeLabel,
   displayRepoName, handleDateRangeChange, formatDateLabel, getStatusLabel, getStatusType, getHoursSourceLabel,
   updateDraftProject, updateDraftHours, recalculateWorkHours, generateAll, generateCurrent, saveCurrent, saveAll, publishCurrent,
-  publishAll, openSubmissionRecords, loadFeishuProjects, countWeeklyReportFiles,
+  publishAll, retryFailed, generateAndPublish, openSubmissionRecords, loadFeishuProjects, countWeeklyReportFiles,
 } = useWeeklyReports();
 
 type WorkflowStage = 'scope' | 'generate' | 'publish';
 const activeStage = ref<WorkflowStage>('scope');
 const publishCheckVisible = ref(false);
 const autoSaveTimer = ref<ReturnType<typeof setTimeout> | null>(null);
+const showEvidence = ref(false);
+const showSupplement = ref(false);
+const supplementText = ref('');
+const recentRepoPaths = ref<string[]>([]);
+const templateKey = ref('standard');
+const evidenceDraft = computed(() => activeDraft.value);
+const recentRepos = computed(() => recentRepoPaths.value.map((path) => sortedRepos.value.find((repo) => repo.path === path)).filter(Boolean));
+const duplicateKeys = computed(() => findWeeklyDuplicateKeys(drafts.value.map((draft) => ({
+  key: draft.key, date: draft.date, projectName: displayRepoName(draft.repo), report: draft.report,
+  commitsCount: draft.result?.commits.length ?? 0, filesCount: countWeeklyReportFiles(draft.result),
+}))));
+const activeQuality = computed(() => {
+  const draft = activeDraft.value;
+  return draft ? checkWeeklyReportQuality({
+    key: draft.key, date: draft.date, projectName: displayRepoName(draft.repo), report: draft.report,
+    commitsCount: draft.result?.commits.length ?? 0, filesCount: countWeeklyReportFiles(draft.result),
+  }) : null;
+});
 const workflowStages = [
   { key: 'scope' as const, index: '01', label: '范围' },
   { key: 'generate' as const, index: '02', label: '生成' },
@@ -76,7 +95,7 @@ function selectDraft(key: string) {
     confirmButtonText: '保存并切换', cancelButtonText: '暂不切换', type: 'warning',
   }).then(async () => {
     await saveCurrent();
-    activeDraftKey.value = key;
+    if (!current.dirty) activeDraftKey.value = key;
   }).catch(() => undefined);
 }
 
@@ -104,13 +123,74 @@ function confirmPublishAll() {
   void publishAll();
 }
 
+function loadRecentConfig() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('gitinsight:weekly-recent-config') || '{}') as { repoPaths?: string[]; dateRange?: [string, string] };
+    recentRepoPaths.value = raw.repoPaths ?? [];
+    if (raw.dateRange?.length === 2) dateRange.value = raw.dateRange;
+  } catch {
+    recentRepoPaths.value = [];
+  }
+}
+
+function saveRecentConfig() {
+  localStorage.setItem('gitinsight:weekly-recent-config', JSON.stringify({ repoPaths: selectedRepoPaths.value, dateRange: dateRange.value }));
+  recentRepoPaths.value = [...selectedRepoPaths.value];
+}
+
+function reuseLastConfig() {
+  const available = recentRepoPaths.value.filter((path) => sortedRepos.value.some((repo) => repo.path === path));
+  if (available.length) selectedRepoPaths.value = available;
+  ElMessage.success(available.length ? '已沿用上次日期和项目范围' : '暂无可沿用的上次配置');
+}
+
+function applyTemplate(key: string) {
+  const templates: Record<string, string> = {
+    standard: '今日完成：\n- \n\n结果与影响：\n- \n\n下一步计划：\n- ',
+    concise: '今日完成：\n- \n结果：\n- ',
+    detailed: '今日完成：\n- \n\n问题与处理：\n- \n\n结果与影响：\n- \n\n下一步计划：\n- ',
+  };
+  if (!activeDraft.value) return;
+  activeReportModel.value = templates[key] ?? templates.standard;
+  ElMessage.success('已插入日报模板，请补充具体内容');
+}
+
+function appendSupplement() {
+  const value = supplementText.value.trim();
+  if (!value || !activeDraft.value) return;
+  const base = activeDraft.value.report.trim();
+  activeReportModel.value = `${base}${base ? '\n\n' : ''}补充工作：\n${value.split(/\r?\n/).map((line) => `- ${line.trim()}`).join('\n')}`;
+  supplementText.value = '';
+  showSupplement.value = false;
+  ElMessage.success('已补充到当前日报');
+}
+
 watch(activeReportModel, scheduleAutoSave);
-onMounted(() => window.addEventListener('beforeunload', handleBeforeUnload));
-onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnload));
+onMounted(() => {
+  loadRecentConfig();
+  window.addEventListener('beforeunload', handleBeforeUnload);
+  window.addEventListener('keydown', handleKeydown);
+});
+watch([dateRange, selectedRepoPaths], saveRecentConfig, { deep: true });
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload);
+  window.removeEventListener('keydown', handleKeydown);
+});
 function handleBeforeUnload(event: BeforeUnloadEvent) {
   if (!dirtyDrafts.value.length) return;
   event.preventDefault();
   event.returnValue = '';
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (!(event.ctrlKey || event.metaKey)) return;
+  if (event.key.toLowerCase() === 's') {
+    event.preventDefault();
+    void saveCurrent();
+  } else if (event.key === 'Enter' && activeDraft.value?.report.trim()) {
+    event.preventDefault();
+    void publishCurrent();
+  }
 }
 </script>
 
@@ -182,6 +262,18 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
             {{ displayRepoName(repo) }}
           </el-checkbox>
         </el-checkbox-group>
+        <div v-if="recentRepos.length" class="weekly-recent-repos">
+          <span>最近使用</span>
+          <el-button
+            v-for="repo in recentRepos"
+            :key="repo!.path"
+            size="small"
+            plain
+            @click="selectedRepoPaths = Array.from(new Set([...selectedRepoPaths, repo!.path]))"
+          >
+            {{ displayRepoName(repo!) }}
+          </el-button>
+        </div>
         <p v-if="!sortedRepos.length" class="muted-text">暂无已扫描项目，请先在日报配置中选择工作区。</p>
       </div>
 
@@ -192,8 +284,10 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
           <span><strong>{{ generatedHoursTotal.toFixed(1) }}h</strong> 已分配工时</span>
         </div>
         <div class="weekly-action-buttons">
+          <el-button plain @click="reuseLastConfig">沿用上次配置</el-button>
           <el-button :icon="Calculator" plain :disabled="!generatedDrafts.length" @click="recalculateWorkHours(true)">按工作内容重算工时</el-button>
           <el-button :icon="FileText" type="primary" :loading="loading" :disabled="!selectedRepos.length" @click="generateAll">生成整周日报</el-button>
+          <el-button :icon="Send" type="success" plain :loading="loading || pushing" :disabled="!selectedRepos.length" @click="generateAndPublish">生成并提交</el-button>
         </div>
       </div>
       <div v-if="generationProgress.total" class="weekly-generation-progress" aria-live="polite">
@@ -271,6 +365,10 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
             <span>提交记录：{{ activeDraft.result?.commits.length ?? 0 }}</span>
             <span>影响文件：{{ countWeeklyReportFiles(activeDraft.result) }}</span>
             <span v-if="activeDraft.message" class="weekly-editor-message">{{ activeDraft.message }}</span>
+            <el-tag v-if="activeQuality" :type="activeQuality.score === 'good' ? 'success' : activeQuality.score === 'empty' ? 'info' : 'warning'" size="small" effect="plain">
+              质量：{{ activeQuality.label }}
+            </el-tag>
+            <el-tag v-if="activeDraft && duplicateKeys.has(activeDraft.key)" type="warning" size="small" effect="plain">内容重复</el-tag>
           </div>
           <div v-if="activeDraft.report.trim() && activeDraft.result && !activeDraft.result.commits.length" class="weekly-no-commits-guide">
             <CircleAlert :size="18" />
@@ -317,6 +415,20 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
               </div>
             </div>
           </div>
+          <div class="weekly-editor-tools">
+            <el-select v-model="templateKey" size="small">
+              <el-option label="标准模板" value="standard" />
+              <el-option label="简洁模板" value="concise" />
+              <el-option label="详细模板" value="detailed" />
+            </el-select>
+            <el-button size="small" plain @click="applyTemplate(templateKey)">插入模板</el-button>
+            <el-button size="small" plain @click="showSupplement = true">局部补写</el-button>
+            <el-button size="small" plain :disabled="!activeDraft?.result" @click="showEvidence = true">查看提交依据</el-button>
+            <span class="weekly-shortcut-hint">Ctrl+S 保存 · Ctrl+Enter 提交当前</span>
+          </div>
+          <div v-if="activeQuality?.issues.length" class="weekly-quality-issues">
+            <span v-for="issue in activeQuality.issues" :key="issue">{{ issue }}</span>
+          </div>
           <div class="weekly-editor-actions">
             <el-button
               :icon="RefreshCw"
@@ -354,6 +466,7 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
       <div class="weekly-publish-actions">
         <el-button :icon="RefreshCw" plain :disabled="!generatedDrafts.length" @click="recalculateWorkHours(true)">重新估算全部工时</el-button>
         <el-button :icon="Save" plain :disabled="!dirtyDrafts.length" @click="saveAll">保存全部修改</el-button>
+        <el-button :icon="RefreshCw" plain :disabled="!drafts.some((draft) => draft.generateStatus === 'failed')" @click="retryFailed">仅重试失败项</el-button>
         <el-button :icon="Send" type="primary" :loading="pushing" :disabled="!pendingPublishDrafts.length" @click="openPublishCheck">提交全部待提交日报</el-button>
       </div>
       <div v-if="generatedDrafts.length" class="weekly-publish-table">
@@ -395,6 +508,25 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
       <template #footer>
         <el-button @click="publishCheckVisible = false">返回修改</el-button>
         <el-button type="primary" :loading="pushing" @click="confirmPublishAll">确认提交 {{ publishCheckStats.publishable }} 条</el-button>
+      </template>
+    </el-dialog>
+
+    <el-drawer v-model="showEvidence" title="提交记录依据" size="520px">
+      <div v-if="evidenceDraft?.result" class="weekly-evidence-drawer">
+        <div class="weekly-evidence-summary"><strong>{{ evidenceDraft.date }} · {{ displayRepoName(evidenceDraft.repo) }}</strong><span>{{ evidenceDraft.result.commits.length }} 次提交 · {{ countWeeklyReportFiles(evidenceDraft.result) }} 个影响文件</span></div>
+        <article v-for="commit in evidenceDraft.result.commits" :key="commit.hash" class="weekly-evidence-commit">
+          <strong>{{ commit.message }}</strong><small>{{ commit.author }} · {{ commit.date }}</small>
+          <p>{{ commit.files.join('、') || '暂无文件明细' }}</p>
+        </article>
+      </div>
+      <el-empty v-else description="当前日报暂无提交依据" />
+    </el-drawer>
+
+    <el-dialog v-model="showSupplement" title="局部补写当前日报" width="520px">
+      <el-input v-model="supplementText" type="textarea" :rows="6" maxlength="1000" show-word-limit placeholder="只补充需要追加的工作、结果或协作内容，每行一项。" />
+      <template #footer>
+        <el-button @click="showSupplement = false">取消</el-button>
+        <el-button type="primary" :disabled="!supplementText.trim()" @click="appendSupplement">追加到日报</el-button>
       </template>
     </el-dialog>
   </div>

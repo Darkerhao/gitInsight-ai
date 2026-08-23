@@ -107,6 +107,22 @@ async function publishAll(ctx: WeeklyReportCommandContext) {
   }
 }
 
+async function retryFailed(ctx: WeeklyReportCommandContext) {
+  const failed = ctx.state.drafts.value.filter((draft) => draft.generateStatus === 'failed');
+  if (!failed.length) return ElMessage.info('当前没有生成失败的日报');
+  ctx.state.loading.value = true;
+  const results = await Promise.allSettled(failed.map(ctx.actions.generateDraft));
+  ctx.mutations.recalculateWorkHours();
+  ctx.state.loading.value = false;
+  const success = results.filter((result) => result.status === 'fulfilled' && result.value).length;
+  ElMessage[success === failed.length ? 'success' : 'warning'](`已重试 ${success}/${failed.length} 条失败日报`);
+}
+
+async function generateAndPublish(ctx: WeeklyReportCommandContext) {
+  await generateAll(ctx);
+  if (ctx.state.generatedDrafts.value.some((draft) => draft.report.trim())) await publishAll(ctx);
+}
+
 export function createWeeklyReportCommands(ctx: WeeklyReportCommandContext) {
   return {
     generateAll: () => generateAll(ctx),
@@ -115,6 +131,8 @@ export function createWeeklyReportCommands(ctx: WeeklyReportCommandContext) {
     saveAll: () => saveAll(ctx),
     publishCurrent: () => publishCurrent(ctx),
     publishAll: () => publishAll(ctx),
+    retryFailed: () => retryFailed(ctx),
+    generateAndPublish: () => generateAndPublish(ctx),
     openSubmissionRecords: () => ctx.assistant.openFeishuSubmissionRecords(ctx.state.activeDraft.value?.date ?? ctx.state.availableDates.value[0]),
   };
 }
