@@ -18,6 +18,8 @@ import type {
   FeishuProjectOption,
   FeishuProjectOptionsPayload,
   FeishuSubmissionRecordsPayload,
+  FeishuDuplicateCheckPayload,
+  FeishuDuplicateCheckResult,
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
   GenerateReportParams,
@@ -53,6 +55,8 @@ contextBridge.exposeInMainWorld('api', {
   loginFeishu: (payload: FeishuLoginPayload) => ipcRenderer.invoke('feishu:login', payload) as Promise<FeishuAuthSnapshot>,
   openFeishuSubmissionRecords: (payload: FeishuSubmissionRecordsPayload) =>
     ipcRenderer.invoke('feishu:open-submission-records', payload) as Promise<boolean>,
+  checkFeishuDuplicate: (payload: FeishuDuplicateCheckPayload) =>
+    ipcRenderer.invoke('feishu:check-duplicate', payload) as Promise<FeishuDuplicateCheckResult>,
   listFeishuFields: (payload: FeishuProjectOptionsPayload) =>
     ipcRenderer.invoke('feishu:list-fields', payload) as Promise<FeishuFieldOption[]>,
   listFeishuProjects: (payload: FeishuProjectOptionsPayload) =>

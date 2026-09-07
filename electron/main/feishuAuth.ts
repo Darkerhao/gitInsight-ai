@@ -1,6 +1,6 @@
 import { BrowserWindow, session } from 'electron';
 import { DEFAULT_FEISHU_FORM_CONFIG } from '../../src/shared/types.js';
-import type { FeishuAuthSnapshot, FeishuFormConfig, FeishuLoginPayload, FeishuSubmissionRecordsPayload } from '../../src/shared/types.js';
+import type { FeishuAuthSnapshot, FeishuDuplicateCheckPayload, FeishuDuplicateCheckResult, FeishuFormConfig, FeishuLoginPayload, FeishuSubmissionRecordsPayload } from '../../src/shared/types.js';
 import { getWindowOptionsIcon, sendToMainWindow } from './windows.js';
 
 export let feishuWindow: BrowserWindow | null = null;
@@ -271,6 +271,43 @@ export function requireFeishuConfigValue(value: string, label: string) {
     throw new Error(`请先填写${label}`);
   }
   return normalizedValue;
+}
+
+function buildFeishuDuplicateCheckScript(payload: Pick<FeishuDuplicateCheckPayload, 'targetDate' | 'projectName' | 'projectOptionId' | 'workHours'>) {
+  return `
+(() => {
+  const targetDate = ${JSON.stringify(payload.targetDate.trim())};
+  const projectName = ${JSON.stringify(payload.projectName?.trim() || '')};
+  const projectOptionId = ${JSON.stringify(payload.projectOptionId?.trim() || '')};
+  const targetHours = Number(${JSON.stringify(payload.workHours)});
+  const normalize = (value) => String(value || '').replace(/\\s+/g, '');
+  const normalizeDate = (value) => {
+    const matched = normalize(value).replace(/[年月.-]/g, '/').replace(/日/g, '').match(/(\\d{4})\\/?(\\d{1,2})\\/?(\\d{1,2})/);
+    return matched ? matched[1] + '/' + String(matched[2]).padStart(2, '0') + '/' + String(matched[3]).padStart(2, '0') : '';
+  };
+  const date = normalizeDate(targetDate);
+  const documents = [document, ...Array.from(document.querySelectorAll('iframe,frame')).flatMap((frame) => {
+    try { return frame.contentDocument ? [frame.contentDocument] : []; } catch { return []; }
+  })];
+  const text = documents.map((doc) => doc.body?.innerText || '').join('\\n');
+  if (!text || !/(我的提交记录|提交记录)/.test(text)) return { available: false, matches: 0 };
+  const cards = documents.flatMap((doc) => Array.from(doc.querySelectorAll('body *')))
+    .filter((element) => {
+      const value = normalize(element.innerText || element.textContent);
+      if (value.length < 20 || value.length > 1800 || !normalizeDate(value).includes(date)) return false;
+      if (!value.includes('所属项目') && !value.includes('工作时长') && !value.includes('每日工作时长')) return false;
+      return !Array.from(element.children || []).some((child) => normalize(child.innerText || child.textContent).includes(date));
+    });
+  const project = normalize(projectName) || normalize(projectOptionId);
+  const matches = cards.filter((card) => {
+    const value = normalize(card.innerText || card.textContent);
+    if (project && !value.includes(project)) return false;
+    const hours = value.match(/(?:每日工作时长|工作时长)[：:]?([0-9]+(?:\\.[0-9]+)?)/);
+    return hours ? Number(hours[1]) === targetHours : false;
+  }).length;
+  return { available: true, matches };
+})()
+`;
 }
 
 
@@ -626,6 +663,31 @@ export async function openFeishuSubmissionRecords(payload: FeishuSubmissionRecor
   const snapshot = await readFeishuAuthSnapshot(formConfig);
   emitFeishuAuthSnapshot(snapshot);
   return openedRecords;
+}
+
+export async function checkFeishuDuplicate(payload: FeishuDuplicateCheckPayload): Promise<FeishuDuplicateCheckResult> {
+  const formConfig = { ...DEFAULT_FEISHU_FORM_CONFIG, ...payload.config };
+  const targetUrl = getFeishuFormPageUrl(formConfig);
+  watchFeishuAuthSession(formConfig);
+  if (!feishuWindow || feishuWindow.isDestroyed()) {
+    await openFeishuSubmissionRecords({ config: formConfig });
+  } else {
+    feishuWindow.show();
+    feishuWindow.focus();
+    await feishuWindow.loadURL(targetUrl);
+    await focusFeishuSubmissionRecords(feishuWindow);
+  }
+  if (!feishuWindow || feishuWindow.isDestroyed()) return { available: false, matches: 0 };
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      const result = await feishuWindow.webContents.executeJavaScript(buildFeishuDuplicateCheckScript(payload), true);
+      if (result && typeof result === 'object' && 'available' in result) return result as FeishuDuplicateCheckResult;
+    } catch {
+      // The records page may still be rendering.
+    }
+    await wait(400);
+  }
+  return { available: false, matches: 0 };
 }
 
 

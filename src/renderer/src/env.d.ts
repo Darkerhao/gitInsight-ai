@@ -17,6 +17,8 @@ import type {
   FeishuProjectOption,
   FeishuProjectOptionsPayload,
   FeishuSubmissionRecordsPayload,
+  FeishuDuplicateCheckPayload,
+  FeishuDuplicateCheckResult,
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
   GenerateReportParams,
@@ -47,6 +49,7 @@ declare global {
       generateReport: (params: GenerateReportParams) => Promise<ReportResult>;
       loginFeishu: (payload: FeishuLoginPayload) => Promise<FeishuAuthSnapshot>;
       openFeishuSubmissionRecords: (payload: FeishuSubmissionRecordsPayload) => Promise<boolean>;
+      checkFeishuDuplicate: (payload: FeishuDuplicateCheckPayload) => Promise<FeishuDuplicateCheckResult>;
       listFeishuFields: (payload: FeishuProjectOptionsPayload) => Promise<FeishuFieldOption[]>;
       listFeishuProjects: (payload: FeishuProjectOptionsPayload) => Promise<FeishuProjectOption[]>;
       testSubmitFeishu: (payload: FeishuTestSubmitPayload) => Promise<FeishuSubmitResult>;

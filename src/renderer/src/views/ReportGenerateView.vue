@@ -765,6 +765,38 @@ function buildDraftFeishuConfig(draft: ProjectReportDraft) {
   };
 }
 
+async function confirmNoFeishuDuplicate(draft: ProjectReportDraft) {
+  const projectName = projectOptions.value.find((item) => item.id === draft.projectOptionId)?.name ?? draft.projectOptionId;
+  try {
+    const result = await window.api.checkFeishuDuplicate({
+      config: buildDraftFeishuConfig(draft),
+      targetDate: form.date,
+      projectName,
+      projectOptionId: draft.projectOptionId,
+      workHours: normalizeWorkHours(draft.workHours),
+    });
+    if (!result.available) {
+      await ElMessageBox.confirm(
+        `飞书提交记录暂时无法自动读取，请在已打开的飞书窗口中确认 ${form.date} 是否已有「${projectName}」${normalizeWorkHours(draft.workHours).toFixed(1)} 小时记录。`,
+        '无法自动完成重复检查',
+        { confirmButtonText: '确认无重复并发布', cancelButtonText: '取消发布', type: 'warning' },
+      );
+      return true;
+    }
+    if (!result.matches) return true;
+    await ElMessageBox.confirm(
+      `飞书中已找到 ${result.matches} 条 ${form.date}「${projectName}」${normalizeWorkHours(draft.workHours).toFixed(1)} 小时的提交记录，仍要继续发布吗？`,
+      '发现可能重复的飞书日报',
+      { confirmButtonText: '仍然发布', cancelButtonText: '取消发布', type: 'warning' },
+    );
+    return true;
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return false;
+    ElMessage.error(error instanceof Error ? error.message : '重复检查失败，已取消发布');
+    return false;
+  }
+}
+
 async function publishDraft(draft: ProjectReportDraft, options: { persistBeforePublish?: boolean } = {}) {
   const content = draft.report.trim();
   if (!form.date) {
@@ -850,6 +882,7 @@ async function publishActiveReport() {
   }
   const confirmed = await confirmPublishDate(`当前项目「${draft.repo.name}」`);
   if (!confirmed) return;
+  if (!(await confirmNoFeishuDuplicate(draft))) return;
 
   pushing.value = true;
   try {
@@ -877,6 +910,10 @@ async function publishAllReports() {
   try {
     await persistConfigSnapshot();
     for (const draft of targets) {
+      if (!(await confirmNoFeishuDuplicate(draft))) {
+        failedCount += 1;
+        continue;
+      }
       const success = await publishDraft(draft, { persistBeforePublish: false });
       if (success) successCount += 1;
       else failedCount += 1;

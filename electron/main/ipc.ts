@@ -7,6 +7,7 @@ import type {
   FeishuLoginPayload,
   FeishuProjectOptionsPayload,
   FeishuSubmissionRecordsPayload,
+  FeishuDuplicateCheckPayload,
   FeishuTestSubmitPayload,
   GenerateReportParams,
   HistoryLogQuery,
@@ -24,7 +25,7 @@ import { getDatabase, getStorageInfo, listDailyReports, listErrorLogs, listHisto
 import { getTimelineSnapshot } from './timeline.js';
 import type { TimelineQuery } from '../../src/shared/types.js';
 import { listFeishuFieldOptions, listFeishuProjectOptions, syncFeishuDaily, testSubmitFeishuForm } from './feishuForm.js';
-import { openFeishuLogin, openFeishuSubmissionRecords } from './feishuAuth.js';
+import { checkFeishuDuplicate, openFeishuLogin, openFeishuSubmissionRecords } from './feishuAuth.js';
 import { generateReport } from './report.js';
 import { scanRepositories } from './repoScan.js';
 import { getMainWindow } from './windows.js';
@@ -85,6 +86,7 @@ export function registerIpcHandlers() {
   ipcMain.handle('checkin-wallet:spend', async (_event, payload: CheckinCoinSpendPayload) => spendCheckinCoins(payload));
   ipcMain.handle('feishu:login', async (_event, payload: FeishuLoginPayload) => openFeishuLogin(payload));
   ipcMain.handle('feishu:open-submission-records', async (_event, payload: FeishuSubmissionRecordsPayload) => openFeishuSubmissionRecords(payload));
+  ipcMain.handle('feishu:check-duplicate', async (_event, payload: FeishuDuplicateCheckPayload) => checkFeishuDuplicate(payload));
   ipcMain.handle('feishu:list-fields', async (_event, payload: FeishuProjectOptionsPayload) => listFeishuFieldOptions(payload));
   ipcMain.handle('feishu:list-projects', async (_event, payload: FeishuProjectOptionsPayload) => listFeishuProjectOptions(payload));
   ipcMain.handle('feishu:test-submit', async (_event, payload: FeishuTestSubmitPayload) => testSubmitFeishuForm(payload));

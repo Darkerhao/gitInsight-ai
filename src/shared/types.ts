@@ -570,6 +570,18 @@ export interface FeishuSubmissionRecordsPayload extends FeishuLoginPayload {
   targetDate?: string;
 }
 
+export interface FeishuDuplicateCheckPayload extends FeishuLoginPayload {
+  targetDate: string;
+  projectName?: string;
+  projectOptionId?: string;
+  workHours: number;
+}
+
+export interface FeishuDuplicateCheckResult {
+  available: boolean;
+  matches: number;
+}
+
 export interface FeishuAuthSnapshot {
   endpoint: string;
   shareToken: string;
