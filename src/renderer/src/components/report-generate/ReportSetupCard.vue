@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { CheckCircle2, Clock3, FolderGit2, ListChecks, Pencil, Pin, Plus, Search, Trash2 } from 'lucide-vue-next';
 import StatusBadge from '@/components/common/StatusBadge.vue';
-import type { RepoInfo } from '@shared/types';
+import type { RepoInfo, ReportPromptStyle } from '@shared/types';
 import {
   getRepoDisplayName as resolveRepoDisplayName,
   matchesRepoKeyword,
@@ -39,6 +39,7 @@ const props = defineProps<{
   sortedRepos: RepoInfo[];
   repoDisplayNames: Record<string, string>;
   aiProfileOptions: AiProfileOption[];
+  promptStyle: ReportPromptStyle;
   dateShortcut: DateShortcut;
   isRepoSelected: (path: string) => boolean;
   isRepoPinned: (path: string) => boolean;
@@ -47,6 +48,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'choose-workspace'): void;
   (e: 'select-ai-profile', value: string): void;
+  (e: 'select-prompt-style', value: ReportPromptStyle): void;
   (e: 'report-date-change', value: string): void;
   (e: 'start-date-time-change', value: string): void;
   (e: 'end-date-time-change', value: string): void;
@@ -72,6 +74,18 @@ function repoMeta(repo: RepoInfo) {
 function handleAiProfileChange(value: string) {
   emit('select-ai-profile', value);
 }
+
+function handlePromptStyleChange(value: string | number | boolean | undefined) {
+  if (value === 'concise' || value === 'standard' || value === 'detailed') {
+    emit('select-prompt-style', value);
+  }
+}
+
+const promptStyleHints: Record<ReportPromptStyle, string> = {
+  concise: '提炼核心事项，减少篇幅，适合快速汇报',
+  standard: '兼顾信息量与可读性，适合常规研发日报',
+  detailed: '展开具体动作与实际结果，适合完整复盘',
+};
 
 function handleReportDateChange(value: string | null) {
   if (value) emit('report-date-change', value);
@@ -210,6 +224,16 @@ function handleEndDateTimeChange(value: string | null) {
             </div>
           </el-option>
         </el-select>
+      </div>
+
+      <div class="field field-span-3">
+        <label>日报风格</label>
+        <el-radio-group :model-value="promptStyle" @change="handlePromptStyleChange">
+          <el-radio-button value="concise">简短精炼</el-radio-button>
+          <el-radio-button value="standard">标准均衡</el-radio-button>
+          <el-radio-button value="detailed">具体详细</el-radio-button>
+        </el-radio-group>
+        <small class="field-hint">{{ promptStyleHints[promptStyle] }}</small>
       </div>
 
       <div class="field">

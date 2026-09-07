@@ -156,6 +156,8 @@ export interface AppConfig {
   autoSync: AutoSyncConfig;
 }
 
+export type ReportPromptStyle = 'concise' | 'standard' | 'detailed';
+
 export interface GenerateReportParams {
   repoPaths: string[];
   date: string;
@@ -164,6 +166,8 @@ export interface GenerateReportParams {
   reporterName: string;
   gitAuthorEmail?: string;
   aiProfileId?: string;
+  /** 本次生成使用的日报表达风格；未传时保持标准风格。 */
+  promptStyle?: ReportPromptStyle;
   /** 用户补充的非 Git 工作内容，例如网页测试、上线、会议或联调。 */
   manualWorkContent?: string;
 }

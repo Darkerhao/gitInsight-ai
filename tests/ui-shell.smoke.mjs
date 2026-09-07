@@ -14,6 +14,7 @@ const app = await read('src/renderer/src/App.vue');
 const sidebar = await read('src/renderer/src/components/AppSidebar.vue');
 const topbar = await read('src/renderer/src/components/AppTopbar.vue');
 const generate = await read('src/renderer/src/views/ReportGenerateView.vue');
+const reportSetup = await read('src/renderer/src/components/report-generate/ReportSetupCard.vue');
 const indexStyles = await read('src/renderer/src/styles/index.scss');
 const atelierStyles = await read('src/renderer/src/styles/_atelier.scss');
 
@@ -33,6 +34,10 @@ assert.match(generate, /data-stage="publish"/, 'publish stage should be addressa
 assert.match(generate, /activeWorkflowStage/, 'workflow rail should expose the current stage');
 assert.match(generate, /IntersectionObserver/, 'workflow stage should follow scroll position');
 assert.match(generate, /aria-current/, 'workflow stage should expose current-step semantics');
+assert.match(reportSetup, /简短精炼/, 'report setup should expose the concise prompt style');
+assert.match(reportSetup, /标准均衡/, 'report setup should expose the standard prompt style');
+assert.match(reportSetup, /具体详细/, 'report setup should expose the detailed prompt style');
+assert.match(generate, /promptStyle: reportPromptStyle\.value/, 'selected prompt style should be included in report generation');
 assert.match(indexStyles, /@use ['"]atelier['"]/, 'atelier stylesheet must be loaded last');
 assert.match(atelierStyles, /prefers-reduced-motion/, 'atelier motion must have an accessibility fallback');
 assert.match(atelierStyles, /\.atelier-workflow-step\.active/, 'active workflow stage needs visible feedback');

@@ -11,7 +11,7 @@ import { useAssistant } from '@/composables/useAssistant';
 import type { ProjectReportDraft } from '@/composables/useAssistant';
 import { countResultFiles, getReportRangePayloadFromForm, resolveReportTimeRange, toPlainRawInput } from '@/composables/assistant/reportState';
 import { allocateProjectWorkHours, normalizeProjectWorkHours, normalizeWorkHours } from '@/composables/assistant/normalizers';
-import type { DailyReportRecord, RepoInfo } from '@shared/types';
+import type { DailyReportRecord, RepoInfo, ReportPromptStyle } from '@shared/types';
 import {
   getRepoDisplayName,
   getRepoPathKey,
@@ -77,6 +77,7 @@ const {
 } = assistant;
 
 const dateShortcut = ref<DateShortcut>('today');
+const reportPromptStyle = ref<ReportPromptStyle>('standard');
 const workHourPresets = [1, 2, 4, 6, 7, 7.5, 8, 10];
 
 function displayRepoName(repo: RepoInfo) {
@@ -505,6 +506,7 @@ async function generateDraft(draftKey: string, options: { updateStatus?: boolean
       reporterName: config.reporterName,
       gitAuthorEmail: config.gitAuthorEmail,
       aiProfileId: config.activeAiProfileId,
+      promptStyle: reportPromptStyle.value,
       manualWorkContent: form.manualWorkContent.trim() || undefined,
     });
 
@@ -1071,11 +1073,13 @@ onBeforeUnmount(() => {
           :sorted-repos="sortedRepos"
           :repo-display-names="config.repoDisplayNames"
           :ai-profile-options="aiProfileOptions"
+          :prompt-style="reportPromptStyle"
           :date-shortcut="dateShortcut"
           :is-repo-selected="isRepoSelected"
           :is-repo-pinned="isRepoPinned"
           @choose-workspace="chooseWorkspace"
           @select-ai-profile="selectAiProfile"
+          @select-prompt-style="reportPromptStyle = $event"
           @report-date-change="handleReportDateChange"
           @start-date-time-change="handleStartDateTimeChange"
           @end-date-time-change="handleEndDateTimeChange"

@@ -1,5 +1,5 @@
 import { basename } from 'node:path';
-import type { CommitEntry, GenerateReportParams, ReportResult, ReportTimeRange, StructuredReportMetadata } from '../../src/shared/types.js';
+import type { CommitEntry, GenerateReportParams, ReportPromptStyle, ReportResult, ReportTimeRange, StructuredReportMetadata } from '../../src/shared/types.js';
 import { callAiReport, callAiStructuredExtract, resolveAiConfig } from './aiClient.js';
 import { loadConfig } from './config.js';
 import { recordGeneratedReport } from './database.js';
@@ -220,9 +220,12 @@ export function fallbackReport(
   commits: CommitEntry[],
   timeRange: ReportTimeRange,
   manualWorkContent = '',
+  promptStyle: ReportPromptStyle = 'standard',
 ) {
+  const workItemLimit = promptStyle === 'concise' ? 2 : promptStyle === 'detailed' ? 5 : 3;
+  const planItemLimit = promptStyle === 'concise' ? 1 : 2;
   const manualWorkItems = normalizeManualWorkItems(manualWorkContent);
-  const commitWorkItems = commits.slice(0, 3).map((commit) => {
+  const commitWorkItems = commits.slice(0, workItemLimit).map((commit) => {
     const moduleName = getCommitModuleName(commit, repoNames);
     const topic = stripConventionalCommitPrefix(commit.message) || moduleName;
     return `【${moduleName}】完成${topic}相关优化，提升对应页面或功能的数据展示与交互稳定性。`;
@@ -230,7 +233,7 @@ export function fallbackReport(
   const workItems = [
     ...manualWorkItems.map((item) => `【${getManualWorkModuleName(item)}】${item.replace(/[。；;]+$/, '')}。`),
     ...commitWorkItems,
-  ];
+  ].slice(0, workItemLimit);
   const moduleNames = [...new Set(commits.map((commit) => getCommitModuleName(commit, repoNames)))].slice(0, 3).join('、');
   const resultItems = commits.length
     ? [
@@ -261,7 +264,7 @@ export function fallbackReport(
     '',
     '明日计划：',
     '',
-    formatNumbered(planItems),
+    formatNumbered(planItems.slice(0, planItemLimit)),
     '',
     `汇报人：${reporterName}`,
     `日期：${date}`,
@@ -325,13 +328,13 @@ export async function generateReport(params: GenerateReportParams): Promise<Repo
   let report = '';
   if (aiConfig.aiApiKey) {
     try {
-      report = await callAiReport(aiConfig, rawInput, timeRange);
+      report = await callAiReport(aiConfig, rawInput, timeRange, params.promptStyle);
     } catch (error) {
-      report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange, rawInput.manualWorkContent);
+      report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange, rawInput.manualWorkContent, params.promptStyle);
       report = `${report}\n\nAI提示：${error instanceof Error ? error.message : '调用失败'}`;
     }
   } else {
-    report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange, rawInput.manualWorkContent);
+    report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange, rawInput.manualWorkContent, params.promptStyle);
     const profileLabel = aiConfig.aiProfileName ? `“${aiConfig.aiProfileName}”` : '当前 AI 配置';
     report = `${report}\n\nAI提示：请先在 AI 设置中为${profileLabel}配置 OpenAI 兼容接口与 API Key。`;
   }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { callAiWeeklyReflection, testAiConnection } from '../electron/main/aiClient.js';
+import { callAiReport, callAiWeeklyReflection, testAiConnection } from '../electron/main/aiClient.js';
 
 test('testAiConnection 使用当前配置调用模型并返回连接耗时', async () => {
   const originalFetch = globalThis.fetch;
@@ -159,6 +159,33 @@ test('callAiWeeklyReflection 使用当前模型并解析严格 JSON', async () =
     assert.equal(result.title, '项目周反思');
     assert.equal(requestedBody.model, 'demo-model');
     assert.equal(requestedBody.temperature, 0.2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('callAiReport 将用户选择的具体详细风格写入提示词', async () => {
+  const originalFetch = globalThis.fetch;
+  let prompt = '';
+  globalThis.fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body)) as { messages: Array<{ role: string; content: string }> };
+    prompt = body.messages.find((item) => item.role === 'user')?.content ?? '';
+    return new Response(JSON.stringify({ choices: [{ message: { content: '日报正文' } }] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+
+  try {
+    await callAiReport(
+      { aiBaseUrl: 'https://api.example.com/v1', aiApiKey: 'key', aiModel: 'demo-model' },
+      { gitLogs: '提交记录', files: 'file.ts', diff: '代码变更' },
+      { startDateTime: '2026-09-07T00:00:00', endDateTime: '2026-09-08T00:00:00', label: '2026-09-07' },
+      'detailed',
+    );
+    assert.match(prompt, /本次日报风格：具体详细/);
+    assert.match(prompt, /具体改动对象、执行动作和实际结果/);
+    assert.doesNotMatch(prompt, /正文每条25-70字/);
   } finally {
     globalThis.fetch = originalFetch;
   }
