@@ -164,12 +164,12 @@ test('callAiWeeklyReflection 使用当前模型并解析严格 JSON', async () =
   }
 });
 
-test('callAiReport 将用户选择的具体详细风格写入提示词', async () => {
+test('callAiReport 的三种风格均不限制条数并保留功能模块标签', async () => {
   const originalFetch = globalThis.fetch;
-  let prompt = '';
+  const prompts: string[] = [];
   globalThis.fetch = async (_input, init) => {
     const body = JSON.parse(String(init?.body)) as { messages: Array<{ role: string; content: string }> };
-    prompt = body.messages.find((item) => item.role === 'user')?.content ?? '';
+    prompts.push(body.messages.find((item) => item.role === 'user')?.content ?? '');
     return new Response(JSON.stringify({ choices: [{ message: { content: '日报正文' } }] }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -177,15 +177,22 @@ test('callAiReport 将用户选择的具体详细风格写入提示词', async (
   };
 
   try {
-    await callAiReport(
-      { aiBaseUrl: 'https://api.example.com/v1', aiApiKey: 'key', aiModel: 'demo-model' },
-      { gitLogs: '提交记录', files: 'file.ts', diff: '代码变更' },
-      { startDateTime: '2026-09-07T00:00:00', endDateTime: '2026-09-08T00:00:00', label: '2026-09-07' },
-      'detailed',
-    );
-    assert.match(prompt, /本次日报风格：具体详细/);
-    assert.match(prompt, /具体改动对象、执行动作和实际结果/);
-    assert.doesNotMatch(prompt, /正文每条25-70字/);
+    for (const promptStyle of ['concise', 'standard', 'detailed'] as const) {
+      await callAiReport(
+        { aiBaseUrl: 'https://api.example.com/v1', aiApiKey: 'key', aiModel: 'demo-model' },
+        { gitLogs: '提交记录', files: 'file.ts', diff: '代码变更' },
+        { startDateTime: '2026-09-07T00:00:00', endDateTime: '2026-09-08T00:00:00', label: '2026-09-07' },
+        promptStyle,
+      );
+    }
+
+    assert.match(prompts[2], /本次日报风格：具体详细/);
+    assert.match(prompts[2], /具体改动对象、执行动作和实际结果/);
+    for (const prompt of prompts) {
+      assert.match(prompt, /不设条数上限/);
+      assert.match(prompt, /【一级模块 \/ 具体功能】/);
+      assert.doesNotMatch(prompt, /\d+(?:-\d+)?条(?:工作内容|工作成果|明日计划)/);
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }
