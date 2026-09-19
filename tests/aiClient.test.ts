@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { callAiReport, callAiWeeklyReflection, testAiConnection } from '../electron/main/aiClient.js';
+import { callAiReport, callAiStructuredExtract, callAiWeeklyReflection, testAiConnection } from '../electron/main/aiClient.js';
 
 test('testAiConnection 使用当前配置调用模型并返回连接耗时', async () => {
   const originalFetch = globalThis.fetch;
@@ -186,13 +186,54 @@ test('callAiReport 的三种风格均不限制条数并保留功能模块标签'
       );
     }
 
-    assert.match(prompts[2], /本次日报风格：具体详细/);
-    assert.match(prompts[2], /具体改动对象、执行动作和实际结果/);
+    assert.match(prompts[0], /正文每条25-55字/);
+    assert.match(prompts[1], /正文每条35-80字/);
+    assert.match(prompts[2], /正文每条50-120字/);
+    assert.match(prompts[2], /具体模块、功能对象、执行动作、问题处理和实际结果/);
     for (const prompt of prompts) {
-      assert.match(prompt, /不设条数上限/);
+      assert.match(prompt, /工作条数完全按照实际工作量决定/);
+      assert.match(prompt, /优先保证事实完整和具体工作动作完整，其次再控制篇幅/);
       assert.match(prompt, /【一级模块 \/ 具体功能】/);
       assert.doesNotMatch(prompt, /\d+(?:-\d+)?条(?:工作内容|工作成果|明日计划)/);
     }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('callAiStructuredExtract 保留具体工作描述并按实际目标分类', async () => {
+  const originalFetch = globalThis.fetch;
+  let prompt = '';
+  globalThis.fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body)) as { messages: Array<{ role: string; content: string }> };
+    prompt = body.messages.find((item) => item.role === 'user')?.content ?? '';
+    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({
+      title: '合同列表逻辑修复',
+      workItems: [{
+        module: '合同管理 / 合同列表',
+        description: '调整签订公司字段映射，修正剩余天数计算和到期排序逻辑。',
+        workType: 'Bug 修复',
+      }],
+      achievements: ['合同到期信息展示准确。'],
+      techTags: [],
+      risks: [],
+      tomorrowPlan: ['验证临界日期和空值场景。'],
+      milestone: false,
+    }) } }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  try {
+    const result = await callAiStructuredExtract(
+      { aiBaseUrl: 'https://api.example.com/v1', aiApiKey: 'key', aiModel: 'demo-model' },
+      '【合同管理 / 合同列表】调整签订公司字段映射，修正剩余天数计算和到期排序逻辑。',
+    );
+
+    assert.equal(result?.workItems[0].workType, 'Bug 修复');
+    assert.match(prompt, /具体对象 \+ 实际动作 \+ 结果或问题/);
+    assert.match(prompt, /没有阅读代码的人理解实际完成了什么工作/);
+    assert.match(prompt, /禁止仅输出“优化XX”“完善XX”“修复XX”“调整XX”/);
+    assert.match(prompt, /module 应提取业务模块、页面或功能/);
+    assert.match(prompt, /不要为了分类而虚构工作类型/);
   } finally {
     globalThis.fetch = originalFetch;
   }
