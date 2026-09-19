@@ -91,7 +91,7 @@ onBeforeUnmount(() => {
 <template>
   <aside class="sidebar atelier-sidebar" aria-label="工作台主导航">
     <div class="sidebar-brand atelier-sidebar-brand">
-      <img class="sidebar-logo" src="../assets/logo.png" alt="Logo" />
+      <img class="sidebar-logo" src="../assets/logo.png" alt="码迹 AI" />
       <span class="sidebar-brand-name">码迹 AI</span>
     </div>
 
