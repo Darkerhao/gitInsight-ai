@@ -92,7 +92,7 @@ onBeforeUnmount(() => {
   <aside class="sidebar atelier-sidebar" aria-label="工作台主导航">
     <div class="sidebar-brand atelier-sidebar-brand">
       <img class="sidebar-logo" src="../assets/logo.png" alt="Logo" />
-      <span class="sidebar-brand-name">AI日报助手</span>
+      <span class="sidebar-brand-name">码迹 AI</span>
     </div>
 
     <nav class="sidebar-nav" aria-label="主导航">
@@ -145,7 +145,7 @@ onBeforeUnmount(() => {
       <div class="sidebar-tip-icon"><Bot :size="28" /></div>
       <div class="sidebar-tip-title">
         <Sparkles :size="14" />
-        <span>简洁版提示</span>
+        <span>轻量版提示</span>
       </div>
       <p class="sidebar-tip-desc">串联单日生成、一周日报、项目周反思与历史查看，形成完整工作闭环。</p>
       <el-button class="sidebar-tip-btn" @click="emit('update:activeNav', 'generate')">开始生成日报</el-button>

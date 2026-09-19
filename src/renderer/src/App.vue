@@ -366,7 +366,7 @@ onBeforeUnmount(() => {
         </Transition>
 
         <footer v-if="activeNav !== 'timeline'" class="app-footer">
-          AI日报助手{{ appVersionText }} · 让技术日报生成更简单、更智能
+          码迹 AI{{ appVersionText }} · 让每一次提交，都成为看得见的成果
         </footer>
       </div>
     </main>

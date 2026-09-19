@@ -3,17 +3,18 @@ const edition = process.env.APP_EDITION === 'standard' ? 'standard' : 'lite';
 const editionConfig = {
   lite: {
     appId: 'com.shuzhi.gitinsight-ai.lite',
-    productName: 'GitInsight AI Lite',
-    artifactLabel: 'Lite',
+    productName: '码迹 AI 轻量版',
+    artifactLabel: '轻量版',
   },
   standard: {
     appId: 'com.shuzhi.gitinsight-ai',
-    productName: 'GitInsight AI Standard',
-    artifactLabel: 'Standard',
+    productName: '码迹 AI 标准版',
+    artifactLabel: '标准版',
   },
 }[edition];
 
-const artifactBase = `GitInsight-AI-${editionConfig.artifactLabel}-\${version}-\${os}-\${arch}`;
+const artifactBase = `码迹AI-${editionConfig.artifactLabel}-\${version}-\${os}-\${arch}`;
+const windowsArtifactBase = artifactBase.replace('${os}', 'Windows');
 
 module.exports = {
   appId: editionConfig.appId,
@@ -36,6 +37,7 @@ module.exports = {
     releaseType: 'release',
   },
   win: {
+    artifactName: `${windowsArtifactBase}.\${ext}`,
     icon: 'build/icons/win/icon.ico',
     target: [
       { target: 'nsis', arch: ['x64'] },
@@ -47,7 +49,7 @@ module.exports = {
     },
   },
   nsis: {
-    artifactName: `${artifactBase}-setup.\${ext}`,
+    artifactName: `${windowsArtifactBase}.\${ext}`,
     oneClick: false,
     perMachine: false,
     allowToChangeInstallationDirectory: true,
@@ -55,7 +57,7 @@ module.exports = {
     createStartMenuShortcut: true,
   },
   portable: {
-    artifactName: `${artifactBase}-portable.\${ext}`,
+    artifactName: `${windowsArtifactBase}-便携版.\${ext}`,
   },
   mac: {
     icon: 'build/icons/mac/icon.icns',

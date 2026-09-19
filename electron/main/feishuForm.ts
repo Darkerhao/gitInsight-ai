@@ -327,7 +327,7 @@ export function buildFeishuTestFormData(config: FeishuFormConfig, date: string) 
     config,
     date,
     reporterName,
-    workContent: `[GitInsight 测试记录] 表单连通性验证，请勿作为正式日报统计。提交时间：${new Date().toISOString()}`,
+    workContent: `[码迹 AI 测试记录] 表单连通性验证，请勿作为正式日报统计。提交时间：${new Date().toISOString()}`,
     workHours: normalizeWorkHours(config.defaultWorkHours, DEFAULT_FEISHU_FORM_CONFIG.defaultWorkHours),
   });
 }

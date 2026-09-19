@@ -86,7 +86,7 @@ const stageCopy: Record<StageKey, { title: string; detail: string }> = {
   },
   ready: {
     title: '工作台就绪',
-    detail: '正在进入 AI 日报助手',
+    detail: '正在进入码迹 AI',
   },
 };
 
@@ -573,7 +573,7 @@ onBeforeUnmount(() => {
     :class="{ 'is-leaving': leaving, 'is-compact': compactRun, 'is-accelerated': accelerated }"
     tabindex="0"
     role="dialog"
-    aria-label="AI日报助手开屏动画"
+    aria-label="码迹 AI 开屏动画"
     @keydown="handleKeydown"
     @pointerdown.self="accelerate"
   >
@@ -603,7 +603,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="brand-copy">
         <p>AI Daily Workspace</p>
-        <h1>AI日报助手</h1>
+        <h1>码迹 AI</h1>
         <span>智能生成，高效同步</span>
       </div>
     </div>

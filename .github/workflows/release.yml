@@ -22,7 +22,7 @@ jobs:
             editionLabel: Lite
             os: windows-latest
             script: npm run dist:win -- --publish never
-            artifact: GitInsight-AI-Lite-Windows
+            artifact: 码迹AI-轻量版-Windows
             paths: |
               release/**/*.exe
               release/**/*.zip
@@ -32,7 +32,7 @@ jobs:
             editionLabel: Standard
             os: windows-latest
             script: npm run dist:win -- --publish never
-            artifact: GitInsight-AI-Standard-Windows
+            artifact: 码迹AI-标准版-Windows
             paths: |
               release/**/*.exe
               release/**/*.zip
@@ -42,7 +42,7 @@ jobs:
             editionLabel: Lite
             os: macos-latest
             script: npm run dist:mac -- --publish never
-            artifact: GitInsight-AI-Lite-macOS
+            artifact: 码迹AI-轻量版-macOS
             paths: |
               release/**/*.dmg
               release/**/*.zip
@@ -52,7 +52,7 @@ jobs:
             editionLabel: Standard
             os: macos-latest
             script: npm run dist:mac -- --publish never
-            artifact: GitInsight-AI-Standard-macOS
+            artifact: 码迹AI-标准版-macOS
             paths: |
               release/**/*.dmg
               release/**/*.zip
@@ -62,7 +62,7 @@ jobs:
             editionLabel: Lite
             os: ubuntu-latest
             script: npm run dist:linux -- --publish never
-            artifact: GitInsight-AI-Lite-Linux
+            artifact: 码迹AI-轻量版-Linux
             paths: |
               release/**/*.AppImage
               release/**/*.deb
@@ -74,7 +74,7 @@ jobs:
             editionLabel: Standard
             os: ubuntu-latest
             script: npm run dist:linux -- --publish never
-            artifact: GitInsight-AI-Standard-Linux
+            artifact: 码迹AI-标准版-Linux
             paths: |
               release/**/*.AppImage
               release/**/*.deb

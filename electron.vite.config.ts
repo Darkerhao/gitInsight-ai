@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import vue from '@vitejs/plugin-vue';
 
 const appEdition = process.env.APP_EDITION === 'standard' ? 'standard' : 'lite';
-const appEditionLabel = appEdition === 'standard' ? '标准版' : '简洁版';
-const appProductName = appEdition === 'standard' ? 'GitInsight AI Standard' : 'GitInsight AI Lite';
+const appEditionLabel = appEdition === 'standard' ? '标准版' : '轻量版';
+const appProductName = `码迹 AI ${appEditionLabel}`;
 const editionDefines = {
   __APP_EDITION__: JSON.stringify(appEdition),
   __APP_EDITION_LABEL__: JSON.stringify(appEditionLabel),

@@ -59,7 +59,7 @@ const dataStats = computed(() => [
   { label: '错误日志', value: storageInfo.value?.errorLogsCount ?? 0 },
 ]);
 const systemInfoRows = computed(() => [
-  { label: '系统名称', value: storageInfo.value?.appName || 'AI日报助手' },
+  { label: '系统名称', value: storageInfo.value?.appName || '码迹 AI' },
   { label: '系统描述', value: '基于配置自动生成日报，支持预览、导出和同步飞书' },
   { label: '系统版本', value: storageInfo.value?.appVersion || '读取中' },
   { label: '发行版本', value: storageInfo.value?.appEditionLabel || '读取中' },

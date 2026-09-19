@@ -40,6 +40,6 @@ function run(command, args) {
   }
 }
 
-console.log(`Building GitInsight AI ${edition === 'standard' ? 'Standard' : 'Lite'} package...`);
+console.log(`正在构建码迹 AI ${edition === 'standard' ? '标准版' : '轻量版'}安装包...`);
 run('npm', ['run', 'build']);
 run('npx', ['electron-builder', '--config', 'electron-builder.config.cjs', ...builderArgs]);

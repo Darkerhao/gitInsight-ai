@@ -1,7 +1,7 @@
 # Edition-aware npm scripts use electron-builder.config.cjs.
 # This YAML file is kept as a legacy single-edition fallback.
 appId: com.shuzhi.gitinsight-ai
-productName: GitInsight AI
+productName: 码迹 AI
 directories:
   output: release/${version}
 files:
@@ -34,14 +34,14 @@ win:
     signingHashAlgorithms:
       - sha256
 nsis:
-  artifactName: ${productName}-${version}-${os}-${arch}-setup.${ext}
+  artifactName: 码迹AI-${version}-Windows-${arch}.${ext}
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   createStartMenuShortcut: true
 portable:
-  artifactName: ${productName}-${version}-${os}-${arch}-portable.${ext}
+  artifactName: 码迹AI-${version}-Windows-${arch}-便携版.${ext}
 mac:
   icon: build/icons/mac/icon.icns
   target:
