@@ -13,7 +13,8 @@ const editionConfig = {
   },
 }[edition];
 
-const artifactBase = `码迹AI-${editionConfig.artifactLabel}-\${version}-\${os}-\${arch}`;
+const artifactEdition = edition === 'standard' ? 'Standard' : 'Lite';
+const artifactBase = `MajiAI-${artifactEdition}-\${version}-\${os}-\${arch}`;
 const windowsArtifactBase = artifactBase.replace('${os}', 'Windows');
 
 module.exports = {
@@ -57,7 +58,7 @@ module.exports = {
     createStartMenuShortcut: true,
   },
   portable: {
-    artifactName: `${windowsArtifactBase}-便携版.\${ext}`,
+    artifactName: `${windowsArtifactBase}-Portable.\${ext}`,
   },
   mac: {
     icon: 'build/icons/mac/icon.icns',

@@ -14,11 +14,12 @@ asarUnpack:
   - node_modules/sql.js/dist/*.wasm
 npmRebuild: false
 compression: maximum
-artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+artifactName: MajiAI-Standard-${version}-${os}-${arch}.${ext}
 publish:
   provider: github
   releaseType: release
 win:
+  artifactName: MajiAI-Standard-${version}-Windows-${arch}.${ext}
   icon: build/icons/win/icon.ico
   target:
     - target: nsis
@@ -34,14 +35,14 @@ win:
     signingHashAlgorithms:
       - sha256
 nsis:
-  artifactName: 码迹AI-${version}-Windows-${arch}.${ext}
+  artifactName: MajiAI-Standard-${version}-Windows-${arch}.${ext}
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   createStartMenuShortcut: true
 portable:
-  artifactName: 码迹AI-${version}-Windows-${arch}-便携版.${ext}
+  artifactName: MajiAI-Standard-${version}-Windows-${arch}-Portable.${ext}
 mac:
   icon: build/icons/mac/icon.icns
   target:

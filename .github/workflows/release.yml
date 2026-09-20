@@ -22,65 +22,65 @@ jobs:
             editionLabel: Lite
             os: windows-latest
             script: npm run dist:win -- --publish never
-            artifact: 码迹AI-轻量版-Windows
+            artifact: MajiAI-Lite-Windows
             paths: |
-              release/**/*.exe
-              release/**/*.zip
-              release/**/*.blockmap
+              release/*/lite/MajiAI-*.exe
+              release/*/lite/MajiAI-*.zip
+              release/*/lite/MajiAI-*.blockmap
           - name: Windows
             edition: standard
             editionLabel: Standard
             os: windows-latest
             script: npm run dist:win -- --publish never
-            artifact: 码迹AI-标准版-Windows
+            artifact: MajiAI-Standard-Windows
             paths: |
-              release/**/*.exe
-              release/**/*.zip
-              release/**/*.blockmap
+              release/*/standard/MajiAI-*.exe
+              release/*/standard/MajiAI-*.zip
+              release/*/standard/MajiAI-*.blockmap
           - name: macOS
             edition: lite
             editionLabel: Lite
             os: macos-latest
             script: npm run dist:mac -- --publish never
-            artifact: 码迹AI-轻量版-macOS
+            artifact: MajiAI-Lite-macOS
             paths: |
-              release/**/*.dmg
-              release/**/*.zip
-              release/**/*.blockmap
+              release/*/lite/MajiAI-*.dmg
+              release/*/lite/MajiAI-*.zip
+              release/*/lite/MajiAI-*.blockmap
           - name: macOS
             edition: standard
             editionLabel: Standard
             os: macos-latest
             script: npm run dist:mac -- --publish never
-            artifact: 码迹AI-标准版-macOS
+            artifact: MajiAI-Standard-macOS
             paths: |
-              release/**/*.dmg
-              release/**/*.zip
-              release/**/*.blockmap
+              release/*/standard/MajiAI-*.dmg
+              release/*/standard/MajiAI-*.zip
+              release/*/standard/MajiAI-*.blockmap
           - name: Linux
             edition: lite
             editionLabel: Lite
             os: ubuntu-latest
             script: npm run dist:linux -- --publish never
-            artifact: 码迹AI-轻量版-Linux
+            artifact: MajiAI-Lite-Linux
             paths: |
-              release/**/*.AppImage
-              release/**/*.deb
-              release/**/*.rpm
-              release/**/*.tar.gz
-              release/**/*.blockmap
+              release/*/lite/MajiAI-*.AppImage
+              release/*/lite/MajiAI-*.deb
+              release/*/lite/MajiAI-*.rpm
+              release/*/lite/MajiAI-*.tar.gz
+              release/*/lite/MajiAI-*.blockmap
           - name: Linux
             edition: standard
             editionLabel: Standard
             os: ubuntu-latest
             script: npm run dist:linux -- --publish never
-            artifact: 码迹AI-标准版-Linux
+            artifact: MajiAI-Standard-Linux
             paths: |
-              release/**/*.AppImage
-              release/**/*.deb
-              release/**/*.rpm
-              release/**/*.tar.gz
-              release/**/*.blockmap
+              release/*/standard/MajiAI-*.AppImage
+              release/*/standard/MajiAI-*.deb
+              release/*/standard/MajiAI-*.rpm
+              release/*/standard/MajiAI-*.tar.gz
+              release/*/standard/MajiAI-*.blockmap
 
     env:
       APP_EDITION: ${{ matrix.edition }}
@@ -108,7 +108,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Package
+      - name: Verify release artifact names
+        run: node --test tests/releaseArtifacts.test.cjs
+
+      - name: Build packages
         run: ${{ matrix.script }}
 
       - name: Upload package artifacts
