@@ -1,5 +1,5 @@
 .weekly-reports-view {
-  --weekly-accent: #7c5cff;
+  --weekly-accent: var(--c-primary);
   --weekly-border: color-mix(in srgb, var(--el-border-color) 78%, transparent);
   gap: 18px;
 }
@@ -78,17 +78,17 @@
 .weekly-generation-item strong { overflow: hidden; color: var(--el-text-color-primary); text-overflow: ellipsis; white-space: nowrap; }
 
 .weekly-no-commits-guide { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; border-radius: 8px; background: color-mix(in srgb, #e6a23c 10%, transparent); padding: 10px 12px; color: var(--el-text-color-secondary); font-size: 12px; line-height: 1.5; }
-.weekly-no-commits-guide svg { flex: 0 0 auto; color: #c88900; }
+.weekly-no-commits-guide svg { flex: 0 0 auto; color: var(--tone-amber); }
 
 .weekly-publish-check-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
 .weekly-publish-check-stats div { border: 1px solid var(--weekly-border); border-radius: 8px; padding: 10px 8px; text-align: center; }
 .weekly-publish-check-stats strong, .weekly-publish-check-stats span { display: block; }
 .weekly-publish-check-stats strong { font-size: 16px; }
 .weekly-publish-check-stats span { margin-top: 3px; color: var(--el-text-color-secondary); font-size: 11px; }
-.weekly-publish-check-issues { border-radius: 8px; background: #fff8e6; padding: 10px 12px; }
-.weekly-publish-check-issues strong { color: #c88900; font-size: 13px; }
+.weekly-publish-check-issues { border-radius: 8px; background: var(--tone-amber-bg); padding: 10px 12px; }
+.weekly-publish-check-issues strong { color: var(--tone-amber); font-size: 13px; }
 .weekly-publish-check-issues p { margin: 6px 0 0; color: var(--el-text-color-secondary); font-size: 12px; }
-.weekly-publish-check-ready { margin: 0; border-radius: 8px; background: #effaf3; padding: 12px; color: #26834d; font-size: 13px; }
+.weekly-publish-check-ready { margin: 0; border-radius: 8px; background: var(--tone-green-bg); padding: 12px; color: var(--tone-green); font-size: 13px; }
 
 .weekly-setup-card,
 .weekly-draft-list,

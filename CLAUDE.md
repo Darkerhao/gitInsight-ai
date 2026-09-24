@@ -11,7 +11,7 @@ The app ships as two **editions**, Lite (简洁版) and Standard (标准版). Ed
 ## Commands
 
 ```bash
-npm run dev        # electron-vite dev with HMR (renderer served at 127.0.0.1:5174, strictPort)
+npm run dev        # electron-vite dev with HMR (renderer served at 127.0.0.1:15174, strictPort)
 npm run build      # bundle main + preload + renderer into out/
 npm start          # electron . — runs the already-built out/main/main.js (run build first)
 npm run typecheck  # vue-tsc --noEmit (the only static check; there is no ESLint/Prettier)
@@ -21,7 +21,7 @@ npm test           # all four unit suites
 
 Tests are hand-rolled `node:test` suites in [tests/](tests/), run one at a time via per-suite scripts — there is **no** test runner (no vitest/jest) and no watch mode. Each script `tsc`-compiles just the files under test into a throwaway `.<name>-test-dist/` dir, runs `node --test`, then deletes the dir. To run a single suite: `npm run test:timeline`, `npm run test:repo-names`, `npm run test:ai-client`, or `npm run test:auto-sync`. Adding a suite means adding a matching `test:<name>` script with its own explicit file list and appending it to `test`. The auto-sync suite covers the pure migration, key, window, work-hour, and scheduling helpers in `electron/main/autoSyncCore.ts`; anything touching Electron APIs can't be tested this way. [tests/ui-shell.smoke.mjs](tests/ui-shell.smoke.mjs) asserts on renderer source text (regex over `.vue`/`.scss` files) and is **not** wired into any npm script.
 
-`npm run dev` requires TCP port **5174** to be free (`strictPort: true`). On Windows this commonly fails with `listen EACCES ... 127.0.0.1:5174` when the port is in an excluded/reserved range (see `dev.stderr.log`); change the port in `electron.vite.config.ts` if so.
+`npm run dev` requires TCP port **15174** to be free (`strictPort: true`). If Windows reports `listen EACCES`, check `netsh interface ipv4 show excludedportrange protocol=tcp` and choose a port outside the excluded ranges in `electron.vite.config.ts`.
 
 ### Packaging & release
 

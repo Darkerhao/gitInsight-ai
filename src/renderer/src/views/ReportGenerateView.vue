@@ -4,7 +4,6 @@ import { BrainCog, CalendarDays, FileText } from 'lucide-vue-next';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import ReportEditorCard from '@/components/report-generate/ReportEditorCard.vue';
-import ReportGenerationLoadingOverlay from '@/components/report-generate/ReportGenerationLoadingOverlay.vue';
 import ReportPublishSidebar from '@/components/report-generate/ReportPublishSidebar.vue';
 import ReportSetupCard from '@/components/report-generate/ReportSetupCard.vue';
 import { useAssistant } from '@/composables/useAssistant';
@@ -141,6 +140,7 @@ const editorDrafts = computed(() =>
     hasLastReportResult: Boolean(draft.lastReportResult),
     dirty: draft.dirty,
     generateStatus: draft.generateStatus,
+    generateMessage: draft.generateMessage,
     publishStatus: draft.publishStatus,
     reportTitle: `${draft.repo.name} ${form.date || '未选择日期'} 研发日报`,
     reportSubtitle: draft.report.trim() ? reportRangeLabel.value : '生成后的日报会在这里进入可编辑状态',
@@ -553,33 +553,42 @@ function syncActiveWorkflowStage(entries: IntersectionObserverEntry[]) {
 }
 
 async function handleGenerateCurrent() {
+  if (loading.value) return;
   const draft = activeDraft.value;
   if (!draft || !validateGenerationReady()) return;
 
   loading.value = true;
   const draftKey = draft.key;
+  status.value = '正在保存生成配置';
   try {
     await persistConfigSnapshot();
     const success = await generateDraft(draftKey);
+    status.value = '正在更新本地生成记录';
     await refreshLocalData();
     const latestDraft = getDraftByKey(draftKey);
     if (success) {
       const allocation = recalculateProjectWorkHours();
       activeDraftKey.value = draftKey;
       const allocationMessage = allocation.estimatedCount ? `，已自动分配项目工时` : '';
-      ElMessage.success(`${latestDraft?.repo.name ?? draft.repo.name} 日报已生成${allocationMessage}`);
+      status.value = `${latestDraft?.repo.name ?? draft.repo.name} 日报已生成${allocationMessage}`;
+      ElMessage.success(status.value);
       if (!latestDraft?.lastReportResult?.commits.length && !form.manualWorkContent.trim()) {
         ElMessage.warning('当前项目未匹配到可用于生成日报的提交记录');
       }
     } else {
-      ElMessage.error(latestDraft?.generateMessage || '生成失败');
+      status.value = latestDraft?.generateMessage || '生成失败';
+      ElMessage.error(status.value);
     }
+  } catch (error) {
+    status.value = error instanceof Error ? error.message : '生成流程未完成';
+    ElMessage.error(status.value);
   } finally {
     loading.value = false;
   }
 }
 
 async function handleGenerateAll() {
+  if (loading.value) return;
   if (!validateGenerationReady()) return;
   if (!projectDrafts.value.length) {
     ElMessage.warning('请至少选择一个项目');
@@ -590,6 +599,7 @@ async function handleGenerateAll() {
   let successCount = 0;
   let failedCount = 0;
   let firstSuccessfulDraftKey = '';
+  status.value = '正在保存生成配置';
   try {
     await persistConfigSnapshot();
     const draftKeys = projectDrafts.value.map((draft) => draft.key);
@@ -605,6 +615,7 @@ async function handleGenerateAll() {
         failedCount += 1;
       }
     }
+    status.value = '正在更新本地生成记录';
     await refreshLocalData();
     if (!activeDraft.value?.report.trim() && firstSuccessfulDraftKey) {
       activeDraftKey.value = firstSuccessfulDraftKey;
@@ -618,6 +629,9 @@ async function handleGenerateAll() {
       const allocationMessage = allocation.estimatedCount ? `，并自动分配 ${allocation.estimatedCount} 个项目工时` : '';
       ElMessage.success(`已生成 ${successCount} 个项目日报${allocationMessage}`);
     }
+  } catch (error) {
+    status.value = error instanceof Error ? error.message : '生成流程未完成';
+    ElMessage.error(status.value);
   } finally {
     loading.value = false;
   }
@@ -1023,8 +1037,6 @@ onBeforeUnmount(() => {
 
 <template>
   <div ref="workflowRoot" class="view-stack report-generate-view atelier-page" data-page="report-generate">
-    <ReportGenerationLoadingOverlay :visible="loading" />
-
     <PageHeader title="日报生成" subtitle="基于 Git 提交记录生成研发日报">
       <template #actions>
         <el-button :icon="FileText" plain @click="emit('navigate', 'history')">生成记录</el-button>
@@ -1056,6 +1068,7 @@ onBeforeUnmount(() => {
       <div class="view-stack">
         <ReportSetupCard
           id="stage-scope"
+          :inert="loading || undefined"
           class="atelier-stage atelier-stage-card atelier-stage-scope"
           data-stage="scope"
           aria-label="生成范围"
@@ -1065,7 +1078,6 @@ onBeforeUnmount(() => {
           :setup-status-label="setupStatusLabel"
           :selected-repo-summary="selectedRepoSummary"
           :repo-context-text="repoContextText"
-          :report-range-label="reportRangeLabel"
           :readiness-progress-label="readinessProgressLabel"
           :readiness-detail="readinessDetail"
           :selected-repos="selectedRepos"
@@ -1123,6 +1135,7 @@ onBeforeUnmount(() => {
 
       <ReportPublishSidebar
         id="stage-publish"
+        :inert="loading || undefined"
         class="atelier-stage atelier-stage-publish"
         data-stage="publish"
         aria-label="日报发布"

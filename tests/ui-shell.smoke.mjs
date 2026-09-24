@@ -18,11 +18,6 @@ const reportSetup = await read('src/renderer/src/components/report-generate/Repo
 const indexStyles = await read('src/renderer/src/styles/index.scss');
 const atelierStyles = await read('src/renderer/src/styles/_atelier.scss');
 
-assert.match(app, /app-atmosphere/, 'app shell should expose the atmospheric canvas layer');
-assert.match(app, /handlePointerMove/, 'app shell should wire pointer feedback');
-assert.match(app, /pointerVelocity/, 'pointer feedback should use a damped spring state');
-assert.match(app, /requestAnimationFrame/, 'pointer feedback should be frame-scheduled');
-assert.match(app, /handleScroll/, 'app shell should expose scroll progress feedback');
 assert.match(sidebar, /lucide-vue-next/, 'sidebar icons must come from Lucide');
 assert.match(sidebar, /atelier-sidebar/, 'sidebar should use the atelier shell');
 assert.match(topbar, /topbar-command/, 'topbar should expose the command/status rail');

@@ -14,6 +14,7 @@ import HistoryLogsView from '@/views/HistoryLogsView.vue';
 import JiaziTimelineView from '@/views/JiaziTimelineView.vue';
 import SystemSettingsView from '@/views/SystemSettingsView.vue';
 import { usePageZoom } from '@/composables/usePageZoom';
+import { useGlassReflection } from '@/composables/useGlassReflection';
 import { navKeys } from '@/router';
 import type { NavKey } from '@/router';
 
@@ -25,22 +26,17 @@ type ViewTransitionDocument = Document & {
 };
 
 const assistant = useAssistant();
+const appLayout = ref<HTMLElement | null>(null);
+const stopReflection = useGlassReflection(appLayout);
 const THEME_STORAGE_KEY = 'gitinsight:theme-mode';
 const WELCOME_STORAGE_KEY = 'gitinsight:welcome-finished';
 const WELCOME_ANIMATION_ENABLED_KEY = 'gitinsight:welcome-animation-enabled';
 const themeMode = ref<ThemeMode>(getInitialThemeMode());
 const showWelcome = ref(shouldShowWelcomeOnLaunch());
 const assistantReady = ref(false);
-const appRoot = ref<HTMLElement | null>(null);
-const appScroll = ref<HTMLElement | null>(null);
 const route = useRoute();
 const router = useRouter();
 const { zoomFactor, canZoomOut, canZoomIn, initializePageZoom, zoomIn, zoomOut, resetPageZoom } = usePageZoom();
-let scrollElement: HTMLElement | null = null;
-let pointerFrame = 0;
-const pointerTarget = { x: 50, y: 18 };
-const pointerCurrent = { x: 50, y: 18 };
-const pointerVelocity = { x: 0, y: 0 };
 const legacyNavMap: Record<string, NavKey> = {
   dashboard: 'generate',
   repositories: 'config',
@@ -74,6 +70,7 @@ const activeNav = computed({
   set: (value: string) => handleNavigate(value),
 });
 const activeView = computed(() => viewMap[activeNav.value as keyof typeof viewMap] ?? ReportGenerateView);
+watch([activeNav, assistant.loading], stopReflection);
 const appVersionText = computed(() => {
   const info = assistant.storageInfo.value;
   if (!info?.appVersion) return '';
@@ -214,66 +211,6 @@ function finishWelcome() {
   showWelcome.value = false;
 }
 
-function prefersReducedMotion() {
-  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-}
-
-function handlePointerMove(event: PointerEvent) {
-  const root = appRoot.value;
-  if (!root) return;
-
-  const bounds = root.getBoundingClientRect();
-  pointerTarget.x = Math.max(0, Math.min(100, ((event.clientX - bounds.left) / Math.max(bounds.width, 1)) * 100));
-  pointerTarget.y = Math.max(0, Math.min(100, ((event.clientY - bounds.top) / Math.max(bounds.height, 1)) * 100));
-  root.style.setProperty('--pointer-alpha', '1');
-
-  if (prefersReducedMotion()) {
-    pointerCurrent.x = pointerTarget.x;
-    pointerCurrent.y = pointerTarget.y;
-    root.style.setProperty('--pointer-x', `${pointerCurrent.x}%`);
-    root.style.setProperty('--pointer-y', `${pointerCurrent.y}%`);
-    return;
-  }
-
-  if (!pointerFrame) pointerFrame = window.requestAnimationFrame(animatePointer);
-}
-
-function resetPointerLight() {
-  appRoot.value?.style.setProperty('--pointer-alpha', '0');
-}
-
-function animatePointer() {
-  const root = appRoot.value;
-  if (!root) {
-    pointerFrame = 0;
-    return;
-  }
-
-  const deltaX = pointerTarget.x - pointerCurrent.x;
-  const deltaY = pointerTarget.y - pointerCurrent.y;
-  pointerVelocity.x = (pointerVelocity.x + deltaX * 0.14) * 0.72;
-  pointerVelocity.y = (pointerVelocity.y + deltaY * 0.14) * 0.72;
-  pointerCurrent.x += pointerVelocity.x;
-  pointerCurrent.y += pointerVelocity.y;
-  root.style.setProperty('--pointer-x', `${pointerCurrent.x}%`);
-  root.style.setProperty('--pointer-y', `${pointerCurrent.y}%`);
-
-  if (Math.abs(deltaX) + Math.abs(deltaY) + Math.abs(pointerVelocity.x) + Math.abs(pointerVelocity.y) > 0.08) {
-    pointerFrame = window.requestAnimationFrame(animatePointer);
-  } else {
-    pointerFrame = 0;
-  }
-}
-
-function handleScroll() {
-  const node = scrollElement ?? appScroll.value;
-  if (!node) return;
-
-  const scrollableDistance = Math.max(node.scrollHeight - node.clientHeight, 0);
-  const ratio = scrollableDistance ? node.scrollTop / scrollableDistance : 0;
-  node.style.setProperty('--scroll-progress', `${Math.max(0, Math.min(1, ratio))}`);
-}
-
 function handlePageZoomShortcut(event: KeyboardEvent) {
   if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
 
@@ -310,9 +247,6 @@ watch(
 
 onMounted(async () => {
   window.addEventListener('keydown', handlePageZoomShortcut, true);
-  scrollElement = appScroll.value;
-  scrollElement?.addEventListener('scroll', handleScroll, { passive: true });
-  handleScroll();
 
   await initializePageZoom();
   await assistant.init();
@@ -323,11 +257,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  if (pointerFrame) window.cancelAnimationFrame(pointerFrame);
-  pointerFrame = 0;
-  scrollElement?.removeEventListener('scroll', handleScroll);
   window.removeEventListener('keydown', handlePageZoomShortcut, true);
-  scrollElement = null;
   assistant.dispose();
 });
 </script>
@@ -335,17 +265,7 @@ onBeforeUnmount(() => {
 <template>
   <WelcomeGate v-if="showWelcome" :metrics="welcomeMetrics" @finished="finishWelcome" />
 
-  <div
-    ref="appRoot"
-    class="app-layout atelier-app"
-    @pointermove="handlePointerMove"
-    @pointerleave="resetPointerLight"
-  >
-    <div class="app-atmosphere" aria-hidden="true">
-      <span class="app-atmosphere-grid" />
-      <span class="app-atmosphere-orbit app-atmosphere-orbit-a" />
-      <span class="app-atmosphere-orbit app-atmosphere-orbit-b" />
-    </div>
+  <div ref="appLayout" class="app-layout atelier-app">
     <AppSidebar v-model:active-nav="activeNav" />
 
     <main class="app-main">
@@ -360,7 +280,7 @@ onBeforeUnmount(() => {
         @reset-zoom="resetPageZoom"
       />
 
-      <div ref="appScroll" class="app-scroll atelier-scroll" :class="{ 'is-immersive': activeNav === 'timeline' }">
+      <div class="app-scroll atelier-scroll" :class="{ 'is-immersive': activeNav === 'timeline' }">
         <Transition name="route-switch" mode="out-in">
           <component :is="activeView" :key="activeNav" :active-nav="activeNav" @navigate="handleNavigate" />
         </Transition>

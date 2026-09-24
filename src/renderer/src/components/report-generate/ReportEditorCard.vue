@@ -37,6 +37,7 @@ interface ProjectReportDraft {
   hasLastReportResult: boolean;
   dirty: boolean;
   generateStatus: DraftGenerateStatus;
+  generateMessage: string;
   publishStatus: DraftPublishStatus;
   reportTitle: string;
   reportSubtitle: string;
@@ -73,6 +74,10 @@ const emit = defineEmits<{
 }>();
 
 const activeDraft = computed(() => props.drafts.find((item) => item.key === props.activeDraftKey) ?? props.drafts[0]);
+const generatingDrafts = computed(() => props.drafts.filter((item) => item.generateStatus === 'generating'));
+const generationDetail = computed(() => generatingDrafts.value.length
+  ? `正在生成 ${generatingDrafts.value.map((item) => item.repoName).join('、')} 的日报`
+  : props.status);
 
 const activeKeyModel = computed({
   get: () => props.activeDraftKey,
@@ -108,7 +113,7 @@ function getTabStatusType(item: ProjectReportDraft) {
 </script>
 
 <template>
-  <section class="surface-card step-card report-editor-card atelier-stage-card" data-card-stage="生成" aria-label="日报生成">
+  <section class="surface-card step-card report-editor-card atelier-stage-card" data-card-stage="生成" :data-glass-disabled="loading" aria-label="日报生成">
     <div class="step-title">
       <span>2</span>
       <strong>生成与编辑</strong>
@@ -118,8 +123,9 @@ function getTabStatusType(item: ProjectReportDraft) {
       <label>补充工作内容（可选）</label>
       <el-input
         :model-value="manualWorkContent"
+        :readonly="loading"
         type="textarea"
-        :rows="4"
+        :rows="3"
         :maxlength="2000"
         show-word-limit
         resize="vertical"
@@ -133,9 +139,15 @@ function getTabStatusType(item: ProjectReportDraft) {
         <strong>{{ setupReady ? '准备就绪，可以生成' : '生成条件未完成' }}</strong>
         <span>{{ readinessDetail }}</span>
       </div>
-      <el-button class="generate-cta" :icon="FileText" type="primary" size="large" :loading="loading" @click="emit('generate-all')">
-        {{ generateButtonLabel }}
+      <el-button class="generate-cta" :icon="FileText" type="primary" size="large" :disabled="loading" @click="emit('generate-all')">
+        {{ loading ? '正在生成日报' : generateButtonLabel }}
       </el-button>
+    </div>
+
+    <div v-if="loading" class="report-generation-status" role="status" aria-live="polite">
+      <FileText :size="18" aria-hidden="true" />
+      <span>{{ generationDetail }}</span>
+      <div v-if="generatingDrafts.length" class="generation-light" role="progressbar" aria-label="日报生成中" />
     </div>
 
     <div class="generation-check-strip">
@@ -179,7 +191,7 @@ function getTabStatusType(item: ProjectReportDraft) {
       </div>
     </div>
 
-    <article class="report-preview" :class="{ 'is-empty': !activeHasReport }">
+    <article :key="activeDraft?.key" class="report-preview" :class="{ 'is-empty': !activeHasReport, 'is-ready': !loading, 'is-generated': !loading && activeDraft?.generateStatus === 'success' }">
       <div class="report-preview-head">
         <div>
           <h2>{{ activeDraft?.reportTitle || '请选择项目生成日报' }}</h2>
@@ -190,7 +202,6 @@ function getTabStatusType(item: ProjectReportDraft) {
           <el-button
             v-if="activeDraft"
             :icon="RefreshCw"
-            :loading="activeDraft.generateStatus === 'generating'"
             :disabled="loading"
             plain
             size="small"
@@ -201,6 +212,12 @@ function getTabStatusType(item: ProjectReportDraft) {
         </div>
       </div>
 
+      <p v-if="activeDraft?.generateStatus === 'success' || activeDraft?.generateStatus === 'failed'" class="report-result-status" :class="activeDraft.generateStatus" role="status">
+        <CheckCircle2 v-if="activeDraft.generateStatus === 'success'" :size="17" aria-hidden="true" />
+        <CircleAlert v-else :size="17" aria-hidden="true" />
+        <span>{{ activeDraft.generateStatus === 'success' ? '生成完成，可编辑后保存' : `生成失败：${activeDraft.generateMessage}` }}</span>
+      </p>
+
       <div v-if="!activeHasReport" class="report-empty-panel">
         <FileText :size="30" />
         <strong>等待生成日报正文</strong>
@@ -210,6 +227,7 @@ function getTabStatusType(item: ProjectReportDraft) {
       <el-input
         v-else
         v-model="reportModel"
+        :readonly="loading"
         class="editable-report"
         type="textarea"
         :autosize="{ minRows: 16, maxRows: 28 }"
@@ -219,8 +237,8 @@ function getTabStatusType(item: ProjectReportDraft) {
     </article>
 
     <div class="button-row end">
-      <el-button :icon="Save" :disabled="!activeHasReport" plain @click="emit('save-current')">保存当前</el-button>
-      <el-button :icon="Save" :disabled="!canSaveAll" plain @click="emit('save-all')">保存全部修改</el-button>
+      <el-button :icon="Save" :disabled="loading || !activeHasReport" plain @click="emit('save-current')">保存当前</el-button>
+      <el-button :icon="Save" :disabled="loading || !canSaveAll" plain @click="emit('save-all')">保存全部修改</el-button>
       <el-button :icon="ClipboardCopy" :disabled="!activeHasReport" plain @click="emit('copy-current')">复制内容</el-button>
       <el-button :icon="Download" :disabled="!activeHasReport" type="primary" plain @click="emit('export-current')">导出 Markdown</el-button>
     </div>

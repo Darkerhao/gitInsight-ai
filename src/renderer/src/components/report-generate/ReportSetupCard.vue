@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { CheckCircle2, Clock3, FolderGit2, ListChecks, Pencil, Pin, Plus, Search, Trash2 } from 'lucide-vue-next';
+import { CheckCircle2, FileText, FolderGit2, ListChecks, Pencil, Pin, Plus, Search, Trash2 } from 'lucide-vue-next';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import type { RepoInfo, ReportPromptStyle } from '@shared/types';
 import {
@@ -31,7 +31,6 @@ const props = defineProps<{
   setupStatusLabel: string;
   selectedRepoSummary: string;
   repoContextText: string;
-  reportRangeLabel: string;
   readinessProgressLabel: string;
   readinessDetail: string;
   selectedRepos: RepoInfo[];
@@ -112,25 +111,20 @@ function handleEndDateTimeChange(value: string | null) {
 
     <div class="report-context-bar">
       <div class="report-context-item">
-        <FolderGit2 :size="16" />
-        <span>
-          <strong>{{ selectedRepoSummary }}</strong>
-          <small>{{ repoContextText }}</small>
-        </span>
+        <span class="report-context-label"><FolderGit2 :size="18" />已选仓库</span>
+        <strong class="report-context-value">{{ selectedRepos.length }}<small>个</small></strong>
+        <span class="report-context-detail" :title="repoContextText">{{ selectedRepoSummary }}</span>
+      </div>
+      <div class="report-context-deck">
+        <div class="report-context-sheet">
+          <span class="report-context-sheet-heading"><FileText :size="18" />研发日报</span>
+          <strong>{{ form.date || '待选择日期' }}</strong>
+        </div>
       </div>
       <div class="report-context-item">
-        <Clock3 :size="16" />
-        <span>
-          <strong>提交范围</strong>
-          <small>{{ reportRangeLabel }}</small>
-        </span>
-      </div>
-      <div class="report-context-item">
-        <ListChecks :size="16" />
-        <span>
-          <strong>{{ readinessProgressLabel }}</strong>
-          <small>{{ readinessDetail }}</small>
-        </span>
+        <span class="report-context-label"><ListChecks :size="18" />生成准备</span>
+        <strong class="report-context-readiness">{{ readinessProgressLabel }}</strong>
+        <span class="report-context-detail">{{ readinessDetail }}</span>
       </div>
     </div>
 
@@ -214,7 +208,7 @@ function handleEndDateTimeChange(value: string | null) {
         </el-popover>
       </div>
 
-      <div class="field field-span-3">
+      <div class="field">
         <label>AI 配置</label>
         <el-select :model-value="activeAiProfileId" placeholder="选择 AI 配置" @change="handleAiProfileChange">
           <el-option v-for="item in aiProfileOptions" :key="item.value" :label="item.label" :value="item.value">
@@ -226,7 +220,7 @@ function handleEndDateTimeChange(value: string | null) {
         </el-select>
       </div>
 
-      <div class="field field-span-3">
+      <div class="field report-style-field">
         <label>日报风格</label>
         <el-radio-group :model-value="promptStyle" @change="handlePromptStyleChange">
           <el-radio-button value="concise">简短精炼</el-radio-button>

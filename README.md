@@ -178,7 +178,7 @@
 
 ```bash
 npm install
-npm run dev        # 开发模式（渲染层固定端口 5174）
+npm run dev        # 开发模式（渲染层固定端口 15174）
 npm run build      # 构建到 out/
 npm start          # 运行已构建产物
 npm run typecheck  # vue-tsc 类型检查

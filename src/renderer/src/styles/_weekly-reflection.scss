@@ -1,5 +1,5 @@
 .weekly-reflection-view {
-  --reflection-accent: #0f8f78;
+  --reflection-accent: var(--c-primary);
   --reflection-border: color-mix(in srgb, var(--el-border-color) 78%, transparent);
   gap: 18px;
 }
