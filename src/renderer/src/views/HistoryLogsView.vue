@@ -27,6 +27,8 @@ const historyLogs = ref<HistoryLogRecord[]>([]);
 const historyProjects = ref<string[]>([]);
 const historyTotal = ref(0);
 const historyLoading = ref(false);
+const historyError = ref('');
+const historyFiltered = ref(false);
 let historyRequestSeq = 0;
 
 const projectOptions = computed(() => {
@@ -59,24 +61,29 @@ function buildHistoryQuery() {
   };
 }
 
-async function loadHistoryLogs(showEmptyMessage = false) {
+async function loadHistoryLogs() {
   const requestSeq = ++historyRequestSeq;
+  const query = buildHistoryQuery();
   historyLoading.value = true;
+  historyError.value = '';
   try {
-    const page = await window.api.queryHistoryLogs(buildHistoryQuery());
+    const page = await window.api.queryHistoryLogs(query);
     if (requestSeq !== historyRequestSeq) return;
     historyLogs.value = page.records;
     historyTotal.value = page.total;
+    historyFiltered.value = Boolean(query.keyword.trim() || query.project !== '全部项目' || query.type !== '全部类型' || query.status !== '全部状态' || query.startDate || query.endDate);
     if (selectedLog.value && !page.records.some((item) => item.id === selectedLog.value?.id)) {
       selectedLog.value = null;
       detailVisible.value = false;
     }
-    if (showEmptyMessage && page.total === 0) {
-      ElMessage.warning('没有匹配日志');
-    }
   } catch (error) {
+    if (requestSeq !== historyRequestSeq) return;
     const message = error instanceof Error ? error.message : String(error || '未知错误');
-    ElMessage.error(`历史日志加载失败：${message}`);
+    historyError.value = message;
+    historyLogs.value = [];
+    historyTotal.value = 0;
+    selectedLog.value = null;
+    detailVisible.value = false;
   } finally {
     if (requestSeq === historyRequestSeq) {
       historyLoading.value = false;
@@ -130,7 +137,7 @@ async function handleSearch() {
   selectedLog.value = null;
   detailVisible.value = false;
   if (currentPage.value === 1) {
-    await loadHistoryLogs(true);
+    await loadHistoryLogs();
   } else {
     currentPage.value = 1;
   }
@@ -244,8 +251,21 @@ function formatDateTime(value: string) {
         </section>
 
         <section class="surface-card log-table-card">
-          <div class="table-summary">共 {{ historyTotal }} 条日志</div>
-          <el-table v-loading="historyLoading" :data="historyLogs" class="log-table" @row-click="openLogDetail">
+          <div v-if="!historyLoading && !historyError" class="table-summary">共 {{ historyTotal }} 条日志</div>
+          <div v-if="historyError" class="history-state" role="alert">
+            <strong>历史日志加载失败</strong>
+            <p>{{ historyError }}</p>
+            <el-button type="primary" :icon="RotateCcw" @click="loadHistoryLogs">重新加载</el-button>
+          </div>
+          <el-table v-else v-loading="historyLoading" :data="historyLogs" class="log-table" @row-click="openLogDetail">
+            <template #empty>
+              <div v-if="!historyLoading" class="history-state" role="status">
+                <strong>{{ historyFiltered ? '没有匹配的日志' : '暂无历史日志' }}</strong>
+                <p>{{ historyFiltered ? '试试调整筛选条件，或清空筛选查看全部记录。' : '生成日报或执行同步后，记录会显示在这里。' }}</p>
+                <el-button v-if="historyFiltered" @click="resetFilters">清空筛选</el-button>
+              </div>
+              <span v-else role="status">正在加载日志…</span>
+            </template>
             <el-table-column label="时间" min-width="170">
               <template #default="{ row }">{{ formatDateTime(row.time) }}</template>
             </el-table-column>
@@ -260,8 +280,7 @@ function formatDateTime(value: string) {
             <el-table-column prop="duration" label="耗时" width="100" />
             <el-table-column prop="operator" label="操作人" width="110" />
           </el-table>
-          <div v-if="!historyLoading && !historyLogs.length" class="empty-state">暂无匹配日志</div>
-          <div class="pagination-row">
+          <div v-if="!historyError && historyTotal > 0" class="pagination-row">
             <el-pagination
               v-model:current-page="currentPage"
               v-model:page-size="pageSize"
@@ -325,3 +344,22 @@ function formatDateTime(value: string) {
     </el-drawer>
   </div>
 </template>
+
+<style scoped lang="scss">
+.history-state {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 40px 20px;
+  color: var(--c-text-muted);
+  text-align: center;
+  line-height: 1.6;
+
+  strong { color: var(--c-text); }
+  p { margin: 0; overflow-wrap: anywhere; }
+}
+
+.log-table :deep(.el-table__empty-text) {
+  width: 100%;
+}
+</style>

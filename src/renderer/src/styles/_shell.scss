@@ -764,6 +764,11 @@
   grid-template-columns: minmax(0, 1fr) 320px;
 }
 
+.surface-card {
+  border-radius: var(--radius-card);
+  padding: 22px 24px;
+}
+
 .surface-card h3 {
   margin: 0;
   color: var(--c-text);

@@ -123,12 +123,6 @@
   color: var(--c-text);
 }
 
-:root[data-theme='dark'] .topbar,
-:root[data-theme='dark'] .sidebar,
-:root[data-theme='dark'] .surface-card {
-  box-shadow: var(--shadow-card);
-}
-
 :root[data-theme='dark'] .sidebar-menu.el-menu {
   --el-menu-hover-bg-color: var(--c-surface-inset);
 }

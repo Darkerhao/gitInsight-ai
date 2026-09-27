@@ -4,41 +4,10 @@
   gap: 18px;
 }
 
-.reflection-setup-panel,
-.reflection-result-panel,
-.reflection-history-panel {
-  padding: 24px;
-}
-
-.reflection-section-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 22px;
-}
-
-.reflection-section-head.compact {
-  margin-bottom: 16px;
-}
-
-.reflection-section-head h2 {
-  margin: 5px 0 6px;
-  font-size: 21px;
-  letter-spacing: 0;
-}
-
 .reflection-section-head p {
   margin: 0;
   color: var(--el-text-color-secondary);
   font-size: 13px;
-}
-
-.reflection-section-head .eyebrow {
-  color: var(--reflection-accent);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0;
 }
 
 .reflection-filter-grid {
@@ -131,17 +100,6 @@
   grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
   gap: 18px;
   align-items: start;
-}
-
-.reflection-result-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.reflection-result-actions .el-button {
-  margin: 0;
 }
 
 .reflection-result-content {
@@ -500,13 +458,6 @@
 }
 
 @media (max-width: 640px) {
-  .reflection-setup-panel,
-  .reflection-result-panel,
-  .reflection-history-panel {
-    padding: 18px;
-  }
-
-  .reflection-section-head,
   .reflection-source-strip {
     align-items: stretch;
     flex-direction: column;

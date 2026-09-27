@@ -488,15 +488,7 @@
   color: var(--c-text-faint);
 }
 
-/* ============ 卡片 / 配置区 ============ */
-.surface-card {
-  background: var(--c-surface);
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-  padding: 22px 24px;
-}
-
+/* ============ 配置区 ============ */
 .report-config-view {
   --config-aside-width: 320px;
 }

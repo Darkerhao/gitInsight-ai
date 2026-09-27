@@ -18,7 +18,7 @@
   initial-value: 0;
 }
 
-/* 黑银玻璃：斜向反射、非均匀亮边和内外阴影共用同一材质。 */
+/* 同一主题下按导航、内容和主编辑区区分材质强度。 */
 .app-layout {
   background: var(--c-page-bg);
 }
@@ -29,9 +29,30 @@
 
 .sidebar,
 .topbar,
-.surface-card,
 .config-block,
 .atelier-workflow-step {
+  border: 1px solid var(--c-border);
+  background: var(--c-surface-muted);
+  box-shadow: none;
+}
+
+.sidebar,
+.topbar {
+  background: linear-gradient(150deg, var(--c-sheen), transparent 45%), var(--c-glass);
+}
+
+.surface-card {
+  border: 1px solid var(--c-border);
+  background: linear-gradient(150deg, var(--c-sheen), transparent 32%), var(--c-surface);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--c-page-bg) 65%, transparent);
+}
+
+.surface-card:is(.help-card, .record-panel, .weekly-draft-list, .weekly-summary-stats, .weekly-summary-history, .reflection-history-panel) {
+  background: var(--c-surface-muted);
+  box-shadow: none;
+}
+
+.surface-card:is(.report-editor-card, .weekly-editor-panel, .weekly-summary-editor, .reflection-result-panel) {
   border: 1px solid transparent;
   background:
     radial-gradient(ellipse 360px 240px at var(--glass-x) var(--glass-y), rgb(255 255 255 / var(--glass-light)), transparent 75%) padding-box,
@@ -243,6 +264,8 @@
 
 .atelier-workflow-step.active {
   border-color: color-mix(in srgb, var(--c-primary) 50%, var(--c-border));
+  background: var(--c-primary-soft);
+  box-shadow: inset 0 2px 0 var(--c-primary);
 }
 
 .atelier-workflow-index {

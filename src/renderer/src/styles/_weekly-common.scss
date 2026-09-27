@@ -1,0 +1,67 @@
+/* 周报与周反思的同级区域只维护一套排版规格。 */
+.weekly-summary-setup,
+.weekly-summary-editor,
+.weekly-summary-stats,
+.weekly-summary-history,
+.reflection-setup-panel,
+.reflection-result-panel,
+.reflection-history-panel {
+  padding: 24px;
+}
+
+.weekly-summary-section-head,
+.reflection-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+
+  &.compact { margin-bottom: 14px; }
+
+  h2 {
+    margin: 5px 0 6px;
+    font-size: 20px;
+    line-height: 1.4;
+    letter-spacing: 0;
+  }
+
+  .eyebrow {
+    color: var(--c-primary);
+    font-size: 11px;
+    font-weight: 700;
+  }
+}
+
+.weekly-summary-toolbar,
+.weekly-summary-actions,
+.reflection-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.weekly-summary-actions,
+.reflection-result-actions {
+  justify-content: flex-end;
+
+  .el-button { margin: 0; }
+}
+
+@media (max-width: 640px) {
+  .weekly-summary-setup,
+  .weekly-summary-editor,
+  .weekly-summary-stats,
+  .weekly-summary-history,
+  .reflection-setup-panel,
+  .reflection-result-panel,
+  .reflection-history-panel {
+    padding: 18px;
+  }
+
+  .weekly-summary-section-head,
+  .reflection-section-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
