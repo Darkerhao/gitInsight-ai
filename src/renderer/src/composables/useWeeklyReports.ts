@@ -1,7 +1,7 @@
 import { onMounted } from 'vue';
 import { countWeeklyReportFiles } from '@shared/weeklyReport';
 import { useAssistant } from './useAssistant';
-import { createWeeklyReportActions } from './weeklyReportActions';
+import { createProjectReportActions, fullDayReportScope, type WeeklyReportDraft } from './projectReportActions';
 import { createWeeklyReportCommands } from './weeklyReportCommands';
 import { createWeeklyReportMutations, useWeeklyReportState } from './useWeeklyReportState';
 import {
@@ -24,10 +24,10 @@ export function useWeeklyReports() {
   const assistant = useAssistant();
   const state = useWeeklyReportState(assistant);
   const mutations = createWeeklyReportMutations(state, () => assistant.config.feishuForm.defaultWorkHours);
-  const actions = createWeeklyReportActions({
+  const actions = createProjectReportActions<WeeklyReportDraft>({
     api: window.api, config: assistant.config,
     getProjectOptions: () => assistant.projectOptions.value,
-    displayRepoName: state.displayRepoName,
+    displayRepoName: state.displayRepoName, getScope: fullDayReportScope,
   });
   const commands = createWeeklyReportCommands({ assistant, state, actions, mutations });
   loadProjectOptionsOnMount(assistant);

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Coins, Gift, Search, Sparkles, Zap } from 'lucide-vue-next';
 import { ElMessage } from 'element-plus';
-import RewardEffectOverlay from '@/components/rewards/RewardEffectOverlay.vue';
+const loadRewardOverlay = () => import('@/components/rewards/RewardEffectOverlay.vue');
+const RewardEffectOverlay = defineAsyncComponent(loadRewardOverlay);
 import {
   EFFECT_OPTION_MAP,
   EFFECT_OPTIONS,
@@ -217,6 +218,8 @@ async function playEffect(effect: RewardEffectKey) {
   spendingEffect.value = effect;
   const requestSeed = effectSeed.value;
   try {
+    await loadRewardOverlay();
+    if (effectSeed.value !== requestSeed) return;
     applyWalletSnapshot(await window.api.spendCheckinCoins({
       amount: option.cost,
       reason: `启动视觉协议：${option.label}`,
@@ -398,6 +401,7 @@ onBeforeUnmount(() => {
   </el-popover>
 
   <RewardEffectOverlay
+    v-if="activeEffect"
     :effect="activeEffect"
     :seed="effectSeed"
     :can-replay="!!activeEffect && wallet.coins >= EFFECT_OPTION_MAP[activeEffect].cost"

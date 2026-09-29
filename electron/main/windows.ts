@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, screen } from 'electron';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -45,16 +45,21 @@ export function toCloneable<T>(value: T): T {
 
 
 export function createMainWindow() {
+  const workArea = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  const width = Math.min(1400, workArea.width);
+  const height = Math.min(900, workArea.height);
   const preloadPath = existsSync(join(__dirname, '../preload/index.js'))
     ? join(__dirname, '../preload/index.js')
     : join(__dirname, '../preload/preload.cjs');
 
   mainWindow = new BrowserWindow({
     show: false,
-    width: 1400,
-    height: 900,
-    minWidth: 1200,
-    minHeight: 780,
+    width,
+    height,
+    x: workArea.x + Math.floor((workArea.width - width) / 2),
+    y: workArea.y + Math.floor((workArea.height - height) / 2),
+    minWidth: Math.min(900, workArea.width),
+    minHeight: Math.min(600, workArea.height),
     icon: getWindowOptionsIcon(),
     backgroundColor: APP_BACKGROUND_COLOR,
     webPreferences: {

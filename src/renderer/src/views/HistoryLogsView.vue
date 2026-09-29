@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { ClipboardCopy, Download, RotateCcw, Search, Send, X } from 'lucide-vue-next';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
+import { createProjectReportActions } from '@/composables/projectReportActions';
 import { useAssistant } from '@/composables/useAssistant';
 import type { HistoryLogRecord, HistoryLogStatusFilter, HistoryLogTypeFilter } from '@shared/types';
 
@@ -12,7 +13,7 @@ const emit = defineEmits<{
 }>();
 
 const assistant = useAssistant();
-const { repos, config, currentReportId, dailyReports, push, applyReportTimeRange, loadDailyReportDraft } = assistant;
+const { repos, config, dailyReports, pushing, applyReportTimeRange, loadDailyReportDraft } = assistant;
 
 const keyword = ref('');
 const selectedProject = ref('全部项目');
@@ -185,10 +186,33 @@ async function republishActiveReport() {
     ElMessage.warning('请选择一条日报生成记录');
     return;
   }
-  applyReportTimeRange(record.date, record.timeRange);
-  config.reporterName = record.reporterName || config.reporterName;
-  currentReportId.value = record.id;
-  await push(record.report);
+  if (pushing.value) return;
+  const target = assistant.projectOptions.value.find((item) => item.id === config.feishuForm.projectOptionId)?.name || config.feishuForm.projectName;
+  try {
+    await ElMessageBox.confirm(`${record.date} 的历史日报将提交到「${target || '未选择项目'}」，请先核对飞书记录，避免重复提交。`, '确认重新发布', { type: 'warning' });
+  } catch { return; }
+  pushing.value = true;
+  try {
+    await assistant.persistConfig();
+    const draft = assistant.createProjectReportDraft({ path: record.repoPaths[0] || '', name: record.repoNames[0] || '历史日报' }, {
+      report: record.report, reportId: record.id,
+    });
+    const actions = createProjectReportActions({
+      api: window.api, config: { ...config, reporterName: record.reporterName || config.reporterName },
+      getProjectOptions: () => assistant.projectOptions.value, displayRepoName: (repo) => repo.name,
+      getScope: () => ({ date: record.date, timeRange: record.timeRange }),
+    });
+    const success = await actions.publishDraft(draft);
+    if (!success) ElMessage.error(draft.publishMessage);
+    else if (draft.publishMessage !== '已提交飞书日报') ElMessage.warning(draft.publishMessage);
+    else ElMessage.success('历史日报已提交飞书');
+    try { await assistant.refreshLocalData(); await loadHistoryLogs(); }
+    catch { ElMessage.warning('发布结果已保留，本地记录刷新失败，请勿重复提交'); }
+  } catch {
+    ElMessage.error('重新发布失败，请核对配置');
+  } finally {
+    pushing.value = false;
+  }
 }
 
 function formatDateTime(value: string) {
@@ -309,7 +333,7 @@ function formatDateTime(value: string) {
         </div>
         <div class="detail-actions">
           <el-button :icon="RotateCcw" plain :disabled="!activeLog.reportRecord" @click="loadActiveReport">继续编辑</el-button>
-          <el-button :icon="Send" plain :disabled="!activeLog.reportRecord" @click="republishActiveReport">重新发布</el-button>
+          <el-button :icon="Send" plain :disabled="!activeLog.reportRecord" :loading="pushing" @click="republishActiveReport">重新发布</el-button>
           <el-button :icon="ClipboardCopy" plain @click="copyActiveLog">复制</el-button>
           <el-button :icon="Download" type="primary" plain @click="exportActiveLog">导出</el-button>
         </div>

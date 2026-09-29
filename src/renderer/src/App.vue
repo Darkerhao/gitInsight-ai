@@ -14,7 +14,6 @@ import HistoryLogsView from '@/views/HistoryLogsView.vue';
 import JiaziTimelineView from '@/views/JiaziTimelineView.vue';
 import SystemSettingsView from '@/views/SystemSettingsView.vue';
 import { usePageZoom } from '@/composables/usePageZoom';
-import { useGlassReflection } from '@/composables/useGlassReflection';
 import { navKeys } from '@/router';
 import type { NavKey } from '@/router';
 
@@ -26,8 +25,6 @@ type ViewTransitionDocument = Document & {
 };
 
 const assistant = useAssistant();
-const appLayout = ref<HTMLElement | null>(null);
-const stopReflection = useGlassReflection(appLayout);
 const THEME_STORAGE_KEY = 'gitinsight:theme-mode';
 const WELCOME_STORAGE_KEY = 'gitinsight:welcome-finished';
 const WELCOME_ANIMATION_ENABLED_KEY = 'gitinsight:welcome-animation-enabled';
@@ -70,30 +67,18 @@ const activeNav = computed({
   set: (value: string) => handleNavigate(value),
 });
 const activeView = computed(() => viewMap[activeNav.value as keyof typeof viewMap] ?? ReportGenerateView);
-watch([activeNav, assistant.loading], stopReflection);
 const appVersionText = computed(() => {
   const info = assistant.storageInfo.value;
   if (!info?.appVersion) return '';
   return ` ${info.appEditionLabel} v${info.appVersion}`;
 });
-const welcomeMetrics = computed(() => {
-  const reports = assistant.dailyReports.value;
-  const syncLogs = assistant.syncLogs.value;
-
-  return {
-    loaded: assistantReady.value,
-    repoCount: assistant.repos.value.length,
-    selectedRepoCount: assistant.selectedRepos.value.length,
-    reportCount: assistant.storageInfo.value?.reportsCount ?? reports.length,
-    recentCommitCount: reports.reduce((total, item) => total + item.commitsCount, 0),
-    syncLogCount: assistant.storageInfo.value?.syncLogsCount ?? syncLogs.length,
-    successSyncLogCount: syncLogs.filter((item) => item.status === 'success').length,
-    errorLogCount: assistant.storageInfo.value?.errorLogsCount ?? assistant.errorLogs.value.length,
-    latestReportDate: reports[0]?.date ?? '',
-    latestSyncAt: syncLogs[0]?.ranAt ?? '',
-    appVersion: assistant.storageInfo.value?.appVersion ?? '',
-  };
-});
+const welcomeMetrics = computed(() => ({
+  loaded: assistantReady.value,
+  selectedRepoCount: assistant.selectedRepos.value.length,
+  reporterName: assistant.config.reporterName,
+  aiReady: Boolean(assistant.activeAiProfile.value.enabled && assistant.activeAiProfile.value.baseUrl
+    && assistant.activeAiProfile.value.model && assistant.activeAiProfile.value.apiKey),
+}));
 
 function handleNavigate(value: string) {
   const target = navKeys.includes(value as NavKey) ? (value as NavKey) : legacyNavMap[value];
@@ -187,10 +172,6 @@ function toggleThemeMode(event?: MouseEvent) {
   });
 }
 
-function needsOnboarding() {
-  return !assistant.config.workspaceDirs.length || !assistant.config.reporterName;
-}
-
 function shouldShowWelcomeOnLaunch() {
   try {
     const animationPreference = window.localStorage.getItem(WELCOME_ANIMATION_ENABLED_KEY);
@@ -251,9 +232,6 @@ onMounted(async () => {
   await initializePageZoom();
   await assistant.init();
   assistantReady.value = true;
-  if (needsOnboarding()) {
-    showWelcome.value = true;
-  }
 });
 
 onBeforeUnmount(() => {
@@ -263,9 +241,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <WelcomeGate v-if="showWelcome" :metrics="welcomeMetrics" @finished="finishWelcome" />
+  <WelcomeGate v-if="showWelcome" :metrics="welcomeMetrics" @finished="finishWelcome" @navigate="handleNavigate" />
 
-  <div ref="appLayout" class="app-layout atelier-app">
+  <div class="app-layout atelier-app" :inert="showWelcome || undefined">
     <AppSidebar v-model:active-nav="activeNav" />
 
     <main class="app-main">

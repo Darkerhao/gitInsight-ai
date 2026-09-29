@@ -10,7 +10,11 @@ permissions:
   contents: write
 
 jobs:
+  verify:
+    uses: ./.github/workflows/checks.yml
+
   package:
+    needs: verify
     name: Package ${{ matrix.name }} ${{ matrix.editionLabel }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -104,12 +108,6 @@ jobs:
       - name: Install Linux packaging tools
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y rpm fakeroot
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Verify release artifact names
-        run: node --test tests/releaseArtifacts.test.cjs
 
       - name: Build packages
         run: ${{ matrix.script }}

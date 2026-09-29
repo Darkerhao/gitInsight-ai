@@ -2,20 +2,20 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { computed, ref } from 'vue';
 import { createWeeklyWorkHoursRecalculator } from '../src/renderer/src/composables/weeklyReportHours.js';
-import type { WeeklyReportDraft } from '../src/renderer/src/composables/weeklyReportActions.js';
+import type { WeeklyReportDraft } from '../src/renderer/src/composables/projectReportActions.js';
 
 function makeDraft(key: string): WeeklyReportDraft {
   return {
     key, date: '2026-08-16', repo: { name: key, path: `D:/${key}` },
-    report: '今日工作内容：\n\n1. 完成功能开发', reportId: null, result: null,
+    report: '今日工作内容：\n\n1. 完成功能开发', reportId: null, lastReportResult: null,
     projectOptionId: key, workHours: 0.5, workHoursSource: 'default',
-    generateStatus: 'success', publishStatus: 'idle', dirty: false, message: '',
+    generateStatus: 'success', publishStatus: 'idle', dirty: false, manualWorkContent: '', generateMessage: '', publishMessage: '',
   };
 }
 
 test('work hours are zero when the report has no commits or changed files', () => {
   const inactive = makeDraft('inactive');
-  inactive.result = {
+  inactive.lastReportResult = {
     report: inactive.report,
     commits: [],
     repos: [inactive.repo],
@@ -38,7 +38,7 @@ test('work hours are zero when the report has no commits or changed files', () =
 
 test('reports without Git activity do not consume hours from active reports', () => {
   const inactive = makeDraft('inactive');
-  inactive.result = {
+  inactive.lastReportResult = {
     report: inactive.report,
     commits: [],
     repos: [inactive.repo],
@@ -51,8 +51,8 @@ test('reports without Git activity do not consume hours from active reports', ()
     rawInput: { gitLogs: '', files: '', diff: '' },
   };
   const active = makeDraft('active');
-  active.result = {
-    ...inactive.result,
+  active.lastReportResult = {
+    ...inactive.lastReportResult,
     report: active.report,
     repos: [active.repo],
     commits: [{

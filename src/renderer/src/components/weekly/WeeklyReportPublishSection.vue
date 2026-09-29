@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RefreshCw, Save, Send } from 'lucide-vue-next';
 import type { FeishuProjectOption, RepoInfo, ReportResult } from '@shared/types';
-import type { WeeklyReportDraft } from '@/composables/weeklyReportActions';
+import type { WeeklyReportDraft } from '@/composables/projectReportActions';
 
 defineProps<{
   publishableDrafts: WeeklyReportDraft[];
@@ -90,9 +90,9 @@ const emit = defineEmits<{
   </el-dialog>
 
   <el-drawer :model-value="showEvidence" title="提交记录依据" size="520px" @update:model-value="(value: boolean) => emit('update:showEvidence', value)">
-    <div v-if="activeDraft?.result" class="weekly-evidence-drawer">
-      <div class="weekly-evidence-summary"><strong>{{ activeDraft.date }} · {{ displayRepoName(activeDraft.repo) }}</strong><span>{{ activeDraft.result.commits.length }} 次提交 · {{ countWeeklyReportFiles(activeDraft.result) }} 个影响文件</span></div>
-      <article v-for="commit in activeDraft.result.commits" :key="commit.hash" class="weekly-evidence-commit"><strong>{{ commit.message }}</strong><small>{{ commit.author }} · {{ commit.date }}</small><p>{{ commit.files.join('、') || '暂无文件明细' }}</p></article>
+    <div v-if="activeDraft?.lastReportResult" class="weekly-evidence-drawer">
+      <div class="weekly-evidence-summary"><strong>{{ activeDraft.date }} · {{ displayRepoName(activeDraft.repo) }}</strong><span>{{ activeDraft.lastReportResult.commits.length }} 次提交 · {{ countWeeklyReportFiles(activeDraft.lastReportResult) }} 个影响文件</span></div>
+      <article v-for="commit in activeDraft.lastReportResult.commits" :key="commit.hash" class="weekly-evidence-commit"><strong>{{ commit.message }}</strong><small>{{ commit.author }} · {{ commit.date }}</small><p>{{ commit.files.join('、') || '暂无文件明细' }}</p></article>
     </div>
     <el-empty v-else description="当前日报暂无提交依据" />
   </el-drawer>

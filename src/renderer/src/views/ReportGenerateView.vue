@@ -6,10 +6,12 @@ import PageHeader from '@/components/common/PageHeader.vue';
 import ReportEditorCard from '@/components/report-generate/ReportEditorCard.vue';
 import ReportPublishSidebar from '@/components/report-generate/ReportPublishSidebar.vue';
 import ReportSetupCard from '@/components/report-generate/ReportSetupCard.vue';
-import { projectGenerationInput, runGenerationQueue } from '@/composables/assistant/projectGeneration';
+import { runGenerationQueue } from '@/composables/assistant/projectGeneration';
+import { createProjectReportActions, runProjectPublishBatch } from '@/composables/projectReportActions';
 import { useAssistant } from '@/composables/useAssistant';
-import type { ProjectReportDraft } from '@/composables/useAssistant';
-import { countResultFiles, getReportRangePayloadFromForm, resolveReportTimeRange, toPlainRawInput } from '@/composables/assistant/reportState';
+import type { ProjectReportDraft } from '@/composables/projectReportActions';
+import { countWeeklyReportFiles as countResultFiles } from '@shared/weeklyReport';
+import { getReportRangePayloadFromForm, resolveReportTimeRange } from '@/composables/assistant/reportState';
 import { allocateProjectWorkHours, normalizeProjectWorkHours, normalizeWorkHours } from '@/composables/assistant/normalizers';
 import type { DailyReportRecord, RepoInfo, ReportPromptStyle } from '@shared/types';
 import {
@@ -181,7 +183,7 @@ const publishDraftItems = computed(() =>
   })),
 );
 
-const publishableDrafts = computed(() => projectDrafts.value.filter((item) => item.report.trim() && item.projectOptionId.trim()));
+const publishableDrafts = computed(() => projectDrafts.value.filter((item) => item.report.trim() && item.projectOptionId.trim() && item.publishStatus !== 'success'));
 const canPublishActive = computed(() => Boolean(activeDraft.value?.report.trim() && activeDraft.value.projectOptionId.trim() && form.date && !pushing.value));
 const canPublishAll = computed(() => Boolean(form.date && publishableDrafts.value.length > 0 && !pushing.value));
 
@@ -465,6 +467,12 @@ function getCurrentReportTimeRange(draft: ProjectReportDraft) {
   return resolveReportTimeRange(getReportRangePayload(), reportRangeLabel.value, draft.lastReportResult?.timeRange);
 }
 
+const draftActions = createProjectReportActions<ProjectReportDraft>({
+  api: window.api, config, displayRepoName,
+  getProjectOptions: () => projectOptions.value,
+  getScope: (draft) => ({ date: form.date, timeRange: getCurrentReportTimeRange(draft) }),
+});
+
 function getDraftByKey(key: string) {
   return projectDrafts.value.find((item) => item.key === key);
 }
@@ -510,46 +518,15 @@ async function generateDraft(draftKey: string, options: { updateStatus?: boolean
     return false;
   }
 
-  draft.generateStatus = 'generating';
-  draft.generateMessage = '';
   if (options.updateStatus !== false) status.value = `正在生成 ${draft.repo.name} 的日报`;
-
   const requestId = crypto.randomUUID();
   activeGenerationRequests.add(requestId);
   try {
-    const result = await window.api.generateReport({
-      requestId,
-      ...projectGenerationInput(draft),
-      date: form.date,
-      ...reportRange,
-      reporterName: config.reporterName,
-      gitAuthorEmail: config.gitAuthorEmail,
-      aiProfileId: config.activeAiProfileId,
-      promptStyle: reportPromptStyle.value,
+    const success = await draftActions.generateDraft(draft, {
+      requestId, signal: generationController.signal, promptStyle: reportPromptStyle.value,
     });
-
-    const latestDraft = getDraftByKey(draftKey);
-    if (!latestDraft) return false;
-    latestDraft.lastReportResult = result;
-    latestDraft.reportId = result.historyId ?? null;
-    latestDraft.report = result.report;
-    latestDraft.publishStatus = 'idle';
-    latestDraft.publishMessage = '';
-    latestDraft.generateStatus = 'success';
-    latestDraft.generateMessage = '';
-    latestDraft.dirty = false;
-    if (options.updateStatus !== false) status.value = `${latestDraft.repo.name} 已生成 ${result.commits.length} 条提交记录`;
-    return true;
-  } catch (error) {
-    const cancelled = generationController.signal.aborted;
-    const message = cancelled ? '已取消生成，原有日报已保留' : error instanceof Error ? error.message : '生成失败';
-    const latestDraft = getDraftByKey(draftKey);
-    if (latestDraft) {
-      latestDraft.generateStatus = cancelled ? 'cancelled' : 'failed';
-      latestDraft.generateMessage = message;
-    }
-    if (options.updateStatus !== false) status.value = `${draft.repo.name} 生成失败：${message}`;
-    return false;
+    if (options.updateStatus !== false) status.value = success ? `${draft.repo.name} 日报已生成` : draft.generateMessage;
+    return success;
   } finally {
     activeGenerationRequests.delete(requestId);
   }
@@ -681,65 +658,26 @@ async function handleGenerateAll() {
   }
 }
 
-async function saveDraft(draft: ProjectReportDraft, options: { silent?: boolean; skipRefresh?: boolean } = {}) {
-  const content = draft.report.trim();
-  if (!content) {
-    if (!options.silent) ElMessage.warning('当前没有可保存的日报内容');
-    return null;
-  }
-
-  const result = draft.lastReportResult;
-  const record = await window.api.saveDailyReport({
-    id: draft.reportId ?? undefined,
-    date: form.date,
-    reporterName: config.reporterName,
-    repoNames: result?.repos.map((item) => getRepoDisplayName(item, config.repoDisplayNames)) ?? [draft.repo.name],
-    repoPaths: result?.repos.map((item) => item.path) ?? [draft.repo.path],
-    report: content,
-    status: result?.commits.length ? 'success' : 'draft',
-    commitsCount: result?.commits.length ?? 0,
-    filesCount: countResultFiles(result),
-    generatedAt: result?.generatedAt,
-    timeRange: getCurrentReportTimeRange(draft),
-    rawInput: {
-      ...(toPlainRawInput(result?.rawInput) ?? { gitLogs: '', files: '', diff: '' }),
-      manualWorkContent: draft.manualWorkContent.trim() || undefined,
-    },
-  });
-
-  draft.reportId = record.id;
-  draft.dirty = false;
-  if (!options.skipRefresh) await refreshLocalData();
-  if (!options.silent) ElMessage.success(`${draft.repo.name} 日报已保存`);
-  return record;
-}
-
 async function handleSaveCurrentReport() {
   const draft = activeDraft.value;
   if (!draft) return;
-  try {
-    await saveDraft(draft);
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '保存日报失败');
-  }
+  if (!(await draftActions.saveDraft(draft))) return ElMessage.error(draft.publishMessage);
+  ElMessage.success(`${draft.repo.name} 日报已保存`);
+  try { await refreshLocalData(); }
+  catch { ElMessage.warning('日报已保存，本地记录刷新失败'); }
 }
 
 async function handleSaveAllReports() {
   const dirtyDrafts = projectDrafts.value.filter((draft) => draft.dirty && draft.report.trim());
-  if (!dirtyDrafts.length) {
-    ElMessage.info('没有需要保存的修改');
-    return;
+  if (!dirtyDrafts.length) return ElMessage.info('没有需要保存的修改');
+  let saved = 0;
+  for (const draft of dirtyDrafts) {
+    if (await draftActions.saveDraft(draft)) saved += 1;
   }
-
-  try {
-    for (const draft of dirtyDrafts) {
-      await saveDraft(draft, { silent: true, skipRefresh: true });
-    }
-    await refreshLocalData();
-    ElMessage.success(`已保存 ${dirtyDrafts.length} 个项目的修改`);
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '保存全部修改失败');
-  }
+  const message = `已保存 ${saved}/${dirtyDrafts.length} 个项目的修改`;
+  ElMessage[saved === dirtyDrafts.length ? 'success' : 'warning'](message);
+  try { await refreshLocalData(); }
+  catch { ElMessage.warning('保存结果已保留，本地记录刷新失败'); }
 }
 
 async function copyReport() {
@@ -799,6 +737,8 @@ function handleUpdateDraftHours(key: string, value: number | undefined) {
   const hours = normalizeWorkHours(value, draft.workHours);
   draft.workHours = hours;
   draft.workHoursSource = 'manual';
+  draft.publishStatus = 'idle';
+  draft.publishMessage = '';
   if (draft.projectOptionId) {
     config.feishuForm.projectWorkHours = {
       ...normalizeProjectWorkHours(config.feishuForm.projectWorkHours),
@@ -814,25 +754,11 @@ function handleCommitDraftHours(key: string, value: number | undefined) {
   });
 }
 
-function buildDraftFeishuConfig(draft: ProjectReportDraft) {
-  const projectName = projectOptions.value.find((item) => item.id === draft.projectOptionId)?.name ?? '';
-  return {
-    ...config.feishuForm,
-    projectOptionId: draft.projectOptionId,
-    projectName,
-    defaultWorkHours: normalizeWorkHours(draft.workHours),
-    projectWorkHours: {
-      ...normalizeProjectWorkHours(config.feishuForm.projectWorkHours),
-      [draft.projectOptionId]: normalizeWorkHours(draft.workHours),
-    },
-  };
-}
-
 async function confirmNoFeishuDuplicate(draft: ProjectReportDraft) {
   const projectName = projectOptions.value.find((item) => item.id === draft.projectOptionId)?.name ?? draft.projectOptionId;
   try {
     const result = await window.api.checkFeishuDuplicate({
-      config: buildDraftFeishuConfig(draft),
+      config: draftActions.buildFeishuConfig(draft),
       targetDate: form.date,
       projectName,
       projectOptionId: draft.projectOptionId,
@@ -856,51 +782,6 @@ async function confirmNoFeishuDuplicate(draft: ProjectReportDraft) {
   } catch (error) {
     if (error === 'cancel' || error === 'close') return false;
     ElMessage.error(error instanceof Error ? error.message : '重复检查失败，已取消发布');
-    return false;
-  }
-}
-
-async function publishDraft(draft: ProjectReportDraft, options: { persistBeforePublish?: boolean } = {}) {
-  const content = draft.report.trim();
-  if (!form.date) {
-    draft.publishStatus = 'failed';
-    draft.publishMessage = '请选择发布日期';
-    return false;
-  }
-  if (!content) {
-    draft.publishStatus = 'failed';
-    draft.publishMessage = '请先生成日报';
-    return false;
-  }
-  if (!draft.projectOptionId.trim()) {
-    draft.publishStatus = 'failed';
-    draft.publishMessage = '请选择飞书发布目标';
-    return false;
-  }
-
-  draft.publishStatus = 'publishing';
-  draft.publishMessage = '正在同步到飞书';
-  try {
-    if (options.persistBeforePublish !== false) await persistConfigSnapshot();
-    if (draft.dirty || !draft.reportId) {
-      await saveDraft(draft, { silent: true, skipRefresh: true });
-    }
-    const result = await window.api.syncFeishuDaily({
-      config: buildDraftFeishuConfig(draft),
-      report: content,
-      date: form.date,
-      reporterName: config.reporterName,
-      workHours: normalizeWorkHours(draft.workHours),
-      reportId: draft.reportId ?? undefined,
-      triggerType: 'manual',
-    });
-    draft.publishStatus = 'success';
-    draft.publishMessage = result.warning || '已同步到飞书日报表';
-    if (result.warning) ElMessage.warning(result.warning);
-    return true;
-  } catch (error) {
-    draft.publishStatus = 'failed';
-    draft.publishMessage = error instanceof Error ? error.message : '同步飞书失败';
     return false;
   }
 }
@@ -958,10 +839,16 @@ async function publishActiveReport() {
 
   pushing.value = true;
   try {
-    const success = await publishDraft(draft);
+    await persistConfigSnapshot();
+    const success = await draftActions.publishDraft(draft);
     await refreshAfterPublish();
-    if (success) ElMessage.success(`${draft.repo.name} 已同步到飞书日报表`);
+    if (success && draft.publishMessage !== '已提交飞书日报') ElMessage.warning(draft.publishMessage);
+    else if (success) ElMessage.success(`${draft.repo.name} 已同步到飞书日报表`);
     else ElMessage.error(draft.publishMessage || '同步飞书失败');
+  } catch {
+    draft.publishStatus = 'failed';
+    draft.publishMessage = '保存发布配置失败，请检查配置后重试';
+    ElMessage.error(draft.publishMessage);
   } finally {
     pushing.value = false;
   }
@@ -977,25 +864,22 @@ async function publishAllReports() {
   if (!confirmed) return;
 
   pushing.value = true;
-  let successCount = 0;
-  let failedCount = 0;
   try {
     await persistConfigSnapshot();
-    for (const draft of targets) {
-      if (!(await confirmNoFeishuDuplicate(draft))) {
-        failedCount += 1;
-        continue;
-      }
-      const success = await publishDraft(draft, { persistBeforePublish: false });
-      if (success) successCount += 1;
-      else failedCount += 1;
-    }
+    const { successCount, failedCount } = await runProjectPublishBatch(targets, async (draft) => {
+      if (!(await confirmNoFeishuDuplicate(draft))) return false;
+      const success = await draftActions.publishDraft(draft);
+      if (success && draft.publishMessage !== '已提交飞书日报') ElMessage.warning(draft.publishMessage);
+      return success;
+    });
     await refreshAfterPublish();
     if (failedCount) {
       ElMessage.warning(`已发布 ${successCount} 个项目，${failedCount} 个项目失败，可切换到失败项目重试`);
     } else {
       ElMessage.success(`已发布 ${successCount} 个项目到飞书`);
     }
+  } catch {
+    ElMessage.error('保存发布配置失败，请检查配置后重试');
   } finally {
     pushing.value = false;
   }
@@ -1094,7 +978,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div ref="workflowRoot" class="view-stack report-generate-view atelier-page" data-page="report-generate">
-    <PageHeader title="日报生成" subtitle="基于 Git 提交记录生成研发日报">
+    <PageHeader title="写今日日报" subtitle="选择仓库、日期并补充工作记录，生成可编辑、可发布的当日日报">
       <template #actions>
         <el-button :icon="FileText" plain @click="emit('navigate', 'history')">生成记录</el-button>
         <el-button :icon="BrainCog" plain @click="emit('navigate', 'ai')">AI 设置</el-button>

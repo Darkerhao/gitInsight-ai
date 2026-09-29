@@ -1,23 +1,5 @@
 @use 'tools' as *;
 
-@property --glass-x {
-  syntax: '<length>';
-  inherits: false;
-  initial-value: 0px;
-}
-
-@property --glass-y {
-  syntax: '<length>';
-  inherits: false;
-  initial-value: 0px;
-}
-
-@property --glass-light {
-  syntax: '<number>';
-  inherits: false;
-  initial-value: 0;
-}
-
 /* 同一主题下按导航、内容和主编辑区区分材质强度。 */
 .app-layout {
   background: var(--c-page-bg);
@@ -54,35 +36,17 @@
 .config-block {
   border: 1px solid transparent;
   background:
-    radial-gradient(ellipse 420px 300px at var(--glass-x) var(--glass-y), rgb(255 255 255 / var(--glass-light)), rgb(148 163 184 / calc(var(--glass-light) * 0.4)) 45%, transparent 75%) padding-box,
-    linear-gradient(var(--glass-angle, 135deg), var(--c-sheen), transparent 28%, transparent 72%, var(--c-sheen)) padding-box,
+    linear-gradient(135deg, var(--c-sheen), transparent 28%, transparent 72%, var(--c-sheen)) padding-box,
     linear-gradient(var(--glass-surface, var(--c-surface)), var(--glass-surface, var(--c-surface))) padding-box,
     var(--c-glass-edge) border-box;
   box-shadow: var(--shadow-card);
-  transition:
-    transform 600ms cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 400ms ease,
-    --glass-x 180ms ease-out,
-    --glass-y 180ms ease-out,
-    --glass-light 300ms ease-out;
+
 }
 
 .config-block {
   --glass-surface: var(--c-surface-muted);
 }
 
-@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
-  .is-glass-hovered:not([data-glass-disabled='true']) {
-    --glass-light: 0.24;
-    transform: perspective(1100px) rotateX(var(--glass-rotate-x)) rotateY(var(--glass-rotate-y)) translateY(-6px);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.65),
-      inset 0 -1px 0 rgb(0 0 0 / 0.08),
-      0 3px 0 var(--c-border-strong),
-      var(--glass-shadow-x) var(--glass-shadow-y) 34px -12px rgb(0 0 0 / 0.3);
-    transition-duration: 220ms, 300ms, 180ms, 180ms, 200ms;
-  }
-}
 
 .sidebar,
 .topbar {
@@ -436,9 +400,6 @@
     transition: none;
   }
 
-  .is-glass-hovered:not([data-glass-disabled='true']) {
-    --glass-light: 0;
-  }
 
   .el-button:active,
   .atelier-workflow-step:active {

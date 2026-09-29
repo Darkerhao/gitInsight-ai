@@ -24,10 +24,10 @@ const activeTab = ref('basic');
 
 const WELCOME_STORAGE_KEY = 'gitinsight:welcome-finished';
 const WELCOME_ANIMATION_ENABLED_KEY = 'gitinsight:welcome-animation-enabled';
-const showWelcomeAnimation = ref(window.localStorage.getItem(WELCOME_ANIMATION_ENABLED_KEY) === 'true');
+const showWelcomeGuide = ref(window.localStorage.getItem(WELCOME_ANIMATION_ENABLED_KEY) === 'true');
 
-function toggleWelcomeAnimation(value: boolean) {
-  showWelcomeAnimation.value = value;
+function toggleWelcomeGuide(value: boolean) {
+  showWelcomeGuide.value = value;
   if (value) {
     window.localStorage.setItem(WELCOME_ANIMATION_ENABLED_KEY, 'true');
     window.localStorage.removeItem(WELCOME_STORAGE_KEY);
@@ -159,12 +159,12 @@ const operationCards = [
           </div>
           <div class="field-grid two-columns">
             <div class="field">
-              <label>开屏动画</label>
-              <div class="state-switch-wrap" :class="{ active: showWelcomeAnimation }">
-                <el-switch :model-value="showWelcomeAnimation" class="state-switch" @change="toggleWelcomeAnimation" />
-                <span class="state-switch-label">{{ showWelcomeAnimation ? '开启' : '关闭' }}</span>
+              <label>启动欢迎页</label>
+              <div class="state-switch-wrap" :class="{ active: showWelcomeGuide }">
+                <el-switch :model-value="showWelcomeGuide" class="state-switch" @change="toggleWelcomeGuide" />
+                <span class="state-switch-label">{{ showWelcomeGuide ? '开启' : '关闭' }}</span>
               </div>
-              <span class="field-hint">开启后每次启动应用都会播放欢迎动画</span>
+              <span class="field-hint">开启后每次启动显示仓库、汇报人和 AI 配置状态</span>
             </div>
           </div>
         </div>

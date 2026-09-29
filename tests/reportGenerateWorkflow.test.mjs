@@ -44,11 +44,14 @@ function createPage(t, api, count = 2) {
     'element-plus': { ElMessage: Object.fromEntries(['warning', 'success', 'error', 'info'].map((key) => [key, (message) => messages.push(message)])) },
     '@/composables/useAssistant': { useAssistant: () => assistant },
     '@/composables/assistant/projectGeneration': project,
+    '@/composables/projectReportActions': loadTs(resolve(root, 'src/renderer/src/composables/projectReportActions.ts')),
     '@/composables/assistant/normalizers': normalizers,
     '@shared/repositoryName': names,
+    '@shared/weeklyReport': loadTs(resolve(root, 'src/shared/weeklyReport.ts')),
     '@/composables/assistant/reportState': {
       getReportRangePayloadFromForm: (form) => ({ startDateTime: form.startDateTime, endDateTime: form.endDateTime }),
       countResultFiles: () => 0,
+      resolveReportTimeRange: (range, label) => ({ ...range, label }),
     },
   };
   const module = evaluate(script, (name) => imports[name] ?? {}, { api });
@@ -102,6 +105,7 @@ test('actual history loader restores legacy material once and displays attributi
     'element-plus': { ElMessage: { warning: (message) => warnings.push(message) } },
     '@shared/types': sharedTypes,
     '@shared/repositoryName': names,
+    '@shared/weeklyReport': loadTs(resolve(root, 'src/shared/weeklyReport.ts')),
     './assistant/normalizers': normalizers,
     './assistant/dateUtils': dateUtils,
     './assistant/projectGeneration': project,

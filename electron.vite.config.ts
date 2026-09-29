@@ -66,7 +66,6 @@ export default defineConfig({
             if (normalizedId.includes('/element-plus/')) return 'vendor-element-plus';
             if (normalizedId.includes('/echarts/')) return 'vendor-echarts';
             if (normalizedId.includes('/lucide-vue-next/')) return 'vendor-icons';
-            if (normalizedId.includes('/gsap/')) return 'vendor-animation';
             if (normalizedId.includes('/three/')) return 'vendor-3d';
             if (normalizedId.includes('/@vueuse/')) return 'vendor-vueuse';
             if (normalizedId.includes('/vue/') || normalizedId.includes('/vue-router/')) return 'vendor-vue';

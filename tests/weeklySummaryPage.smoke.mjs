@@ -13,7 +13,7 @@ const files = {
 
 assert.match(files.router, /summary\|reflection/, 'summary route should be registered');
 assert.match(files.app, /summary: WeeklySummaryView/, 'summary view should be mounted');
-assert.match(files.sidebar, /key: 'summary'.+会议周报/, 'summary should have a navigation item');
+assert.match(files.sidebar, /key: 'summary'.+汇总本周工作/, 'summary should have a navigation item');
 assert.match(files.page, /选择工作周/, 'page should explain the weekly workflow');
 assert.match(files.page, /上一周/, 'page should expose previous week shortcut');
 assert.match(files.page, /生成周报/, 'page should expose generation action');

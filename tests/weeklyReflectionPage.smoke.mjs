@@ -11,7 +11,7 @@ const preload = await readFile(new URL('../electron/preload.ts', import.meta.url
 
 assert.match(router, /weekly\|(?:summary\|)?reflection\|history/, 'reflection route should be registered beside report routes');
 assert.match(app, /reflection: WeeklyReflectionView/, 'reflection view should be mounted by the app shell');
-assert.match(sidebar, /key: 'reflection'.+label: '项目周反思'/, 'reflection page should have a report-center menu item');
+assert.match(sidebar, /key: 'reflection'.+label: '复盘项目问题'/, 'reflection page should have a report-center menu item');
 assert.match(page, /useWeeklyReflection/, 'reflection page should use the dedicated workflow composable');
 assert.match(page, /做得好的地方/, 'reflection result should render strengths');
 assert.match(page, /后续改进动作/, 'reflection result should render improvements');

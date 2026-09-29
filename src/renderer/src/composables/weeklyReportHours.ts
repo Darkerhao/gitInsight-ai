@@ -1,7 +1,7 @@
 import type { ComputedRef, Ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { allocateWeeklyDayWorkHours, countWeeklyReportFiles } from '../../../shared/weeklyReport.js';
-import type { WeeklyReportDraft } from './weeklyReportActions.js';
+import type { WeeklyReportDraft } from './projectReportActions.js';
 
 export interface WeeklyReportHoursState {
   drafts: Ref<WeeklyReportDraft[]>;
@@ -12,9 +12,9 @@ export interface WeeklyReportHoursState {
 function allocateDayWorkHours(state: WeeklyReportHoursState, date: string, dailyHours: number, force: boolean) {
   const dayDrafts = state.drafts.value.filter((draft) => draft.date === date && draft.report.trim());
   const inactiveDrafts = dayDrafts.filter((draft) => (
-    draft.result !== null
-    && draft.result.commits.length === 0
-    && countWeeklyReportFiles(draft.result) === 0
+    draft.lastReportResult !== null
+    && draft.lastReportResult.commits.length === 0
+    && countWeeklyReportFiles(draft.lastReportResult) === 0
   ));
   for (const draft of inactiveDrafts) {
     draft.workHours = 0;

@@ -1,12 +1,12 @@
 import { ElMessage } from 'element-plus';
 import type { useAssistant } from './useAssistant';
-import { runWeeklyPublishBatch, type createWeeklyReportActions } from './weeklyReportActions';
+import { runProjectPublishBatch, type createProjectReportActions } from './projectReportActions';
 import type { createWeeklyReportMutations, WeeklyReportState } from './useWeeklyReportState';
-import type { WeeklyReportDraft } from './weeklyReportActions';
+import type { WeeklyReportDraft } from './projectReportActions';
 import { runGenerationQueue } from './assistant/projectGeneration';
 
 type Assistant = ReturnType<typeof useAssistant>;
-type Actions = ReturnType<typeof createWeeklyReportActions>;
+type Actions = ReturnType<typeof createProjectReportActions<WeeklyReportDraft>>;
 type Mutations = ReturnType<typeof createWeeklyReportMutations>;
 
 interface WeeklyReportCommandContext {
@@ -60,7 +60,7 @@ async function generateCurrent(ctx: WeeklyReportCommandContext) {
     ElMessage.success(ctx.state.status.value);
   } else {
     ctx.state.status.value = `${ctx.state.displayRepoName(draft.repo)} ${draft.date} 日报重新生成失败`;
-    ElMessage.error(draft.message || '重新生成日报失败');
+    ElMessage.error(draft.generateMessage || '重新生成日报失败');
   }
 }
 
@@ -69,7 +69,7 @@ async function saveCurrent(ctx: WeeklyReportCommandContext) {
   if (!draft) return;
   const saved = await ctx.actions.saveDraft(draft);
   if (saved) ElMessage.success(`${ctx.state.displayRepoName(draft.repo)} ${draft.date} 日报已保存`);
-  else ElMessage.error(draft.message || '保存日报失败');
+  else ElMessage.error(draft.publishMessage || '保存日报失败');
 }
 
 async function saveAll(ctx: WeeklyReportCommandContext) {
@@ -90,9 +90,9 @@ async function publishCurrent(ctx: WeeklyReportCommandContext) {
   const success = await ctx.actions.publishDraft(draft);
   ctx.state.pushing.value = false;
   await refreshAfterPublish(ctx);
-  if (success && draft.message !== '已提交飞书日报') ElMessage.warning(draft.message);
+  if (success && draft.publishMessage !== '已提交飞书日报') ElMessage.warning(draft.publishMessage);
   else if (success) ElMessage.success('当前日报已提交飞书');
-  else ElMessage.error(draft.message || '提交飞书失败');
+  else ElMessage.error(draft.publishMessage || '提交飞书失败');
 }
 
 async function refreshAfterPublish(ctx: WeeklyReportCommandContext) {
@@ -110,10 +110,10 @@ async function publishAll(ctx: WeeklyReportCommandContext, requestedTargets?: We
   }
   ctx.state.pushing.value = true;
   try {
-    const result = await runWeeklyPublishBatch(targets, ctx.actions.publishDraft);
+    const result = await runProjectPublishBatch(targets, ctx.actions.publishDraft);
     await refreshAfterPublish(ctx);
     const message = result.failedCount ? `已提交 ${result.successCount} 条，${result.failedCount} 条失败` : `已提交 ${result.successCount} 条日报到飞书`;
-    const hasWarning = targets.some((draft) => draft.publishStatus === 'success' && draft.message !== '已提交飞书日报');
+    const hasWarning = targets.some((draft) => draft.publishStatus === 'success' && draft.publishMessage !== '已提交飞书日报');
     if (hasWarning) ElMessage.warning(`${message}；部分本地记录保存失败，请查看各条日报提示，勿重复提交`);
     else if (result.failedCount) ElMessage.warning(message);
     else ElMessage.success(message);

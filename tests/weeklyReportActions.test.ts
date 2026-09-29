@@ -9,11 +9,11 @@ import {
   type ReportResult,
 } from '../src/shared/types.js';
 import {
-  createWeeklyReportActions,
-  runWeeklyPublishBatch,
-  type WeeklyReportApi,
+  createProjectReportActions, fullDayReportScope,
+  runProjectPublishBatch,
+  type ProjectReportApi,
   type WeeklyReportDraft,
-} from '../src/renderer/src/composables/weeklyReportActions.js';
+} from '../src/renderer/src/composables/projectReportActions.js';
 
 function makeConfig(): AppConfig {
   return {
@@ -37,8 +37,8 @@ function makeResult(): ReportResult {
 function makeDraft(overrides: Partial<WeeklyReportDraft> = {}): WeeklyReportDraft {
   return {
     key: '2026-08-16::D:/repo', date: '2026-08-16', repo: { name: 'repo', path: 'D:/repo' },
-    report: makeResult().report, reportId: 42, result: makeResult(), projectOptionId: 'project-a', workHours: 8,
-    workHoursSource: 'estimated', generateStatus: 'success', publishStatus: 'idle', dirty: false, message: '',
+    report: makeResult().report, reportId: 42, lastReportResult: makeResult(), projectOptionId: 'project-a', workHours: 8,
+    workHoursSource: 'estimated', generateStatus: 'success', publishStatus: 'idle', dirty: false, manualWorkContent: '', generateMessage: '', publishMessage: '',
     ...overrides,
   };
 }
@@ -55,7 +55,7 @@ test('dirty draft saves with history id before Feishu publishing', async () => {
   const calls: string[] = [];
   let savedId: number | undefined;
   let publishedReportId: number | undefined;
-  const api: WeeklyReportApi = {
+  const api: ProjectReportApi = {
     generateReport: async () => makeResult(),
     saveDailyReport: async (payload) => {
       calls.push('save');
@@ -69,7 +69,7 @@ test('dirty draft saves with history id before Feishu publishing', async () => {
     },
   };
   const draft = makeDraft({ dirty: true });
-  const actions = createWeeklyReportActions({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo' });
+  const actions = createProjectReportActions<WeeklyReportDraft>({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo', getScope: fullDayReportScope });
 
   assert.equal(await actions.publishDraft(draft), true);
   assert.deepEqual(calls, ['save', 'sync']);
@@ -78,7 +78,7 @@ test('dirty draft saves with history id before Feishu publishing', async () => {
 });
 
 test('save payload contains structured-cloneable plain objects for IPC', async () => {
-  const api: WeeklyReportApi = {
+  const api: ProjectReportApi = {
     generateReport: async () => makeResult(),
     saveDailyReport: async (payload) => {
       assert.doesNotThrow(() => structuredClone(payload));
@@ -88,7 +88,7 @@ test('save payload contains structured-cloneable plain objects for IPC', async (
   };
   const result = makeResult();
   const draft = makeDraft({
-    result: {
+    lastReportResult: {
       ...result,
       timeRange: new Proxy(result.timeRange!, {}),
       rawInput: new Proxy(result.rawInput, {}),
@@ -104,19 +104,19 @@ test('save payload contains structured-cloneable plain objects for IPC', async (
     },
     dirty: true,
   });
-  const actions = createWeeklyReportActions({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo' });
+  const actions = createProjectReportActions<WeeklyReportDraft>({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo', getScope: fullDayReportScope });
 
   assert.equal(await actions.saveDraft(draft), true);
 });
 
 test('save failure and unresolved hours both prevent Feishu publishing', async () => {
   let syncCount = 0;
-  const api: WeeklyReportApi = {
+  const api: ProjectReportApi = {
     generateReport: async () => makeResult(),
     saveDailyReport: async () => { throw new Error('保存失败'); },
     syncFeishuDaily: async () => { syncCount += 1; return { success: true }; },
   };
-  const actions = createWeeklyReportActions({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo' });
+  const actions = createProjectReportActions<WeeklyReportDraft>({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo', getScope: fullDayReportScope });
 
   assert.equal(await actions.publishDraft(makeDraft({ dirty: true })), false);
   assert.equal(await actions.publishDraft(makeDraft({ workHoursSource: 'unresolved' })), false);
@@ -125,41 +125,41 @@ test('save failure and unresolved hours both prevent Feishu publishing', async (
 
 test('local logging warning retains published state and message', async () => {
   const warning = '飞书日报已提交，本地同步记录保存失败，请勿重复提交。';
-  const api: WeeklyReportApi = {
+  const api: ProjectReportApi = {
     generateReport: async () => makeResult(),
     saveDailyReport: async () => makeRecord(42),
     syncFeishuDaily: async () => ({ success: true, warning }),
   };
   const draft = makeDraft();
-  const actions = createWeeklyReportActions({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo' });
+  const actions = createProjectReportActions<WeeklyReportDraft>({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo', getScope: fullDayReportScope });
   assert.equal(await actions.publishDraft(draft), true);
   assert.equal(draft.publishStatus, 'success');
-  assert.equal(draft.message, warning);
+  assert.equal(draft.publishMessage, warning);
 });
 
 test('external failures use stable user-facing messages', async () => {
   const rawError = new Error('SQL path D:/private.db token=secret');
-  const api: WeeklyReportApi = {
+  const api: ProjectReportApi = {
     generateReport: async () => { throw rawError; },
     saveDailyReport: async () => { throw rawError; },
     syncFeishuDaily: async () => { throw rawError; },
   };
-  const actions = createWeeklyReportActions({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo' });
+  const actions = createProjectReportActions<WeeklyReportDraft>({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo', getScope: fullDayReportScope });
   const generateDraft = makeDraft();
   const saveDraft = makeDraft();
   const publishDraft = makeDraft();
 
   assert.equal(await actions.generateDraft(generateDraft), false);
-  assert.equal(generateDraft.message, '生成日报失败，请稍后重试');
+  assert.equal(generateDraft.generateMessage, '生成日报失败，请稍后重试');
   assert.equal(await actions.saveDraft(saveDraft), false);
-  assert.equal(saveDraft.message, '保存日报失败，请稍后重试');
+  assert.equal(saveDraft.publishMessage, '保存日报失败，请稍后重试');
   assert.equal(await actions.publishDraft(publishDraft), false);
-  assert.equal(publishDraft.message, '提交结果未确认，请先核对飞书提交记录');
+  assert.equal(publishDraft.publishMessage, '提交结果未确认，请先核对飞书提交记录');
 });
 
 test('a failed project draft can be generated again independently', async () => {
   let generateCount = 0;
-  const api: WeeklyReportApi = {
+  const api: ProjectReportApi = {
     generateReport: async () => {
       generateCount += 1;
       return makeResult();
@@ -169,23 +169,40 @@ test('a failed project draft can be generated again independently', async () => 
   };
   const draft = makeDraft({
     report: 'AI提示：AI接口调用失败：502',
-    result: null,
+    lastReportResult: null,
     generateStatus: 'failed',
-    message: '生成日报失败，请稍后重试',
+    generateMessage: '生成日报失败，请稍后重试',
   });
-  const actions = createWeeklyReportActions({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo' });
+  const actions = createProjectReportActions<WeeklyReportDraft>({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo', getScope: fullDayReportScope });
 
   assert.equal(await actions.generateDraft(draft), true);
   assert.equal(generateCount, 1);
   assert.equal(draft.generateStatus, 'success');
   assert.equal(draft.report, makeResult().report);
-  assert.equal(draft.message, '');
+  assert.equal(draft.generateMessage, '');
 });
 
-test('runWeeklyPublishBatch continues after an item fails', async () => {
+test('failed regeneration preserves the published content and batch retries never resubmit it', async () => {
+  let submissions = 0;
+  const api: ProjectReportApi = {
+    generateReport: async () => { throw new Error('unavailable'); },
+    saveDailyReport: async () => makeRecord(42),
+    syncFeishuDaily: async () => { submissions += 1; return { success: true }; },
+  };
+  const draft = makeDraft({ publishStatus: 'success', publishMessage: '已提交飞书日报' });
+  const original = draft.report;
+  const actions = createProjectReportActions<WeeklyReportDraft>({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo', getScope: fullDayReportScope });
+  assert.equal(await actions.generateDraft(draft), false);
+  assert.equal(draft.report, original);
+  assert.equal(draft.publishStatus, 'success');
+  assert.deepEqual(await runProjectPublishBatch([draft], actions.publishDraft), { successCount: 0, failedCount: 0 });
+  assert.equal(submissions, 0);
+});
+
+test('runProjectPublishBatch continues after an item fails', async () => {
   const order: string[] = [];
   const drafts = [makeDraft({ key: 'first' }), makeDraft({ key: 'second' })];
-  const result = await runWeeklyPublishBatch(drafts, async (draft) => {
+  const result = await runProjectPublishBatch(drafts, async (draft) => {
     order.push(draft.key);
     return draft.key === 'second';
   });

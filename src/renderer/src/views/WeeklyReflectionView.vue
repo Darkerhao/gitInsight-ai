@@ -38,7 +38,7 @@ function formatDateTime(value: string) {
 
 <template>
   <div class="view-stack weekly-reflection-view atelier-page">
-    <PageHeader title="项目周反思" subtitle="基于本周日报识别项目问题、工作优缺点和下一步调整动作">
+    <PageHeader title="复盘项目问题" subtitle="选择项目与工作周，从已有日报提炼问题、经验和下一步改进动作">
       <template #actions>
         <el-button :icon="BrainCog" plain @click="emit('navigate', 'ai')">AI 设置</el-button>
       </template>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CalendarDays, CircleAlert, RefreshCw, Save, Send, WandSparkles } from 'lucide-vue-next';
 import type { RepoInfo, ReportResult, FeishuProjectOption } from '@shared/types';
-import type { WeeklyReportDraft } from '@/composables/weeklyReportActions';
+import type { WeeklyReportDraft } from '@/composables/projectReportActions';
 import type { WeeklyQualityResult } from '@shared/weeklyReportQuality';
 
 type DraftGroup = { date: string; items: WeeklyReportDraft[] };
@@ -92,13 +92,14 @@ const emit = defineEmits<{
       </div>
       <div v-if="activeDraft" class="weekly-editor-content">
         <div class="weekly-editor-meta">
-          <span>提交记录：{{ activeDraft.result?.commits.length ?? 0 }}</span>
-          <span>影响文件：{{ countWeeklyReportFiles(activeDraft.result) }}</span>
-          <span v-if="activeDraft.message" class="weekly-editor-message">{{ activeDraft.message }}</span>
+          <span>提交记录：{{ activeDraft.lastReportResult?.commits.length ?? 0 }}</span>
+          <span>影响文件：{{ countWeeklyReportFiles(activeDraft.lastReportResult) }}</span>
+          <span v-if="activeDraft.generateMessage" class="weekly-editor-message">{{ activeDraft.generateMessage }}</span>
+          <span v-if="activeDraft.publishMessage" class="weekly-editor-message">{{ activeDraft.publishMessage }}</span>
           <el-tag v-if="activeQuality" :type="activeQuality.score === 'good' ? 'success' : activeQuality.score === 'empty' ? 'info' : 'warning'" size="small" effect="plain">质量：{{ activeQuality.label }}</el-tag>
           <el-tag v-if="duplicateKeys.has(activeDraft.key)" type="warning" size="small" effect="plain">内容重复</el-tag>
         </div>
-        <div v-if="activeDraft.report.trim() && activeDraft.result && !activeDraft.result.commits.length" class="weekly-no-commits-guide">
+        <div v-if="activeDraft.report.trim() && activeDraft.lastReportResult && !activeDraft.lastReportResult.commits.length" class="weekly-no-commits-guide">
           <CircleAlert :size="18" />
           <span>当前日期没有匹配到提交记录，请扩大日期范围，或直接补充本日手动工作后保存。</span>
         </div>
@@ -138,7 +139,7 @@ const emit = defineEmits<{
           </el-select>
           <el-button size="small" plain @click="emit('apply-template')">插入模板</el-button>
           <el-button size="small" plain @click="emit('show-supplement')">局部补写</el-button>
-          <el-button size="small" plain :disabled="!activeDraft.result" @click="emit('show-evidence')">查看提交依据</el-button>
+          <el-button size="small" plain :disabled="!activeDraft.lastReportResult" @click="emit('show-evidence')">查看提交依据</el-button>
           <span class="weekly-shortcut-hint">Ctrl+S 保存 · Ctrl+Enter 提交当前</span>
         </div>
         <div v-if="activeQuality?.issues.length" class="weekly-quality-issues"><span v-for="issue in activeQuality.issues" :key="issue">{{ issue }}</span></div>

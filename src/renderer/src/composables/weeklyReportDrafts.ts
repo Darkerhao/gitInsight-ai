@@ -1,6 +1,6 @@
 import type { RepoInfo } from '@shared/types';
 import { buildWeeklyDraftKeys } from '@shared/weeklyReport';
-import type { WeeklyReportDraft, WeeklyWorkHoursSource } from './weeklyReportActions';
+import type { WeeklyReportDraft, ProjectReportDraft } from './projectReportActions';
 
 export function createWeeklyReportDraft(
   date: string,
@@ -14,14 +14,14 @@ export function createWeeklyReportDraft(
     repo,
     report: '',
     reportId: null,
-    result: null,
+    lastReportResult: null,
     projectOptionId,
     workHours,
     workHoursSource: 'default',
     generateStatus: 'idle',
     publishStatus: 'idle',
     dirty: false,
-    message: '',
+    manualWorkContent: '', generateMessage: '', publishMessage: '',
   };
 }
 
@@ -68,7 +68,7 @@ export function getWeeklyDraftStatusType(draft: WeeklyReportDraft) {
   return draft.dirty ? 'warning' : 'info';
 }
 
-export function getWeeklyHoursSourceLabel(source: WeeklyWorkHoursSource) {
+export function getWeeklyHoursSourceLabel(source: ProjectReportDraft['workHoursSource']) {
   if (source === 'estimated') return '按工作内容估算';
   if (source === 'manual') return '手动调整';
   if (source === 'unresolved') return '待手动确认';

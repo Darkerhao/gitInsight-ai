@@ -45,6 +45,7 @@ Thumbs.db
 .cache/
 .eslintcache
 .vite/
+output/playwright/
 .timeline-test-dist/
 
 # Misc

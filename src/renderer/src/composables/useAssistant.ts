@@ -17,7 +17,6 @@ import type {
   FeishuFieldOption,
   FeishuProjectOption,
   RepoInfo,
-  ReportResult,
   StorageInfo,
   SyncLogRecord,
 } from '@shared/types';
@@ -37,26 +36,7 @@ import { createRepoState } from './assistant/repoState';
 import { createReportState } from './assistant/reportState';
 import { normalizeRepoDisplayNames } from '@shared/repositoryName';
 
-export type DraftGenerateStatus = 'idle' | 'generating' | 'success' | 'failed' | 'cancelled';
-export type DraftPublishStatus = 'idle' | 'publishing' | 'success' | 'failed';
-export type DraftWorkHoursSource = 'default' | 'estimated' | 'manual';
-
-export interface ProjectReportDraft {
-  key: string;
-  repo: RepoInfo;
-  report: string;
-  manualWorkContent: string;
-  reportId: number | null;
-  lastReportResult: ReportResult | null;
-  projectOptionId: string;
-  workHours: number;
-  workHoursSource: DraftWorkHoursSource;
-  generateStatus: DraftGenerateStatus;
-  generateMessage: string;
-  publishStatus: DraftPublishStatus;
-  publishMessage: string;
-  dirty: boolean;
-}
+import type { ProjectReportDraft } from './projectReportActions';
 
 function createAssistant() {
   const today = formatLocalDate(new Date());
@@ -73,9 +53,6 @@ function createAssistant() {
   const projectOptions = ref<FeishuProjectOption[]>([]);
   const feishuFieldOptions = ref<FeishuFieldOption[]>([]);
   const selectedRepoPaths = ref<string[]>([]);
-  const report = ref('');
-  const currentReportId = ref<number | null>(null);
-  const lastReportResult = ref<ReportResult | null>(null);
   const activeDraftKey = ref('');
   const projectDrafts = ref<ProjectReportDraft[]>([]);
   const dailyReports = ref<DailyReportRecord[]>([]);
@@ -114,7 +91,6 @@ function createAssistant() {
     date: today,
     startDateTime: buildDateTime(today, '00:00'),
     endDateTime: buildDateTime(tomorrow, '00:00'),
-    manualWorkContent: '',
   });
 
   function getProjectWorkHours(optionId: string) {
@@ -186,7 +162,7 @@ function createAssistant() {
 
   let repoState: ReturnType<typeof createRepoState>;
   let autoSyncStateApi: ReturnType<typeof createAutoSyncState>;
-  let reportState: ReturnType<typeof createReportState>;
+  const reportState = createReportState(form);
 
   const configState = createConfigState({
     config,
@@ -234,30 +210,8 @@ function createAssistant() {
     status,
     autoSyncLoading,
     autoSyncState,
-    report,
-    lastReportResult,
-    currentReportId,
     getConfigPayload: () => configState.getConfigPayload(),
     persistConfigBeforeAction: (actionLabel: string) => configState.persistConfigBeforeAction(actionLabel),
-    applyReportTimeRange: (date: string, timeRange: any) => reportState.applyReportTimeRange(date, timeRange),
-    applyFullDayReportRange: (date: string) => reportState.applyFullDayReportRange(date),
-    refreshLocalData: () => localDataState.refreshLocalData(),
-    today,
-  });
-
-  reportState = createReportState({
-    config,
-    form,
-    loading,
-    pushing,
-    report,
-    currentReportId,
-    lastReportResult,
-    selectedRepoPaths,
-    selectedRepos: repoState.selectedRepos,
-    status,
-    persistConfigBeforeAction: (actionLabel: string) => configState.persistConfigBeforeAction(actionLabel),
-    getConfigPayload: () => configState.getConfigPayload(),
     refreshLocalData: () => localDataState.refreshLocalData(),
   });
 
@@ -357,9 +311,6 @@ function createAssistant() {
     projectOptions,
     feishuFieldOptions,
     selectedRepoPaths,
-    report,
-    currentReportId,
-    lastReportResult,
     activeDraftKey,
     projectDrafts,
     dailyReports,
@@ -404,13 +355,9 @@ function createAssistant() {
     selectFeishuProject: feishuState.selectFeishuProject,
     updateProjectWorkHours: feishuState.updateProjectWorkHours,
     testSubmitFeishu: feishuState.testSubmitFeishu,
-    generate: reportState.generate,
-    generateAndPush: reportState.generateAndPush,
-    push: reportState.push,
     runAutoSyncNow: autoSyncStateApi.runAutoSyncNow,
     refreshDailyReports: localDataState.refreshDailyReports,
     refreshLocalData: localDataState.refreshLocalData,
-    saveCurrentReport: reportState.saveCurrentReport,
     createProjectReportDraft,
     loadDailyReportDraft,
     toggleRepo: repoState.toggleRepo,

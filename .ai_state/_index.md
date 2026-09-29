@@ -1,18 +1,20 @@
 # AI State Index
 
-本轮入口：日报可靠性修复，落实审查前五项。实现及测试完成；独立审查因模型接口不可用/限流未完成，未标记 PASS。
+本轮入口：落实审查第 6–10 项，日报流程收敛、CI、导航、动效与小屏验证。
 
 ## 本轮状态（2026-09-29）
 
 - path: Refactor
-- stage: review（实现、测试、主线程复核已完成；独立 reviewer 不可用）
-- current_sprint_slug: report-reliability
-- design: `.ai_state/design/2026-09-29-report-reliability.md`
-- evidence: `.ai_state/sprints/report-reliability/verification.md`
+- stage: ship（实现、运行验证、独立审查、评估与收敛检查完成）
+- current_sprint_slug: report-workflow
+- design: `.ai_state/design/2026-09-29-report-workflow.md`
+- evidence: `.ai_state/sprints/report-workflow/verification.md`
 - architecture: `.ai_state/architecture/ARCHITECTURE.md`
-- confidence: 0.96
-- 验收：npm test（含 27 项可靠性测试）、npm run check、git diff --check 均通过。
-- 后续：独立审查恢复后复核本轮；然后按用户顺序收敛重复流程、CI、导航与视觉。
+- route_confidence: 0.97
+- 验收：104 项业务测试、2 个既有 smoke、类型检查、构建通过；14 项浏览器回归通过。
+- next_action: 本轮已完成；真实硬件系统缩放与启动耗时未实测。
+- review: 独立 final_review 无未解决 P1/P2，规格 PASS；final_evaluation Evidence Cross-Check / VERDICT PASS。
+- 工作区：复用当前 checkout，初始干净；实现主线程执行，调用链调查由只读 explorer 完成，第二个调查 agent 遇到服务限流。
 
 ## 上轮路由（归档）
 
@@ -25,6 +27,8 @@
 - current_sprint_slug: weekly-summary
 
 ## route_history
+
+- 2026-09-29 日报流程收敛：Refactor，三个独立切片为草稿操作、CI/交互回归、导航/动效/小屏；置信度 0.97。
 
 - 2026-09-29 日报可靠性：Refactor，用户确认优先修复内容可信度、项目素材归属、发布结果、请求控制与原子保存；复用干净工作区，互斥写集并行实施，未新增依赖。实现与全量验证通过，独立审查服务不可用。
 

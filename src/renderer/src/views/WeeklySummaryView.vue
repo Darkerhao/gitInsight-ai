@@ -13,10 +13,10 @@ const {
 
 <template>
   <div class="view-stack weekly-summary-view atelier-page">
-    <PageHeader title="周报" subtitle="选择工作周，快速生成周一会议汇报内容">
+    <PageHeader title="汇总本周工作" subtitle="选择工作周，将已有日报汇总成会议汇报，可复制或导出">
       <template #actions>
-        <el-button :icon="FileText" plain @click="emit('navigate', 'generate')">日报生成</el-button>
-        <el-button :icon="Sparkles" plain @click="emit('navigate', 'reflection')">项目周反思</el-button>
+        <el-button :icon="FileText" plain @click="emit('navigate', 'generate')">写今日日报</el-button>
+        <el-button :icon="Sparkles" plain @click="emit('navigate', 'reflection')">复盘项目问题</el-button>
       </template>
     </PageHeader>
 

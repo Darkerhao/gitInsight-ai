@@ -1,22 +1,16 @@
 import { computed } from 'vue';
 import type { Ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import type { AppConfig, AutoSyncState, AutoSyncStatus, AutoSyncTaskState, ReportResult, ReportTimeRange } from '@shared/types';
+import type { AppConfig, AutoSyncState, AutoSyncStatus, AutoSyncTaskState } from '@shared/types';
 
 type AutoSyncStateContext = {
   config: AppConfig;
   status: Ref<string>;
   autoSyncLoading: Ref<boolean>;
   autoSyncState: Ref<AutoSyncState | null>;
-  report: Ref<string>;
-  lastReportResult: Ref<ReportResult | null>;
-  currentReportId: Ref<number | null>;
   getConfigPayload: () => AppConfig;
   persistConfigBeforeAction: (actionLabel: string) => Promise<AppConfig>;
-  applyReportTimeRange: (date: string, timeRange?: ReportTimeRange) => void;
-  applyFullDayReportRange: (date: string) => void;
   refreshLocalData: () => Promise<void>;
-  today: string;
 };
 
 export const AUTO_SYNC_STATUS_LABELS: Record<AutoSyncStatus, string> = {
@@ -44,15 +38,9 @@ export function createAutoSyncState(ctx: AutoSyncStateContext) {
     status,
     autoSyncLoading,
     autoSyncState,
-    report,
-    lastReportResult,
-    currentReportId,
     getConfigPayload,
     persistConfigBeforeAction,
-    applyReportTimeRange,
-    applyFullDayReportRange,
     refreshLocalData,
-    today,
   } = ctx;
 
   const autoSyncRunning = computed(() => autoSyncLoading.value || Boolean(autoSyncState.value?.isRunning));
@@ -123,18 +111,6 @@ export function createAutoSyncState(ctx: AutoSyncStateContext) {
       await persistConfigBeforeAction('执行自动同步');
       const result = await window.api.runAutoSyncNow(getConfigPayload(), taskId);
       status.value = result.message;
-      const reportedTask = (result.taskResults ?? []).find((task) => task.report);
-      if (reportedTask?.report) {
-        report.value = reportedTask.report;
-        lastReportResult.value = null;
-        currentReportId.value = null;
-        if (reportedTask.date) {
-          applyReportTimeRange(reportedTask.date, reportedTask.timeRange);
-        } else {
-          applyFullDayReportRange(today);
-        }
-      }
-
       if (result.status === 'success') ElMessage.success(result.message);
       else if (result.status === 'skipped') ElMessage.warning(result.message);
       else if (result.status === 'failed') ElMessage.error(result.message);

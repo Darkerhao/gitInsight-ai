@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CalendarDays, Calculator, FileText, Send } from 'lucide-vue-next';
 import type { RepoInfo } from '@shared/types';
-import type { WeeklyReportDraft } from '@/composables/weeklyReportActions';
+import type { WeeklyReportDraft } from '@/composables/projectReportActions';
 
 interface GenerationProgress {
   total: number;

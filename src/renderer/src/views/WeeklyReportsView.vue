@@ -37,13 +37,13 @@ const recentRepos = computed(() => recentRepoPaths.value
   .filter((repo): repo is NonNullable<typeof repo> => Boolean(repo)));
 const duplicateKeys = computed(() => findWeeklyDuplicateKeys(drafts.value.map((draft) => ({
   key: draft.key, date: draft.date, projectName: displayRepoName(draft.repo), report: draft.report,
-  commitsCount: draft.result?.commits.length ?? 0, filesCount: countWeeklyReportFiles(draft.result),
+  commitsCount: draft.lastReportResult?.commits.length ?? 0, filesCount: countWeeklyReportFiles(draft.lastReportResult),
 }))));
 const activeQuality = computed(() => {
   const draft = activeDraft.value;
   return draft ? checkWeeklyReportQuality({
     key: draft.key, date: draft.date, projectName: displayRepoName(draft.repo), report: draft.report,
-    commitsCount: draft.result?.commits.length ?? 0, filesCount: countWeeklyReportFiles(draft.result),
+    commitsCount: draft.lastReportResult?.commits.length ?? 0, filesCount: countWeeklyReportFiles(draft.lastReportResult),
   }) : null;
 });
 const workflowStages = [
@@ -184,7 +184,7 @@ function handleKeydown(event: KeyboardEvent) {
 
 <template>
   <div class="view-stack weekly-reports-view atelier-page">
-    <PageHeader title="一周日报" subtitle="按日期与项目批量生成、编辑和提交研发日报">
+    <PageHeader title="批量补日报" subtitle="选择最多 7 天和多个仓库，按日期与项目生成可分别编辑、发布的日报">
       <template #actions>
         <el-button :icon="ExternalLink" plain :loading="feishuLoading" @click="openSubmissionRecords">查看飞书记录</el-button>
         <el-button :icon="CalendarDays" plain @click="emit('navigate', 'config')">日报配置</el-button>

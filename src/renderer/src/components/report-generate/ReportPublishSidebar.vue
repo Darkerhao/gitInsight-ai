@@ -7,7 +7,7 @@ import type { DailyReportRecord, FeishuProjectOption } from '@shared/types';
 type DateShortcut = 'today' | 'yesterday' | 'rolling' | 'custom';
 type RecordStatus = 'success' | 'failed' | 'pending';
 type DraftPublishStatus = 'idle' | 'publishing' | 'success' | 'failed';
-type DraftWorkHoursSource = 'default' | 'estimated' | 'manual';
+type DraftWorkHoursSource = 'default' | 'estimated' | 'manual' | 'unresolved';
 
 interface ProjectPublishDraft {
   key: string;

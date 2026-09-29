@@ -7,7 +7,7 @@ import type { useAssistant } from './useAssistant';
 import { formatLocalDate, shiftLocalDate } from './assistant/dateUtils';
 import { normalizeProjectWorkHours, normalizeWorkHours } from './assistant/normalizers';
 import { createWeeklyReportDraft, mergeWeeklyReportDrafts } from './weeklyReportDrafts';
-import type { WeeklyReportDraft } from './weeklyReportActions';
+import type { WeeklyReportDraft } from './projectReportActions';
 import { createWeeklyWorkHoursRecalculator } from './weeklyReportHours';
 
 type Assistant = ReturnType<typeof useAssistant>;
@@ -80,7 +80,7 @@ function updateDraftReport(state: WeeklyReportState, key: string, value: string)
   if (draft.workHoursSource !== 'manual') draft.workHoursSource = 'unresolved';
   if (draft.publishStatus === 'success') {
     draft.publishStatus = 'idle';
-    draft.message = '内容已修改，需要重新提交';
+    draft.publishMessage = '内容已修改，需要重新提交';
   }
 }
 
@@ -90,7 +90,7 @@ function updateDraftProject(state: WeeklyReportState, key: string, value: string
   draft.projectOptionId = value;
   if (draft.workHoursSource === 'default') draft.workHours = state.getDefaultWorkHours(value);
   draft.publishStatus = 'idle';
-  draft.message = '';
+  draft.publishMessage = '';
 }
 
 function updateDraftHours(state: WeeklyReportState, key: string, value: number | null | undefined) {
