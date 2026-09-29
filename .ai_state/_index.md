@@ -1,8 +1,21 @@
 # AI State Index
 
-本轮入口：落实审查第 6–10 项，日报流程收敛、CI、导航、动效与小屏验证。
+本轮入口：main 推送自动递增版本并完成桌面打包发布。
 
 ## 本轮状态（2026-09-29）
+
+- path: Refactor
+- stage: ship（本地实现与验证完成，尚未推送）
+- current_sprint_slug: main-auto-release
+- design: `.ai_state/sprints/main-auto-release/design.md`
+- evidence: `.ai_state/sprints/main-auto-release/runtime-verify.md`
+- review: 独立代码/规格审查及最终评估 PASS
+- route_confidence: 0.96
+- 验收：发布专项 7/7、actionlint、类型检查、构建、diff check 通过。
+- next_action: 改动合入 main 后由首次实际运行验证远端写权限与跨平台安装包。
+- 工作区：复用当前 feature/simple-version；保留用户原有三处前端修改。
+
+## 上轮日报工作流状态（2026-09-29）
 
 - path: Refactor
 - stage: ship（实现、运行验证、独立审查、评估与收敛检查完成）
@@ -27,6 +40,8 @@
 - current_sprint_slug: weekly-summary
 
 ## route_history
+
+- 2026-09-29 main 自动发布：Refactor，单一 CI 发布闭环，涉及工作流、旧脚本清理、契约测试与说明文档；置信度 0.96。复用当前 checkout，保留三处前端在途修改。
 
 - 2026-09-29 日报流程收敛：Refactor，三个独立切片为草稿操作、CI/交互回归、导航/动效/小屏；置信度 0.97。
 

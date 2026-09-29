@@ -188,6 +188,6 @@ npm test           # 单元测试（timeline / repo-names / ai-client）
 npm run dist:win:standard
 ```
 
-推送 `v*` 标签后，GitHub Actions 会自动构建 Lite 与 Standard 两套 Release 资产。
+推送到 `main` 后，GitHub Actions 会在检查通过后自动递增补丁版本（如 `3.8.6 → 3.8.7`），回写版本文件并创建标签，再构建三平台 Lite 与 Standard 安装包、发布 GitHub Release。下次开发前先 `git pull --rebase` 同步自动版本提交。详见 [发布与打包工作流](docs/release-workflow.md)。
 
 架构说明、IPC 契约与代码约定见 [CLAUDE.md](CLAUDE.md)。

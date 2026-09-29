@@ -880,10 +880,15 @@ onBeforeUnmount(() => {
   min-width: 132px;
   border-color: color-mix(in srgb, var(--effect-tone) 76%, #4f46e5);
   border-radius: 8px;
-  background: linear-gradient(110deg, color-mix(in srgb, var(--effect-tone) 82%, #4f46e5), color-mix(in srgb, var(--effect-tone) 54%, #6366f1));
   box-shadow: 0 8px 18px color-mix(in srgb, var(--effect-tone) 22%, transparent);
   font-size: 11px;
   font-weight: 800;
+}
+
+/* 自定义配色优先于全局按钮材质，不影响响应式布局规则。 */
+.coin-popover .effect-inspector .effect-launch-btn.el-button.el-button--primary {
+  --c-on-primary: #f8fafc;
+  background: linear-gradient(110deg, color-mix(in srgb, var(--effect-tone) 38%, #0f172a), color-mix(in srgb, var(--effect-tone) 24%, #0f172a));
 }
 
 .effect-shop-toolbar {

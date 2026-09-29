@@ -1,5 +1,14 @@
 # 当前架构要点
 
+## 自动版本与桌面发布（2026-09-29）
+
+- `release.yml` 是唯一发布入口：main push → 复用 checks → patch 升版并原子回写 main/tag → 六矩阵固定 SHA 打包 → 汇总发布 Release。
+- checks.yml 保留 PR/master 独立触发；main 只通过发布流程调用检查，避免重复运行。
+- main 发布串行执行；升版前过滤过期源提交，竞争写入由 Git 非强制原子推送拒绝。GITHUB_TOKEN 回写不会再触发 push 工作流。
+- 手动 workflow_dispatch 只构建指定源提交，不升版或发布。打包失败重跑 failed jobs 复用原版本。
+- Artifacts 保留版本/发行版子目录；Release 用递归 glob 收集安装包。旧 release-tag 脚本已删除。
+- [操作说明](../../docs/release-workflow.md) · [验证证据](../sprints/main-auto-release/runtime-verify.md)。
+
 ## 日报可靠性（2026-09-29）
 
 - renderer 的 ProjectReportDraft 独立持有 manualWorkContent；历史合并日报只向首项目恢复素材并提示核对归属。

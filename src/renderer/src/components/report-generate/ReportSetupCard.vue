@@ -61,6 +61,22 @@ const emit = defineEmits<{
 const repoKeyword = ref('');
 const filteredRepos = computed(() => props.sortedRepos.filter((repo) => matchesRepoKeyword(repo, props.repoDisplayNames, repoKeyword.value)));
 
+function tiltReportDeck(event: PointerEvent) {
+  if (event.pointerType !== 'mouse') return;
+  const deck = event.currentTarget as HTMLElement;
+  const bounds = deck.getBoundingClientRect();
+  const x = Math.max(-0.5, Math.min(0.5, (event.clientX - bounds.left) / bounds.width - 0.5));
+  const y = Math.max(-0.5, Math.min(0.5, (event.clientY - bounds.top) / bounds.height - 0.5));
+  deck.style.setProperty('--deck-rotate-x', `${-y * 12}deg`);
+  deck.style.setProperty('--deck-rotate-y', `${x * 20}deg`);
+}
+
+function resetReportDeck(event: PointerEvent) {
+  const deck = event.currentTarget as HTMLElement;
+  deck.style.removeProperty('--deck-rotate-x');
+  deck.style.removeProperty('--deck-rotate-y');
+}
+
 function displayName(repo: RepoInfo) {
   return resolveRepoDisplayName(repo, props.repoDisplayNames);
 }
@@ -115,7 +131,12 @@ function handleEndDateTimeChange(value: string | null) {
         <strong class="report-context-value">{{ selectedRepos.length }}<small>个</small></strong>
         <span class="report-context-detail" :title="repoContextText">{{ selectedRepoSummary }}</span>
       </div>
-      <div class="report-context-deck">
+      <div
+        class="report-context-deck"
+        @pointermove="tiltReportDeck"
+        @pointerleave="resetReportDeck"
+        @pointercancel="resetReportDeck"
+      >
         <div class="report-context-sheet">
           <span class="report-context-sheet-heading"><FileText :size="18" />研发日报</span>
           <strong>{{ form.date || '待选择日期' }}</strong>

@@ -3,18 +3,69 @@ name: Build desktop packages
 on:
   workflow_dispatch:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
     uses: ./.github/workflows/checks.yml
 
-  package:
+  prepare:
     needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      ready: ${{ steps.version.outputs.ready }}
+      ref: ${{ steps.version.outputs.ref }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Prepare package version
+        id: version
+        shell: bash
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != "push" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch origin main
+          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+            echo "A newer commit is on main; its workflow will release it."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          npm version patch --no-git-tag-version --ignore-scripts
+          version=$(node -p "require('./package.json').version")
+          tag="v$version"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore(release): $tag"
+          git tag "$tag"
+          # Publish both refs together; never overwrite a newer main commit.
+          git push --atomic origin HEAD:refs/heads/main "refs/tags/$tag"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  package:
+    needs: prepare
+    if: needs.prepare.outputs.ready == 'true'
     name: Package ${{ matrix.name }} ${{ matrix.editionLabel }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -95,6 +146,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -120,9 +173,23 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload release assets
-        if: startsWith(github.ref, 'refs/tags/v')
+  release:
+    needs: [prepare, package]
+    if: needs.prepare.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: MajiAI-*
+          path: release-assets
+          merge-multiple: true
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.paths }}
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          files: release-assets/**/MajiAI-*
+          fail_on_unmatched_files: true
           generate_release_notes: true

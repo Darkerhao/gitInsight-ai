@@ -3,7 +3,8 @@ name: Business checks
 on:
   pull_request:
   push:
-    branches: [main, master]
+    # main is verified by release.yml before its version bump.
+    branches: [master]
   workflow_call:
 
 permissions:
