@@ -27,6 +27,7 @@ import type {
   RepoInfo,
   ReportResult,
   SyncFeishuDailyPayload,
+  SyncFeishuDailyResult,
   WeeklyReflectionActionStatusUpdate,
   WeeklyReflectionParams,
   WeeklyReflectionProject,
@@ -47,13 +48,14 @@ declare global {
       selectDirectory: () => Promise<string | null>;
       scanRepositories: (workspaceDir: string) => Promise<RepoInfo[]>;
       generateReport: (params: GenerateReportParams) => Promise<ReportResult>;
+      cancelReportGeneration: (requestId: string) => Promise<void>;
       loginFeishu: (payload: FeishuLoginPayload) => Promise<FeishuAuthSnapshot>;
       openFeishuSubmissionRecords: (payload: FeishuSubmissionRecordsPayload) => Promise<boolean>;
       checkFeishuDuplicate: (payload: FeishuDuplicateCheckPayload) => Promise<FeishuDuplicateCheckResult>;
       listFeishuFields: (payload: FeishuProjectOptionsPayload) => Promise<FeishuFieldOption[]>;
       listFeishuProjects: (payload: FeishuProjectOptionsPayload) => Promise<FeishuProjectOption[]>;
       testSubmitFeishu: (payload: FeishuTestSubmitPayload) => Promise<FeishuSubmitResult>;
-      syncFeishuDaily: (payload: SyncFeishuDailyPayload) => Promise<boolean>;
+      syncFeishuDaily: (payload: SyncFeishuDailyPayload) => Promise<SyncFeishuDailyResult>;
       getAutoSyncState: () => Promise<AutoSyncState>;
       validateAutoSync: (config: AppConfig, taskId?: string) => Promise<AutoSyncValidationResult>;
       runAutoSyncNow: (config: AppConfig, taskId?: string) => Promise<AutoSyncRunResult>;

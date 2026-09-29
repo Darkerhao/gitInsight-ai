@@ -35,6 +35,7 @@ import { generateWeeklySummary, getWeeklySummary, getWeeklySummaryHistory, getWe
 import { changePageZoom, clampPageZoom } from '../../src/shared/pageZoom.js';
 
 export function registerIpcHandlers() {
+  const generations = new Map<string, { owner: number; controller: AbortController }>();
   ipcMain.handle('app:load-config', async () => loadConfig());
   ipcMain.handle('app:save-config', async (_event, config: AppConfig) => saveConfigAndReschedule(config));
   ipcMain.handle('ai:test-connection', async (_event, payload: AiConnectionTestPayload) => testAiConnection(payload));
@@ -46,7 +47,25 @@ export function registerIpcHandlers() {
     return result.canceled ? null : result.filePaths[0] ?? null;
   });
   ipcMain.handle('repo:scan', async (_event, workspaceDir: string) => scanRepositories(workspaceDir));
-  ipcMain.handle('report:generate', async (_event, params: GenerateReportParams) => generateReport(params));
+  ipcMain.handle('report:generate', async (event, params: GenerateReportParams) => {
+    const requestId = params.requestId;
+    if (!requestId) return generateReport(params);
+    if (generations.has(requestId)) throw new Error('生成请求已存在');
+    const controller = new AbortController();
+    const cancel = () => controller.abort(new Error('已取消生成'));
+    generations.set(requestId, { owner: event.sender.id, controller });
+    event.sender.once('destroyed', cancel);
+    try {
+      return await generateReport(params, controller.signal);
+    } finally {
+      generations.delete(requestId);
+      event.sender.removeListener('destroyed', cancel);
+    }
+  });
+  ipcMain.handle('report:cancel-generation', (event, requestId: string) => {
+    const generation = generations.get(requestId);
+    if (generation?.owner === event.sender.id) generation.controller.abort(new Error('已取消生成'));
+  });
   ipcMain.handle('daily-report:list', async (_event, limit?: number) => listDailyReports(limit));
   ipcMain.handle('daily-report:save', async (_event, payload: SaveDailyReportPayload) => saveDailyReport(payload));
   ipcMain.handle('timeline:get-snapshot', async (_event, query?: TimelineQuery) =>

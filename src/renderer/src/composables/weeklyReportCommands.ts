@@ -3,6 +3,7 @@ import type { useAssistant } from './useAssistant';
 import { runWeeklyPublishBatch, type createWeeklyReportActions } from './weeklyReportActions';
 import type { createWeeklyReportMutations, WeeklyReportState } from './useWeeklyReportState';
 import type { WeeklyReportDraft } from './weeklyReportActions';
+import { runGenerationQueue } from './assistant/projectGeneration';
 
 type Assistant = ReturnType<typeof useAssistant>;
 type Actions = ReturnType<typeof createWeeklyReportActions>;
@@ -24,8 +25,8 @@ async function generateAll(ctx: WeeklyReportCommandContext) {
   state.status.value = `正在生成 ${state.drafts.value.length} 条项目日报`;
   let failedCount = 0;
   try {
-    const results = await Promise.allSettled(state.drafts.value.map(actions.generateDraft));
-    const successCount = results.filter((result) => result.status === 'fulfilled' && result.value).length;
+    const results = await runGenerationQueue(state.drafts.value, actions.generateDraft, new AbortController().signal);
+    const successCount = results.filter((result) => result === true).length;
     failedCount = results.length - successCount;
     const allocation = mutations.recalculateWorkHours();
     await assistant.refreshLocalData();
@@ -88,9 +89,18 @@ async function publishCurrent(ctx: WeeklyReportCommandContext) {
   ctx.state.pushing.value = true;
   const success = await ctx.actions.publishDraft(draft);
   ctx.state.pushing.value = false;
-  await ctx.assistant.refreshLocalData();
-  if (success) ElMessage.success('当前日报已提交飞书');
+  await refreshAfterPublish(ctx);
+  if (success && draft.message !== '已提交飞书日报') ElMessage.warning(draft.message);
+  else if (success) ElMessage.success('当前日报已提交飞书');
   else ElMessage.error(draft.message || '提交飞书失败');
+}
+
+async function refreshAfterPublish(ctx: WeeklyReportCommandContext) {
+  try {
+    await ctx.assistant.refreshLocalData();
+  } catch {
+    ElMessage.warning('发布结果已保留，本地记录刷新失败，请勿重复提交');
+  }
 }
 
 async function publishAll(ctx: WeeklyReportCommandContext, requestedTargets?: WeeklyReportDraft[]) {
@@ -101,9 +111,11 @@ async function publishAll(ctx: WeeklyReportCommandContext, requestedTargets?: We
   ctx.state.pushing.value = true;
   try {
     const result = await runWeeklyPublishBatch(targets, ctx.actions.publishDraft);
-    await ctx.assistant.refreshLocalData();
+    await refreshAfterPublish(ctx);
     const message = result.failedCount ? `已提交 ${result.successCount} 条，${result.failedCount} 条失败` : `已提交 ${result.successCount} 条日报到飞书`;
-    if (result.failedCount) ElMessage.warning(message);
+    const hasWarning = targets.some((draft) => draft.publishStatus === 'success' && draft.message !== '已提交飞书日报');
+    if (hasWarning) ElMessage.warning(`${message}；部分本地记录保存失败，请查看各条日报提示，勿重复提交`);
+    else if (result.failedCount) ElMessage.warning(message);
     else ElMessage.success(message);
   } finally {
     ctx.state.pushing.value = false;
@@ -114,10 +126,10 @@ async function retryFailed(ctx: WeeklyReportCommandContext) {
   const failed = ctx.state.drafts.value.filter((draft) => draft.generateStatus === 'failed');
   if (!failed.length) return ElMessage.info('当前没有生成失败的日报');
   ctx.state.loading.value = true;
-  const results = await Promise.allSettled(failed.map(ctx.actions.generateDraft));
+  const results = await runGenerationQueue(failed, ctx.actions.generateDraft, new AbortController().signal);
   ctx.mutations.recalculateWorkHours();
   ctx.state.loading.value = false;
-  const success = results.filter((result) => result.status === 'fulfilled' && result.value).length;
+  const success = results.filter((result) => result === true).length;
   ElMessage[success === failed.length ? 'success' : 'warning'](`已重试 ${success}/${failed.length} 条失败日报`);
 }
 

@@ -7,6 +7,7 @@ import type {
   ReportResult,
   SaveDailyReportPayload,
   SyncFeishuDailyPayload,
+  SyncFeishuDailyResult,
 } from '../../../shared/types.js';
 import { countWeeklyReportFiles } from '../../../shared/weeklyReport.js';
 import { shiftLocalDate } from './assistant/dateUtils.js';
@@ -35,7 +36,7 @@ export interface WeeklyReportDraft {
 export interface WeeklyReportApi {
   generateReport(params: GenerateReportParams): Promise<ReportResult>;
   saveDailyReport(payload: SaveDailyReportPayload): Promise<DailyReportRecord>;
-  syncFeishuDaily(payload: SyncFeishuDailyPayload): Promise<boolean>;
+  syncFeishuDaily(payload: SyncFeishuDailyPayload): Promise<SyncFeishuDailyResult>;
 }
 
 interface WeeklyReportActionContext {
@@ -154,13 +155,13 @@ async function publishWeeklyDraft(ctx: WeeklyReportActionContext, draft: WeeklyR
     return false;
   }
   try {
-    await ctx.api.syncFeishuDaily(buildSyncPayload(ctx, draft));
+    const result = await ctx.api.syncFeishuDaily(buildSyncPayload(ctx, draft));
     draft.publishStatus = 'success';
-    draft.message = '已提交飞书日报';
+    draft.message = result.warning || '已提交飞书日报';
     return true;
   } catch {
     draft.publishStatus = 'failed';
-    draft.message = '提交飞书失败，请稍后重试';
+    draft.message = '提交结果未确认，请先核对飞书提交记录';
     return false;
   }
 }

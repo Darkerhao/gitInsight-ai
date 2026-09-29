@@ -1,5 +1,5 @@
 import { basename } from 'node:path';
-import type { CommitEntry, GenerateReportParams, ReportPromptStyle, ReportResult, ReportTimeRange, StructuredReportMetadata } from '../../src/shared/types.js';
+import type { CommitEntry, GenerateReportParams, ReportResult, ReportTimeRange, StructuredReportMetadata } from '../../src/shared/types.js';
 import { callAiReport, callAiStructuredExtract, resolveAiConfig } from './aiClient.js';
 import { loadConfig } from './config.js';
 import { recordGeneratedReport } from './database.js';
@@ -204,15 +204,6 @@ function normalizeManualWorkItems(content: string) {
 }
 
 
-function getManualWorkModuleName(content: string) {
-  if (/(测试|验收|回归|验证)/.test(content)) return '质量保障 / 网页测试';
-  if (/(上线|发布|部署|发版)/.test(content)) return '发布交付 / 功能上线';
-  if (/(会议|评审|沟通|对齐)/.test(content)) return '协作沟通 / 方案评审';
-  if (/(联调|接口)/.test(content)) return '协作联调 / 接口验证';
-  return '非代码工作 / 工作补充';
-}
-
-
 export function fallbackReport(
   repoNames: string[],
   date: string,
@@ -220,51 +211,34 @@ export function fallbackReport(
   commits: CommitEntry[],
   timeRange: ReportTimeRange,
   manualWorkContent = '',
-  promptStyle: ReportPromptStyle = 'standard',
 ) {
-  const workItemLimit = promptStyle === 'concise' ? 2 : promptStyle === 'detailed' ? 5 : 3;
-  const planItemLimit = promptStyle === 'concise' ? 1 : 2;
   const manualWorkItems = normalizeManualWorkItems(manualWorkContent);
-  const commitWorkItems = commits.slice(0, workItemLimit).map((commit) => {
+  const commitWorkItems = commits.map((commit) => {
     const moduleName = getCommitModuleName(commit, repoNames);
     const topic = stripConventionalCommitPrefix(commit.message) || moduleName;
-    return `【${moduleName}】完成${topic}相关优化，提升对应页面或功能的数据展示与交互稳定性。`;
+    return `【${moduleName}】${topic}`;
   });
   const workItems = [
-    ...manualWorkItems.map((item) => `【${getManualWorkModuleName(item)}】${item.replace(/[。；;]+$/, '')}。`),
+    ...manualWorkItems.map((item) => readModuleLabel(item) ? item : `【非代码工作 / 工作补充】${item}`),
     ...commitWorkItems,
-  ].slice(0, workItemLimit);
-  const moduleNames = [...new Set(commits.map((commit) => getCommitModuleName(commit, repoNames)))].slice(0, 3).join('、');
-  const resultItems = commits.length
-    ? [
-        `${moduleNames || repoNames.join('、') || '当前项目'}相关展示与交互路径已完成整理，便于后续回归验证。`,
-      ]
-    : manualWorkItems.length
-      ? [`已完成 ${manualWorkItems.length} 项非代码工作并纳入日报，确保测试、发布及协作事项可追踪。`]
-      : ['完成日报基础信息整理，当前时间段暂无可用研发记录。'];
-  const planItems = commits.length
-    ? commits.slice(0, 2).map((commit) => {
-        const topic = stripConventionalCommitPrefix(commit.message) || getCommitModuleName(commit, repoNames);
-        return `回归验证${topic}相关场景，排查同类展示或排序异常。`;
-      })
-    : ['推进当前模块联调与问题收敛。', '补充后续功能迭代所需的日报素材。'];
+  ];
 
   return [
     '今日工作内容：',
     '',
-    formatNumbered(workItems.length ? workItems : ['【日报生成 / 基础联调】完成基础环境搭建与日报生成流程联调。']),
+    formatNumbered(workItems.length ? workItems : ['暂无可用工作记录，请补充实际工作内容。']),
     '',
     '工作成果：',
     '',
-    formatNumbered(resultItems),
+    '1. 待补充（请确认实际工作成果）',
     '',
     '工作时长：',
     '',
-    '8小时',
+    '待补充（请填写实际工作时长）',
     '',
     '明日计划：',
     '',
-    formatNumbered(planItems.slice(0, planItemLimit)),
+    '1. 待补充（请填写实际明日计划）',
     '',
     `汇报人：${reporterName}`,
     `日期：${date}`,
@@ -273,13 +247,16 @@ export function fallbackReport(
 }
 
 
-export async function generateReport(params: GenerateReportParams): Promise<ReportResult> {
+export async function generateReport(params: GenerateReportParams, signal?: AbortSignal): Promise<ReportResult> {
+  signal?.throwIfAborted();
   const config = await loadConfig();
+  signal?.throwIfAborted();
   const aiConfig = resolveAiConfig(config, params.aiProfileId);
   const generatedAt = new Date().toISOString();
   const timeRange = normalizeReportTimeRange(params);
   const repos = params.repoPaths.map((repoPath) => ({ name: basename(repoPath), path: repoPath }));
   const allRepoDataList = await Promise.all(params.repoPaths.map((repoPath) => collectGitData(repoPath, timeRange)));
+  signal?.throwIfAborted();
   const repoDataList = allRepoDataList.map((item) => {
     const commits = filterCommitsByReporter(item.commits, params.reporterName, params.gitAuthorEmail);
     return formatCollectedGitData(commits);
@@ -302,25 +279,10 @@ export async function generateReport(params: GenerateReportParams): Promise<Repo
     const matchedTip = allCommits.length
       ? `所选时间段存在 ${allCommits.length} 条提交记录，但没有匹配到汇报人“${params.reporterName}”或 Git 作者邮箱“${params.gitAuthorEmail?.trim() || '未配置'}”的提交。`
       : '所选时间段未采集到代码提交记录。';
-    const report = [
-      '今日工作内容：',
-      '',
-      `1. 【日报生成 / 提交扫描】${matchedTip}暂不生成推测性日报内容。`,
-      '',
-      '工作成果：',
-      '',
-      '1. 已完成所选仓库的提交记录扫描，但未发现可用于日报生成的研发变更。',
-      '',
-      '明日计划：',
-      '',
-      '1. 请确认工作日期、仓库路径、汇报人名称或 Git 作者邮箱后重新生成日报。',
-      '',
-      `汇报人：${params.reporterName}`,
-      `日期：${params.date}`,
-      `时间范围：${timeRange.label}`,
-    ].join('\n');
+    const report = `${fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange)}\n\nAI提示：${matchedTip}请确认工作日期、仓库路径、汇报人名称或 Git 作者邮箱，或补充实际非代码工作。`;
 
     const result = { report, commits, repos, generatedAt, timeRange, rawInput };
+    signal?.throwIfAborted();
     const record = await recordGeneratedReport(params, result);
     return { ...result, historyId: record.id };
   }
@@ -328,16 +290,19 @@ export async function generateReport(params: GenerateReportParams): Promise<Repo
   let report = '';
   if (aiConfig.aiApiKey) {
     try {
-      report = await callAiReport(aiConfig, rawInput, timeRange, params.promptStyle);
+      report = await callAiReport(aiConfig, rawInput, timeRange, params.promptStyle, signal);
     } catch (error) {
-      report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange, rawInput.manualWorkContent, params.promptStyle);
+      signal?.throwIfAborted();
+      if (error instanceof Error && error.name === 'AbortError') throw error;
+      report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange, rawInput.manualWorkContent);
       report = `${report}\n\nAI提示：${error instanceof Error ? error.message : '调用失败'}`;
     }
   } else {
-    report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange, rawInput.manualWorkContent, params.promptStyle);
+    report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange, rawInput.manualWorkContent);
     const profileLabel = aiConfig.aiProfileName ? `“${aiConfig.aiProfileName}”` : '当前 AI 配置';
     report = `${report}\n\nAI提示：请先在 AI 设置中为${profileLabel}配置 OpenAI 兼容接口与 API Key。`;
   }
+  signal?.throwIfAborted();
   report = ensureReportWorkItemModuleLabels(
     report,
     commits,
@@ -347,11 +312,12 @@ export async function generateReport(params: GenerateReportParams): Promise<Repo
   // 二次 AI 调用：从日报文本中提取结构化元数据（失败不影响主流程）
   let structuredJson: StructuredReportMetadata | undefined;
   if (aiConfig.aiApiKey) {
-    const extracted = await callAiStructuredExtract(aiConfig, report);
+    const extracted = await callAiStructuredExtract(aiConfig, report, signal);
     if (extracted) structuredJson = extracted;
   }
 
   const result = { report, commits, repos, generatedAt, timeRange, rawInput, structuredJson };
+  signal?.throwIfAborted();
   const record = await recordGeneratedReport(params, result);
   return { ...result, historyId: record.id };
 }

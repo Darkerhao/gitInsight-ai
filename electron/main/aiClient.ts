@@ -10,6 +10,7 @@ import type {
 } from '../../src/shared/types.js';
 import { parseWeeklyReflectionMetadata } from '../../src/shared/weeklyReflection.js';
 import { parseWeeklySummaryMetadata } from '../../src/shared/weeklySummary.js';
+import { fetchWithTimeout } from './networkRequest.js';
 
 type AiRuntimeConfig = {
   aiBaseUrl: string;
@@ -77,15 +78,21 @@ function buildNetworkErrorMessage(url: string, error: unknown, fallbackError?: u
     .join('。');
 }
 
-async function fetchAi(url: string, init?: RequestInit) {
+async function fetchAi(url: string, init?: RequestInit, timeoutMs = 60_000) {
+  return fetchWithTimeout(url, init, timeoutMs, fetchAiTransport);
+}
+
+async function fetchAiTransport(url: string, init?: RequestInit) {
   const electronNetFetch = await getElectronNetFetch();
   if (electronNetFetch) {
     try {
       return await electronNetFetch(url, init);
     } catch (electronError) {
+      init?.signal?.throwIfAborted();
       try {
         return await fetch(url, init);
       } catch (nodeError) {
+        init?.signal?.throwIfAborted();
         throw new Error(buildNetworkErrorMessage(url, electronError, nodeError));
       }
     }
@@ -94,6 +101,7 @@ async function fetchAi(url: string, init?: RequestInit) {
   try {
     return await fetch(url, init);
   } catch (error) {
+    init?.signal?.throwIfAborted();
     throw new Error(buildNetworkErrorMessage(url, error));
   }
 }
@@ -264,11 +272,12 @@ export function isUnsupportedModelError(status: number, detail: string) {
 }
 
 
-export async function fetchAvailableModels(config: AiRuntimeConfig) {
+export async function fetchAvailableModels(config: AiRuntimeConfig, signal?: AbortSignal) {
   try {
     const response = await fetchAi(getModelsUrl(config.aiBaseUrl), {
+      signal,
       headers: { Authorization: `Bearer ${config.aiApiKey}` },
-    });
+    }, 10_000);
     if (!response.ok) return [];
     const data = await response.json();
     if (!Array.isArray(data?.data)) return [];
@@ -277,18 +286,19 @@ export async function fetchAvailableModels(config: AiRuntimeConfig) {
       .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
       .slice(0, 20);
   } catch {
+    signal?.throwIfAborted();
     return [];
   }
 }
 
 
-export async function buildAiErrorMessage(config: AiRuntimeConfig, response: Response, detail: string) {
+export async function buildAiErrorMessage(config: AiRuntimeConfig, response: Response, detail: string, signal?: AbortSignal) {
   const parsedDetail = parseAiError(detail);
   if ([408, 504, 524].includes(response.status)) {
     return `AI 接口上游响应超时（${response.status}）。服务商可能正在排队或模型处理时间过长，请稍后重试、确认模型名称，或更换可用的 API 节点。${parsedDetail ? ` 原始错误：${parsedDetail.slice(0, 300)}` : ''}`;
   }
   if (isUnsupportedModelError(response.status, detail)) {
-    const models = await fetchAvailableModels(config);
+    const models = await fetchAvailableModels(config, signal);
     const modelTips = models.length
       ? `；/models 可查询到的模型包括：${models.join('、')}。注意：模型列表不一定代表当前 /chat/completions 接口全部可用`
       : '；同时未能从 /models 获取可用模型列表';
@@ -303,6 +313,7 @@ export async function callAiReport(
   rawInput: { gitLogs: string; files: string; diff: string; manualWorkContent?: string },
   timeRange: ReportTimeRange,
   promptStyle: ReportPromptStyle = 'standard',
+  signal?: AbortSignal,
 ) {
   const styleRequirements: Record<ReportPromptStyle, { name: string; instruction: string }> = {
     concise: {
@@ -404,12 +415,11 @@ export async function callAiReport(
 
 ## 十、工作成果不要重复工作内容
 
-“工作成果”不是重新复述今天改了什么，应该描述此次工作的业务结果或质量收益，避免重复字段名、实现细节和排序逻辑。
+“工作成果”只描述输入中明确确认的业务结果或质量收益。不能从代码修改推断性能提升、稳定性提升或验收通过；没有明确依据时写“待补充”。不得推测工作时长或默认填写八小时。
 
 ## 十一、明日计划
 
-明日计划只能根据今天实际工作合理安排，优先写回归验证、功能联调、边界场景验证、同类问题排查、异常数据验证、兼容性验证、上线前检查和风险收敛，不要简单重复今天已经完成的工作。
-如果当前输入不足以判断明确的明日计划，则输出基于今日工作最合理的验证计划，不得虚构新的开发需求。
+明日计划只记录用户明确提供的安排；没有明确计划时写“待补充”。不要把可能需要的回归验证、联调或上线检查写成用户已确定的计划。
 
 ## 十二、风格要求
 
@@ -464,16 +474,17 @@ ${rawInput.diff}
 
 工作成果：
 
-1. 业务结果或质量收益
+1. 有明确依据的业务结果或质量收益；否则待补充
 
 明日计划：
 
-1. 回归验证或风险收敛计划
+1. 用户明确提供的计划；否则待补充
 
 只输出上述日报内容，不输出分析过程、判断过程、原始代码、Git 信息或额外解释。`;
 
   const chatCompletionsUrl = getChatCompletionsUrl(config.aiBaseUrl);
   const response = await fetchAi(chatCompletionsUrl, {
+    signal,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -491,7 +502,7 @@ ${rawInput.diff}
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(await buildAiErrorMessage(config, response, detail));
+    throw new Error(await buildAiErrorMessage(config, response, detail, signal));
   }
 
   const data = (await readAiJsonResponse(response, chatCompletionsUrl)) as {
@@ -541,10 +552,12 @@ const STRUCTURED_EXTRACT_PROMPT = `你是一个工作日报结构化分析助手
 export async function callAiStructuredExtract(
   config: AiRuntimeConfig,
   reportText: string,
+  signal?: AbortSignal,
 ): Promise<StructuredReportMetadata | null> {
   try {
     const chatCompletionsUrl = getChatCompletionsUrl(config.aiBaseUrl);
     const response = await fetchAi(chatCompletionsUrl, {
+      signal,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -558,7 +571,7 @@ export async function callAiStructuredExtract(
         ],
         temperature: 0,
       }),
-    });
+    }, 20_000);
 
     if (!response.ok) return null;
 
@@ -577,6 +590,7 @@ export async function callAiStructuredExtract(
     if (!parsed.title || !Array.isArray(parsed.workItems)) return null;
     return parsed;
   } catch {
+    signal?.throwIfAborted();
     // 结构化提取失败不影响主流程，静默降级
     return null;
   }

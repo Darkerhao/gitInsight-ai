@@ -1,8 +1,20 @@
 # AI State Index
 
-本轮唯一入口：实现会议汇报周报模块，按工作周汇总已有日报并生成可编辑、可保存的简洁周报。
+本轮入口：日报可靠性修复，落实审查前五项。实现及测试完成；独立审查因模型接口不可用/限流未完成，未标记 PASS。
 
-## 当前路由
+## 本轮状态（2026-09-29）
+
+- path: Refactor
+- stage: review（实现、测试、主线程复核已完成；独立 reviewer 不可用）
+- current_sprint_slug: report-reliability
+- design: `.ai_state/design/2026-09-29-report-reliability.md`
+- evidence: `.ai_state/sprints/report-reliability/verification.md`
+- architecture: `.ai_state/architecture/ARCHITECTURE.md`
+- confidence: 0.96
+- 验收：npm test（含 27 项可靠性测试）、npm run check、git diff --check 均通过。
+- 后续：独立审查恢复后复核本轮；然后按用户顺序收敛重复流程、CI、导航与视觉。
+
+## 上轮路由（归档）
 
 - stage: ship
 - route: 黄区 / Feature，跨数据库、AI、Electron IPC 和 renderer 的完整闭环
@@ -13,6 +25,8 @@
 - current_sprint_slug: weekly-summary
 
 ## route_history
+
+- 2026-09-29 日报可靠性：Refactor，用户确认优先修复内容可信度、项目素材归属、发布结果、请求控制与原子保存；复用干净工作区，互斥写集并行实施，未新增依赖。实现与全量验证通过，独立审查服务不可用。
 
 - 2026-07-25 Signal Atelier UI：黄区 renderer Feature，已 ship（14 测试+smoke+typecheck+build 全绿）
 - 2026-08-04 多任务自动同步：分诊确认现状为全局单例配置（autoSync.ts 单跑单提交）→ 提供 A（单条多明细行）/B（多任务调度）两案 → 用户选 B → 红区 worktree 写者；升级日幂等靠运行键格式不变

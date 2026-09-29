@@ -65,7 +65,7 @@ test('dirty draft saves with history id before Feishu publishing', async () => {
     syncFeishuDaily: async (payload) => {
       calls.push('sync');
       publishedReportId = payload.reportId;
-      return true;
+      return { success: true };
     },
   };
   const draft = makeDraft({ dirty: true });
@@ -84,7 +84,7 @@ test('save payload contains structured-cloneable plain objects for IPC', async (
       assert.doesNotThrow(() => structuredClone(payload));
       return makeRecord(99);
     },
-    syncFeishuDaily: async () => true,
+    syncFeishuDaily: async () => ({ success: true }),
   };
   const result = makeResult();
   const draft = makeDraft({
@@ -114,13 +114,27 @@ test('save failure and unresolved hours both prevent Feishu publishing', async (
   const api: WeeklyReportApi = {
     generateReport: async () => makeResult(),
     saveDailyReport: async () => { throw new Error('保存失败'); },
-    syncFeishuDaily: async () => { syncCount += 1; return true; },
+    syncFeishuDaily: async () => { syncCount += 1; return { success: true }; },
   };
   const actions = createWeeklyReportActions({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo' });
 
   assert.equal(await actions.publishDraft(makeDraft({ dirty: true })), false);
   assert.equal(await actions.publishDraft(makeDraft({ workHoursSource: 'unresolved' })), false);
   assert.equal(syncCount, 0);
+});
+
+test('local logging warning retains published state and message', async () => {
+  const warning = '飞书日报已提交，本地同步记录保存失败，请勿重复提交。';
+  const api: WeeklyReportApi = {
+    generateReport: async () => makeResult(),
+    saveDailyReport: async () => makeRecord(42),
+    syncFeishuDaily: async () => ({ success: true, warning }),
+  };
+  const draft = makeDraft();
+  const actions = createWeeklyReportActions({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo' });
+  assert.equal(await actions.publishDraft(draft), true);
+  assert.equal(draft.publishStatus, 'success');
+  assert.equal(draft.message, warning);
 });
 
 test('external failures use stable user-facing messages', async () => {
@@ -140,7 +154,7 @@ test('external failures use stable user-facing messages', async () => {
   assert.equal(await actions.saveDraft(saveDraft), false);
   assert.equal(saveDraft.message, '保存日报失败，请稍后重试');
   assert.equal(await actions.publishDraft(publishDraft), false);
-  assert.equal(publishDraft.message, '提交飞书失败，请稍后重试');
+  assert.equal(publishDraft.message, '提交结果未确认，请先核对飞书提交记录');
 });
 
 test('a failed project draft can be generated again independently', async () => {
@@ -151,7 +165,7 @@ test('a failed project draft can be generated again independently', async () => 
       return makeResult();
     },
     saveDailyReport: async () => makeRecord(42),
-    syncFeishuDaily: async () => true,
+    syncFeishuDaily: async () => ({ success: true }),
   };
   const draft = makeDraft({
     report: 'AI提示：AI接口调用失败：502',

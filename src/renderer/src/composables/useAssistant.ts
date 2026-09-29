@@ -1,4 +1,5 @@
 import { reactive, ref } from 'vue';
+import { restoredManualWorkContent } from './assistant/projectGeneration';
 import { ElMessage } from 'element-plus';
 import {
   DEFAULT_AI_BASE_URL_OPTIONS,
@@ -36,7 +37,7 @@ import { createRepoState } from './assistant/repoState';
 import { createReportState } from './assistant/reportState';
 import { normalizeRepoDisplayNames } from '@shared/repositoryName';
 
-export type DraftGenerateStatus = 'idle' | 'generating' | 'success' | 'failed';
+export type DraftGenerateStatus = 'idle' | 'generating' | 'success' | 'failed' | 'cancelled';
 export type DraftPublishStatus = 'idle' | 'publishing' | 'success' | 'failed';
 export type DraftWorkHoursSource = 'default' | 'estimated' | 'manual';
 
@@ -44,6 +45,7 @@ export interface ProjectReportDraft {
   key: string;
   repo: RepoInfo;
   report: string;
+  manualWorkContent: string;
   reportId: number | null;
   lastReportResult: ReportResult | null;
   projectOptionId: string;
@@ -126,6 +128,7 @@ function createAssistant() {
       key: repo.path,
       repo,
       report: '',
+      manualWorkContent: '',
       reportId: null,
       lastReportResult: null,
       projectOptionId,
@@ -141,7 +144,6 @@ function createAssistant() {
   }
 
   function loadDailyReportDraft(record: DailyReportRecord) {
-    form.manualWorkContent = record.manualWorkContent ?? '';
     const recordRepos = record.repoPaths.map((path, index) => {
       const existingRepo = repos.value.find((repo) => repo.path === path);
       return existingRepo ?? { path, name: record.repoNames[index] || path };
@@ -155,13 +157,14 @@ function createAssistant() {
 
     selectedRepoPaths.value = normalizeRepoSelections([...selectedRepoPaths.value, ...fallbackRepos.map((repo) => repo.path)]);
     const previousDrafts = new Map(projectDrafts.value.map((draft) => [draft.key, draft]));
-    const loadedDrafts = fallbackRepos.map((repo) => {
+    const loadedDrafts = fallbackRepos.map((repo, index) => {
       const previous = previousDrafts.get(repo.path);
       const projectOptionId = previous?.projectOptionId || config.feishuForm.projectOptionId || '';
       return createProjectReportDraft(repo, {
         ...previous,
         repo,
         report: record.report,
+        manualWorkContent: restoredManualWorkContent(record.manualWorkContent, index),
         reportId: record.id,
         lastReportResult: null,
         projectOptionId,
@@ -176,6 +179,9 @@ function createAssistant() {
     const loadedKeys = new Set(loadedDrafts.map((draft) => draft.key));
     projectDrafts.value = [...projectDrafts.value.filter((draft) => !loadedKeys.has(draft.key)), ...loadedDrafts];
     activeDraftKey.value = loadedDrafts[0]?.key ?? activeDraftKey.value;
+    if (fallbackRepos.length > 1 && record.manualWorkContent?.trim()) {
+      ElMessage.warning('历史合并日报的补充工作已放入首个项目，请核对归属后再生成');
+    }
   }
 
   let repoState: ReturnType<typeof createRepoState>;

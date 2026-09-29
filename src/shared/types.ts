@@ -159,6 +159,7 @@ export interface AppConfig {
 export type ReportPromptStyle = 'concise' | 'standard' | 'detailed';
 
 export interface GenerateReportParams {
+  requestId?: string;
   repoPaths: string[];
   date: string;
   startDateTime?: string;
@@ -554,6 +555,11 @@ export interface SaveDailyReportPayload {
   generatedAt?: string;
   rawInput?: ReportResult['rawInput'];
   structuredJson?: StructuredReportMetadata;
+}
+
+export interface SyncFeishuDailyResult {
+  success: true;
+  warning?: string;
 }
 
 export interface SyncFeishuDailyPayload {

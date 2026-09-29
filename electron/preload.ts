@@ -33,6 +33,7 @@ import type {
   StorageInfo,
   SyncLogRecord,
   SyncFeishuDailyPayload,
+  SyncFeishuDailyResult,
   WeeklyReflectionActionStatusUpdate,
   WeeklyReflectionParams,
   WeeklyReflectionProject,
@@ -52,6 +53,7 @@ contextBridge.exposeInMainWorld('api', {
   selectDirectory: () => ipcRenderer.invoke('dialog:select-directory') as Promise<string | null>,
   scanRepositories: (workspaceDir: string) => ipcRenderer.invoke('repo:scan', workspaceDir) as Promise<RepoInfo[]>,
   generateReport: (params: GenerateReportParams) => ipcRenderer.invoke('report:generate', params) as Promise<ReportResult>,
+  cancelReportGeneration: (requestId: string) => ipcRenderer.invoke('report:cancel-generation', requestId) as Promise<void>,
   loginFeishu: (payload: FeishuLoginPayload) => ipcRenderer.invoke('feishu:login', payload) as Promise<FeishuAuthSnapshot>,
   openFeishuSubmissionRecords: (payload: FeishuSubmissionRecordsPayload) =>
     ipcRenderer.invoke('feishu:open-submission-records', payload) as Promise<boolean>,
@@ -63,7 +65,7 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('feishu:list-projects', payload) as Promise<FeishuProjectOption[]>,
   testSubmitFeishu: (payload: FeishuTestSubmitPayload) =>
     ipcRenderer.invoke('feishu:test-submit', payload) as Promise<FeishuSubmitResult>,
-  syncFeishuDaily: (payload: SyncFeishuDailyPayload) => ipcRenderer.invoke('report:sync-feishu', payload) as Promise<boolean>,
+  syncFeishuDaily: (payload: SyncFeishuDailyPayload) => ipcRenderer.invoke('report:sync-feishu', payload) as Promise<SyncFeishuDailyResult>,
   getAutoSyncState: () => ipcRenderer.invoke('auto-sync:get-state') as Promise<AutoSyncState>,
   validateAutoSync: (config: AppConfig, taskId?: string) =>
     ipcRenderer.invoke('auto-sync:validate', config, taskId) as Promise<AutoSyncValidationResult>,

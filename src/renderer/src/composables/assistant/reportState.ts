@@ -178,7 +178,7 @@ export function createReportState(ctx: ReportStateContext) {
     pushing.value = true;
     try {
       await persistConfigBeforeAction('同步飞书');
-      await window.api.syncFeishuDaily({
+      const result = await window.api.syncFeishuDaily({
         config: getConfigPayload().feishuForm,
         report: content,
         date: form.date,
@@ -187,8 +187,13 @@ export function createReportState(ctx: ReportStateContext) {
         reportId: currentReportId.value ?? undefined,
         triggerType: 'manual',
       });
-      ElMessage.success('已同步到飞书日报表');
-      await refreshLocalData();
+      if (result.warning) ElMessage.warning(result.warning);
+      else ElMessage.success('已同步到飞书日报表');
+      try {
+        await refreshLocalData();
+      } catch {
+        ElMessage.warning('已提交飞书，本地记录刷新失败，请勿重复提交');
+      }
     } catch (error) {
       ElMessage.error(error instanceof Error ? error.message : '同步飞书失败');
     } finally {

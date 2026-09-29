@@ -11,7 +11,7 @@ import {
 } from 'lucide-vue-next';
 
 type GenerationCheckAction = '' | 'config' | 'ai';
-type DraftGenerateStatus = 'idle' | 'generating' | 'success' | 'failed';
+type DraftGenerateStatus = 'idle' | 'generating' | 'success' | 'failed' | 'cancelled';
 type DraftPublishStatus = 'idle' | 'publishing' | 'success' | 'failed';
 
 interface GenerationCheck {
@@ -53,6 +53,7 @@ const props = defineProps<{
   readinessDetail: string;
   generateButtonLabel: string;
   loading: boolean;
+  cancelling: boolean;
   generationChecks: GenerationCheck[];
   metrics: MetricItem[];
   activeHasReport: boolean;
@@ -65,6 +66,7 @@ const emit = defineEmits<{
   (e: 'update-draft-report', key: string, value: string): void;
   (e: 'update:manual-work-content', value: string): void;
   (e: 'generate-all'): void;
+  (e: 'cancel-generation'): void;
   (e: 'generate-current'): void;
   (e: 'save-current'): void;
   (e: 'save-all'): void;
@@ -93,6 +95,7 @@ const reportModel = computed({
 
 function getTabStatusLabel(item: ProjectReportDraft) {
   if (item.generateStatus === 'generating') return '生成中';
+  if (item.generateStatus === 'cancelled') return '已取消';
   if (item.publishStatus === 'publishing') return '发布中';
   if (item.publishStatus === 'success') return '已发布';
   if (item.publishStatus === 'failed') return '发布失败';
@@ -120,10 +123,11 @@ function getTabStatusType(item: ProjectReportDraft) {
     </div>
 
     <div class="field manual-work-field">
-      <label>补充工作内容（可选）</label>
+      <label>{{ activeDraft?.repoName ?? '请选择项目' }} · 补充工作内容（仅用于当前项目）</label>
       <el-input
         :model-value="manualWorkContent"
         :readonly="loading"
+        :disabled="!activeDraft"
         type="textarea"
         :rows="3"
         :maxlength="2000"
@@ -146,7 +150,8 @@ function getTabStatusType(item: ProjectReportDraft) {
 
     <div v-if="loading" class="report-generation-status" role="status" aria-live="polite">
       <FileText :size="18" aria-hidden="true" />
-      <span>{{ generationDetail }}</span>
+      <span>{{ cancelling ? '正在取消生成，已完成的日报将保留' : generationDetail }}</span>
+      <el-button :disabled="cancelling" @click="emit('cancel-generation')">{{ cancelling ? '正在取消' : '取消生成' }}</el-button>
       <div v-if="generatingDrafts.length" class="generation-light" role="progressbar" aria-label="日报生成中" />
     </div>
 

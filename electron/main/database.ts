@@ -1,6 +1,6 @@
 import { app, safeStorage } from 'electron';
 import { existsSync } from 'node:fs';
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import initSqlJs from 'sql.js';
 import { APP_EDITION, APP_EDITION_LABEL, APP_PRODUCT_NAME } from '../../src/shared/edition.js';
@@ -27,6 +27,8 @@ import { ensureWeeklySummarySchema } from './weeklySummaryStore.js';
 import { backfillTimelineSnapshots, ensureTimelineSchema, upsertTimelineSnapshot } from './timeline.js';
 
 export let sqlDatabase: import('sql.js').Database | null = null;
+let databaseInitialization: Promise<import('sql.js').Database> | null = null;
+let databaseWriteQueue: Promise<void> = Promise.resolve();
 
 
 export function countRawInputFiles(rawInput?: ReportResult['rawInput']) {
@@ -34,8 +36,20 @@ export function countRawInputFiles(rawInput?: ReportResult['rawInput']) {
 }
 
 
-export async function getDatabase() {
+export async function getDatabase(): Promise<import('sql.js').Database> {
+  if (databaseInitialization) return databaseInitialization;
   if (sqlDatabase) return sqlDatabase;
+  databaseInitialization = initializeDatabase().catch((error) => {
+    sqlDatabase?.close();
+    sqlDatabase = null;
+    throw error;
+  }).finally(() => {
+    databaseInitialization = null;
+  });
+  return databaseInitialization;
+}
+
+async function initializeDatabase() {
   await ensureConfigDir();
   const SQL = await initSqlJs({
     locateFile: (file) => {
@@ -166,10 +180,21 @@ export async function getDatabase() {
 }
 
 
-export async function persistDatabase() {
-  if (!sqlDatabase) return;
-  await ensureConfigDir();
-  await writeFile(getDatabasePath(), sqlDatabase.export());
+export function persistDatabase(): Promise<void> {
+  const save = databaseWriteQueue.then(async () => {
+    if (!sqlDatabase) return;
+    await ensureConfigDir();
+    const databasePath = getDatabasePath();
+    const temporaryPath = `${databasePath}.tmp`;
+    try {
+      await writeFile(temporaryPath, sqlDatabase.export());
+      await rename(temporaryPath, databasePath);
+    } finally {
+      await rm(temporaryPath, { force: true }).catch(() => {});
+    }
+  });
+  databaseWriteQueue = save.catch(() => {});
+  return save;
 }
 
 

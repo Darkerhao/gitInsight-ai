@@ -278,7 +278,7 @@ async function runAutoSyncTask(
       };
     }
 
-    await syncFeishuDaily({
+    const syncResult = await syncFeishuDaily({
       config: {
         ...mergeFeishuFormConfig(config),
         projectOptionId: task.projectOptionId,
@@ -292,8 +292,12 @@ async function runAutoSyncTask(
       triggerType: trigger,
     });
 
-    const message = `已自动同步 ${result.commits.length} 条记录到飞书日报表（${result.timeRange.label}）`;
-    await updateAutoSyncTaskStatus(task.id, 'success', message, { runKey, ranAt, scheduled: isScheduled, success: true });
+    let message = syncResult.warning || `已自动同步 ${result.commits.length} 条记录到飞书日报表（${result.timeRange.label}）`;
+    try {
+      await updateAutoSyncTaskStatus(task.id, 'success', message, { runKey, ranAt, scheduled: isScheduled, success: true });
+    } catch {
+      message = '飞书日报已提交，自动同步状态保存失败，请先核对提交记录，勿重复提交';
+    }
     return {
       taskId: task.id,
       taskName: task.name,

@@ -7,7 +7,9 @@ import type {
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
   SyncFeishuDailyPayload,
+  SyncFeishuDailyResult,
 } from '../../src/shared/types.js';
+import { fetchWithTimeout } from './networkRequest.js';
 import { normalizeWorkHours } from './config.js';
 import { recordErrorLog, recordSyncLog } from './database.js';
 import {
@@ -270,7 +272,7 @@ export async function fetchFeishuContentMeta(formConfig: FeishuFormConfig, label
     headers.cookie = cookie;
   }
 
-  const response = await fetch(getFeishuContentMetaUrl(formConfig), {
+  const response = await fetchWithTimeout(getFeishuContentMetaUrl(formConfig), {
     headers: {
       ...headers,
     },
@@ -344,7 +346,7 @@ async function submitFeishuTestForm(payload: FeishuTestSubmitPayload): Promise<F
   const requestId = `gitinsight-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const auth = await resolveFeishuAuth(formConfig, '飞书测试提交失败');
 
-  const response = await fetch(endpoint, {
+  const response = await fetchWithTimeout(endpoint, {
     method: 'POST',
     headers: {
       accept: 'application/json, text/plain, */*',
@@ -400,7 +402,7 @@ export async function testSubmitFeishuForm(payload: FeishuTestSubmitPayload): Pr
 }
 
 
-export async function syncFeishuDaily(payload: SyncFeishuDailyPayload) {
+export async function syncFeishuDaily(payload: SyncFeishuDailyPayload): Promise<SyncFeishuDailyResult> {
   const formConfig: FeishuFormConfig = {
     ...DEFAULT_FEISHU_FORM_CONFIG,
     ...payload.config,
@@ -410,7 +412,7 @@ export async function syncFeishuDaily(payload: SyncFeishuDailyPayload) {
     const auth = await resolveFeishuAuth(formConfig, '同步飞书日报失败');
     const requestId = `gitinsight-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-    const response = await fetch(auth.endpoint, {
+    const response = await fetchWithTimeout(auth.endpoint, {
       method: 'POST',
       headers: {
         accept: 'application/json, text/plain, */*',
@@ -427,6 +429,11 @@ export async function syncFeishuDaily(payload: SyncFeishuDailyPayload) {
         data: JSON.stringify(buildFeishuFormData({ ...payload, config: formConfig })),
         preUploadEnable: false,
       }),
+    }).catch((error: unknown) => {
+      if (error instanceof Error && error.name === 'TimeoutError') {
+        throw new Error('飞书提交请求超时，提交结果尚未确认，请先核对飞书提交记录，勿直接重复提交', { cause: error });
+      }
+      throw error;
     });
 
     const detail = await response.text();
@@ -445,6 +452,22 @@ export async function syncFeishuDaily(payload: SyncFeishuDailyPayload) {
       throw new Error(`同步飞书日报失败：${result.msg || `code=${result.code}`}`);
     }
 
+  } catch (error) {
+    await Promise.allSettled([
+      recordSyncLog({
+        reportId: payload.reportId,
+        date: payload.date,
+        triggerType: payload.triggerType || 'manual',
+        status: 'failed',
+        message: error instanceof Error ? error.message : '同步飞书失败',
+        durationMs: Date.now() - startedAt,
+      }),
+      recordErrorLog('syncFeishuDaily', error),
+    ]);
+    throw error;
+  }
+
+  try {
     await recordSyncLog({
       reportId: payload.reportId,
       date: payload.date,
@@ -453,18 +476,8 @@ export async function syncFeishuDaily(payload: SyncFeishuDailyPayload) {
       message: '同步飞书日报成功',
       durationMs: Date.now() - startedAt,
     });
-    return true;
-  } catch (error) {
-    await recordSyncLog({
-      reportId: payload.reportId,
-      date: payload.date,
-      triggerType: payload.triggerType || 'manual',
-      status: 'failed',
-      message: error instanceof Error ? error.message : '同步飞书失败',
-      durationMs: Date.now() - startedAt,
-    });
-    await recordErrorLog('syncFeishuDaily', error);
-    throw error;
+    return { success: true };
+  } catch {
+    return { success: true, warning: '飞书日报已提交，本地同步记录保存失败，请勿重复提交。' };
   }
 }
-
