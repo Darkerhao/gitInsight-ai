@@ -403,6 +403,7 @@ const scene: SceneFn = (api) => {
 }
 
 @keyframes er-camera {
+  0%, 90% { opacity: 1; }
   0% { transform: scale(1.07); }
   13% { transform: scale(1.02); }
   30% { transform: scale(1.035); }

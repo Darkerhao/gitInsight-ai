@@ -255,6 +255,7 @@ const scene: SceneFn = (api) => {
 
 /* 组件自带镜头：吸入缓推 → 闪爆急胀失焦 → 隧道巡航回稳 → 驶离淡出 */
 @keyframes space-camera {
+  0%, 90% { opacity: 1; }
   0% { filter: blur(0); transform: scale(1.14); }
   18% { filter: blur(0.5px); transform: scale(0.96); }
   29% { filter: blur(2.5px); transform: scale(0.78); }

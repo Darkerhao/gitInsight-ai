@@ -319,6 +319,7 @@ const scene: SceneFn = (api) => {
 }
 
 @keyframes cs-camera {
+  0%, 90% { opacity: 1; }
   0% { transform: translateX(1.6%) scale(1.05); }
   22% { transform: translateX(-0.6%) scale(1.01); }
   46% { transform: translateX(0.4%) scale(1.02); }

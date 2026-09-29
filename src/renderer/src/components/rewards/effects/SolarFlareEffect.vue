@@ -288,6 +288,7 @@ const scene: SceneFn = (api) => {
 }
 
 @keyframes flare-camera {
+  90% { opacity: 1; }
   0% { opacity: 0; transform: scale(1.08); }
   8% { opacity: 1; }
   36% { transform: scale(1); }

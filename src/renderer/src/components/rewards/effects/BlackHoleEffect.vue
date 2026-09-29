@@ -283,6 +283,7 @@ const scene: SceneFn = (api) => {
 }
 
 @keyframes bh-camera {
+  0%, 90% { opacity: 1; }
   0% { transform: scale(1.13); }
   22% { transform: scale(1.05); }
   40% { transform: scale(1.01); }

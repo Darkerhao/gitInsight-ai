@@ -441,6 +441,7 @@ const scene: SceneFn = (api) => {
 }
 
 @keyframes ct-camera {
+  0%, 90% { opacity: 1; }
   0% { transform: scale(1.08) translateY(1.2%); }
   20% { transform: scale(1.04) translateY(0.6%); }
   62% { transform: scale(1.01) translateY(0); }

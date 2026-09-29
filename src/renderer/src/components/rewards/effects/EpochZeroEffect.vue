@@ -407,6 +407,7 @@ const scene: SceneFn = (api) => {
 }
 
 @keyframes ez-camera {
+  0%, 90% { opacity: 1; }
   0% { transform: scale(1.05); }
   21% { transform: scale(1.008); }
   24% { transform: scale(1.022); }

@@ -4,7 +4,6 @@ import { Coins, Gift, Search, Sparkles, Zap } from 'lucide-vue-next';
 import { ElMessage } from 'element-plus';
 import RewardEffectOverlay from '@/components/rewards/RewardEffectOverlay.vue';
 import {
-  EFFECT_DURATIONS,
   EFFECT_OPTION_MAP,
   EFFECT_OPTIONS,
   EFFECT_TIERS,
@@ -28,10 +27,10 @@ const coinPanelVisible = ref(false);
 const spendingEffect = ref<RewardEffectKey | null>(null);
 const activeEffect = ref<RewardEffectKey | null>(null);
 const effectSeed = ref(0);
+const playbackError = ref('');
 const effectQuery = ref('');
 const activeTier = ref<EffectTierFilter>('all');
 const inspectedEffectKey = ref<RewardEffectKey>(effectTierGroups[0]?.options[0]?.key ?? 'fireworks');
-let effectTimer: number | null = null;
 let effectFrame: number | null = null;
 let unsubscribeWalletUpdated: (() => void) | null = null;
 
@@ -158,11 +157,7 @@ async function loadWalletSnapshot() {
 }
 
 function stopEffect() {
-  if (effectTimer) {
-    window.clearTimeout(effectTimer);
-    effectTimer = null;
-  }
-
+  effectSeed.value += 1;
   if (effectFrame) {
     window.cancelAnimationFrame(effectFrame);
     effectFrame = null;
@@ -171,17 +166,19 @@ function stopEffect() {
   activeEffect.value = null;
 }
 
+function returnToEffectLibrary() {
+  stopEffect();
+  coinPanelVisible.value = true;
+}
+
 function startEffect(effect: RewardEffectKey) {
   stopEffect();
   coinPanelVisible.value = false;
 
-  effectSeed.value += 1;
   effectFrame = window.requestAnimationFrame(() => {
     activeEffect.value = effect;
     effectFrame = null;
   });
-
-  effectTimer = window.setTimeout(stopEffect, EFFECT_DURATIONS[effect]);
 }
 
 async function runDailyCheckin() {
@@ -207,6 +204,7 @@ async function runDailyCheckin() {
 }
 
 async function playEffect(effect: RewardEffectKey) {
+  if (spendingEffect.value) return;
   const option = EFFECT_OPTION_MAP[effect];
   if (!option) return;
 
@@ -215,17 +213,20 @@ async function playEffect(effect: RewardEffectKey) {
     return;
   }
 
+  playbackError.value = '';
   spendingEffect.value = effect;
+  const requestSeed = effectSeed.value;
   try {
     applyWalletSnapshot(await window.api.spendCheckinCoins({
       amount: option.cost,
       reason: `启动视觉协议：${option.label}`,
       refKey: effect,
     }));
-    startEffect(effect);
-    ElMessage.success(`已使用 ${option.cost} 甲币，已启用「${option.label}」`);
+    if (effectSeed.value === requestSeed) startEffect(effect);
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '甲币消费失败');
+    const message = error instanceof Error ? error.message : '甲币消费失败';
+    if (activeEffect.value) playbackError.value = message;
+    else ElMessage.error(message);
   } finally {
     spendingEffect.value = null;
   }
@@ -396,7 +397,15 @@ onBeforeUnmount(() => {
     </div>
   </el-popover>
 
-  <RewardEffectOverlay :effect="activeEffect" :seed="effectSeed" @close="stopEffect" />
+  <RewardEffectOverlay
+    :effect="activeEffect"
+    :seed="effectSeed"
+    :can-replay="!!activeEffect && wallet.coins >= EFFECT_OPTION_MAP[activeEffect].cost"
+    :replaying="!!spendingEffect"
+    :replay-error="playbackError"
+    @close="returnToEffectLibrary"
+    @replay="activeEffect && playEffect(activeEffect)"
+  />
 </template>
 
 <style lang="scss">

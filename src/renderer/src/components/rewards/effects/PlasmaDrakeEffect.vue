@@ -390,6 +390,7 @@ const scene: SceneFn = (api) => {
 }
 
 @keyframes drake-camera {
+  0%, 90% { opacity: 1; }
   0% { transform: translateX(-1.4%) scale(1.06); }
   24% { transform: translateX(1%) scale(1.02); }
   48% { transform: translateX(-0.8%) scale(1.04); }

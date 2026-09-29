@@ -37,8 +37,8 @@ export class PostProcessing {
   }
 
   resize(context: ExplosionContext) {
+    this.composer.setPixelRatio(context.size.pixelRatio);
     this.composer.setSize(context.size.width, context.size.height);
-    this.bloomPass.setSize(context.size.width, context.size.height);
     this.heatPass.uniforms.uResolution.value.set(context.size.width, context.size.height);
   }
 
@@ -55,6 +55,7 @@ export class PostProcessing {
   }
 
   dispose() {
+    for (const pass of this.composer.passes) pass.dispose();
     this.composer.dispose();
   }
 }

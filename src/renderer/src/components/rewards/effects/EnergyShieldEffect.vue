@@ -252,6 +252,7 @@ const scene: SceneFn = (api) => {
 }
 
 @keyframes shield-camera {
+  90% { opacity: 1; }
   0% { opacity: 0; transform: scale(1.08); }
   9% { opacity: 1; }
   28% { transform: scale(1); }

@@ -269,6 +269,7 @@ const scene: SceneFn = (api) => {
 
 /* 与幕次同步的内容层微镜头：呼吸 → 坍缩吸入 → 爆发反弹 → 星云凝视 */
 @keyframes sn-camera {
+  0%, 90% { opacity: 1; }
   0% { transform: scale(1.06); }
   30% { transform: scale(1); }
   35% { transform: scale(0.985); }

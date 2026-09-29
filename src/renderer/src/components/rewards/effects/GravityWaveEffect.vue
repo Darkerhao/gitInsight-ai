@@ -308,6 +308,7 @@ const scene: SceneFn = (api) => {
 }
 
 @keyframes gw-camera {
+  0%, 90% { opacity: 1; }
   0% { transform: scale(1.08); }
   30% { transform: scale(1.015); }
   40% { transform: scale(0.985); }

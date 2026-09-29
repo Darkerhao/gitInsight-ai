@@ -68,22 +68,11 @@ import VacuumDecayEffect from '@/components/rewards/effects/VacuumDecayEffect.vu
 import { EFFECT_OPTION_MAP, EFFECT_TIERS } from '@/components/rewards/rewardEffects';
 import type { RewardEffectKey } from '@/components/rewards/rewardEffects';
 
-/**
- * NEXUS 统一电影舞台：所有特效在同一套「深空指挥舰桥」里演出。
- * 舞台按 rewardEffects.ts 的分级与镜头数据施加统一的
- * 开幕（光圈展开 + 能量注入）→ 相机运动 → 后期处理（扫描线/噪点/
- * 色差/暗角/电影黑边）→ 协议 HUD → 闭幕（世界回收）。
- * 特效组件只负责内容层，屏幕语言全部由舞台数据驱动。
- */
+import { ArrowLeft, Eye, EyeOff, Orbit, RotateCcw, X } from 'lucide-vue-next';
+import { CinemaEnvironment } from './engine/CinemaEnvironment';
 
-const props = defineProps<{
-  effect: RewardEffectKey | null;
-  seed: number;
-}>();
-
-const emit = defineEmits<{
-  close: [];
-}>();
+const props = defineProps<{ effect: RewardEffectKey | null; seed: number; canReplay?: boolean; replaying?: boolean; replayError?: string }>();
+const emit = defineEmits<{ close: []; replay: [] }>();
 
 const effectComponentMap: Record<RewardEffectKey, Component> = {
   fireworks: FireworksEffect,
@@ -151,1713 +140,388 @@ const effectComponentMap: Record<RewardEffectKey, Component> = {
   celestialThrone: CelestialThroneEffect,
 };
 
-const activeComponent = computed(() => (props.effect ? effectComponentMap[props.effect] : null));
-const option = computed(() => (props.effect ? EFFECT_OPTION_MAP[props.effect] : null));
-const tierMeta = computed(() => (option.value ? EFFECT_TIERS[option.value.tier] : null));
-
-const SHAKE_AMPLITUDES = ['0px', '2.5px', '4.5px'] as const;
-const PHASE_LABELS = {
-  entry: '接入',
-  loop: '演出',
-  exit: '回收',
-} as const;
-
-const stageClasses = computed(() => {
-  if (!option.value) return [];
-  return [
-    `is-${option.value.key}`,
-    `fx-tier-${option.value.tier}`,
-    `fx-cam-${option.value.camera}`,
-    option.value.shake > 0 ? 'fx-has-shake' : '',
-    option.value.apex ? 'fx-apex' : '',
-  ].filter(Boolean);
+const activeComponent = computed(() => props.effect ? effectComponentMap[props.effect] : null);
+const option = computed(() => props.effect ? EFFECT_OPTION_MAP[props.effect] : null);
+const tierMeta = computed(() => option.value ? EFFECT_TIERS[option.value.tier] : null);
+const duration = computed(() => {
+  const phases = option.value?.phases;
+  return phases ? phases.entry + phases.loop + phases.exit : 0;
 });
+const stageVars = computed(() => ({
+  '--fx-accent': option.value?.accent,
+  '--fx-secondary': option.value?.secondary,
+  '--fx-ms': `${duration.value}ms`,
+  '--fx-entry-ms': `${option.value?.phases.entry ?? 0}ms`,
+  '--fx-exit-ms': `${option.value?.phases.exit ?? 0}ms`,
+  '--fx-exit-delay': `${duration.value - (option.value?.phases.exit ?? 0)}ms`,
+}));
 
-const stageVars = computed(() => {
-  if (!option.value) return {};
-  const { phases, accent, secondary, shake } = option.value;
-  const total = phases.entry + phases.loop + phases.exit;
-  return {
-    '--fx-accent': accent,
-    '--fx-secondary': secondary,
-    '--fx-ms': `${total}ms`,
-    '--fx-entry-ms': `${phases.entry}ms`,
-    '--fx-exit-ms': `${phases.exit}ms`,
-    '--fx-exit-delay': `${total - phases.exit}ms`,
-    '--fx-shake-amp': SHAKE_AMPLITUDES[shake],
-  };
+const stageRef = ref<HTMLElement | null>(null);
+const canvasRef = ref<HTMLCanvasElement | null>(null);
+const elapsed = ref(0);
+const finished = ref(false);
+const immersive = ref(false);
+const reducedMotion = ref(false);
+const phaseLabel = computed(() => {
+  if (finished.value) return '演出完成';
+  if (reducedMotion.value) return '静态欣赏';
+  if (elapsed.value < (option.value?.phases.entry ?? 0)) return '正在入场';
+  if (elapsed.value >= duration.value - (option.value?.phases.exit ?? 0)) return '余韵';
+  return '正在演出';
 });
+const progress = computed(() => duration.value ? Math.min(100, elapsed.value / duration.value * 100) : 0);
+const remaining = computed(() => `${Math.max(0, (duration.value - elapsed.value) / 1000).toFixed(1)}s`);
+let environment: CinemaEnvironment | null = null;
+let frame = 0;
+let restoreFocus: HTMLElement | null = null;
+let previousOverflow = '';
+let appWasInert = false;
+let playerOpen = false;
 
-const seedLabel = computed(() => String(props.seed % 10000).padStart(4, '0'));
-const durationLabel = computed(() => {
-  if (!option.value) return '0.0s';
-  const { phases } = option.value;
-  return `${((phases.entry + phases.loop + phases.exit) / 1000).toFixed(1)}s`;
-});
-const overlayLabel = computed(() => (option.value ? `${option.value.label}开屏动画` : '奖励开屏动画'));
-const phaseSegments = computed(() => {
-  if (!option.value) return [];
-  return (Object.entries(option.value.phases) as Array<[keyof typeof PHASE_LABELS, number]>).map(([key, ms]) => ({
-    key,
-    ms,
-    label: PHASE_LABELS[key],
-  }));
-});
-
-const spatialMediumCanvas = ref<HTMLCanvasElement | null>(null);
-let spatialFrame: number | null = null;
-let spatialGl: WebGLRenderingContext | null = null;
-let spatialProgram: WebGLProgram | null = null;
-let spatialBuffer: WebGLBuffer | null = null;
-
-const SPATIAL_VERTEX_SHADER = `
-attribute vec2 aPosition;
-void main() {
-  gl_Position = vec4(aPosition, 0.0, 1.0);
-}
-`;
-
-const SPATIAL_FRAGMENT_SHADER = `
-precision highp float;
-
-uniform vec2 uResolution;
-uniform float uTime;
-uniform float uSeed;
-uniform float uIntensity;
-uniform vec3 uAccent;
-uniform vec3 uSecondary;
-
-float hash21(vec2 p) {
-  p = fract(p * vec2(123.34, 456.21));
-  p += dot(p, p + 45.32 + uSeed);
-  return fract(p.x * p.y);
+function stopScene() {
+  window.cancelAnimationFrame(frame);
+  frame = 0;
+  environment?.dispose();
+  environment = null;
 }
 
-float noise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(
-    mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
-    mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0)), f.x),
-    f.y
-  );
+function releasePlayer() {
+  stopScene();
+  if (!playerOpen) return;
+  playerOpen = false;
+  document.body.style.overflow = previousOverflow;
+  const app = document.getElementById('app');
+  if (app) app.inert = appWasInert;
+  window.removeEventListener('keydown', handleKeydown);
+  if (restoreFocus?.isConnected) restoreFocus.focus({ preventScroll: true });
+  restoreFocus = null;
 }
 
-float fbm(vec2 p) {
-  float value = 0.0;
-  float amplitude = 0.5;
-  mat2 rotation = mat2(0.8, -0.6, 0.6, 0.8);
-  for (int i = 0; i < 5; i++) {
-    value += amplitude * noise(p);
-    p = rotation * p * 2.03 + 0.17;
-    amplitude *= 0.5;
-  }
-  return value;
-}
-
-void main() {
-  vec2 frag = gl_FragCoord.xy;
-  vec2 uv = (frag * 2.0 - uResolution.xy) / min(uResolution.x, uResolution.y);
-  float t = uTime * 0.18;
-  float radius = length(uv);
-  float angle = atan(uv.y, uv.x);
-
-  float medium = fbm(uv * 1.45 + vec2(t, -t * 0.62) + uSeed * 0.013);
-  float detail = fbm(uv * 3.1 - vec2(t * 0.42, t * 0.7));
-  float tidal = sin(radius * 16.0 - uTime * 1.75 + medium * 5.2 + uSeed) * 0.5 + 0.5;
-  float ring = exp(-abs(radius - (0.58 + sin(uTime * 0.36 + uSeed) * 0.06)) * 19.0);
-  float spectral = exp(-abs(radius - 0.92) * 8.0) * (0.55 + 0.45 * sin(angle * 3.0 - uTime));
-
-  vec2 starCell = floor((uv + 2.0) * 54.0);
-  vec2 starUv = fract((uv + 2.0) * 54.0) - 0.5;
-  float starSeed = hash21(starCell);
-  float stars = smoothstep(0.045, 0.0, length(starUv)) * step(0.965, starSeed);
-  stars *= 0.42 + 0.58 * sin(uTime * (1.0 + starSeed * 2.4) + starSeed * 19.0);
-
-  float nebula = smoothstep(0.42, 0.9, medium * 0.72 + detail * 0.38);
-  float centerMask = smoothstep(1.72, 0.08, radius);
-  vec3 color = mix(uSecondary, uAccent, medium + tidal * 0.18);
-  color *= nebula * 0.52 + ring * 0.42 + spectral * 0.22;
-  color += mix(uAccent, vec3(1.0), 0.52) * stars * 1.35;
-
-  float alpha = (nebula * 0.2 + ring * 0.12 + spectral * 0.08 + stars * 0.5) * centerMask * uIntensity;
-  gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.52));
-}
-`;
-
-function compileSpatialShader(gl: WebGLRenderingContext, type: number, source: string) {
-  const shader = gl.createShader(type);
-  if (!shader) throw new Error('Unable to create spatial medium shader');
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    const message = gl.getShaderInfoLog(shader) ?? 'Unknown shader compilation error';
-    gl.deleteShader(shader);
-    throw new Error(message);
-  }
-  return shader;
-}
-
-function colorToRgb(color: string): [number, number, number] {
-  const value = color.replace('#', '');
-  if (!/^[0-9a-f]{6}$/i.test(value)) return [0.38, 0.65, 0.98];
-  return [0, 2, 4].map((offset) => Number.parseInt(value.slice(offset, offset + 2), 16) / 255) as [number, number, number];
-}
-
-function resizeSpatialMedium() {
-  if (!spatialGl || !spatialMediumCanvas.value) return;
-  const canvas = spatialMediumCanvas.value;
-  const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
-  const width = Math.max(1, Math.floor(window.innerWidth * pixelRatio));
-  const height = Math.max(1, Math.floor(window.innerHeight * pixelRatio));
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-  }
-  spatialGl.viewport(0, 0, width, height);
-}
-
-function stopSpatialMedium() {
-  if (spatialFrame !== null) {
-    window.cancelAnimationFrame(spatialFrame);
-    spatialFrame = null;
-  }
-  window.removeEventListener('resize', resizeSpatialMedium);
-  if (spatialGl && spatialBuffer) spatialGl.deleteBuffer(spatialBuffer);
-  if (spatialGl && spatialProgram) spatialGl.deleteProgram(spatialProgram);
-  spatialBuffer = null;
-  spatialProgram = null;
-  spatialGl = null;
-}
-
-function startSpatialMedium() {
-  stopSpatialMedium();
-  const canvas = spatialMediumCanvas.value;
-  const activeOption = option.value;
-  const activeTier = tierMeta.value;
-  if (!canvas || !activeOption || !activeTier || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-  const gl = canvas.getContext('webgl', {
-    alpha: true,
-    antialias: false,
-    depth: false,
-    powerPreference: 'high-performance',
-    premultipliedAlpha: false,
-    preserveDrawingBuffer: false,
-    stencil: false,
-  });
-  if (!gl) return;
-
-  try {
-    const vertexShader = compileSpatialShader(gl, gl.VERTEX_SHADER, SPATIAL_VERTEX_SHADER);
-    const fragmentShader = compileSpatialShader(gl, gl.FRAGMENT_SHADER, SPATIAL_FRAGMENT_SHADER);
-    const program = gl.createProgram();
-    if (!program) throw new Error('Unable to create spatial medium program');
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
-    gl.deleteShader(vertexShader);
-    gl.deleteShader(fragmentShader);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      throw new Error(gl.getProgramInfoLog(program) ?? 'Unknown spatial medium link error');
-    }
-
-    const buffer = gl.createBuffer();
-    if (!buffer) throw new Error('Unable to create spatial medium buffer');
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-    gl.useProgram(program);
-    const position = gl.getAttribLocation(program, 'aPosition');
-    gl.enableVertexAttribArray(position);
-    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-    spatialGl = gl;
-    spatialProgram = program;
-    spatialBuffer = buffer;
-    resizeSpatialMedium();
-    window.addEventListener('resize', resizeSpatialMedium, { passive: true });
-
-    const resolutionUniform = gl.getUniformLocation(program, 'uResolution');
-    const timeUniform = gl.getUniformLocation(program, 'uTime');
-    const seedUniform = gl.getUniformLocation(program, 'uSeed');
-    const intensityUniform = gl.getUniformLocation(program, 'uIntensity');
-    const accentUniform = gl.getUniformLocation(program, 'uAccent');
-    const secondaryUniform = gl.getUniformLocation(program, 'uSecondary');
-    const accent = colorToRgb(activeOption.accent);
-    const secondary = colorToRgb(activeOption.secondary);
-    const intensity = 0.72 + (activeTier.grade - 1) * 0.26 + (activeOption.apex ? 0.18 : 0);
-    const startedAt = performance.now();
-
-    const render = (now: number) => {
-      if (!spatialGl || !spatialProgram || !spatialMediumCanvas.value) return;
-      const target = spatialMediumCanvas.value;
-      spatialGl.useProgram(spatialProgram);
-      spatialGl.uniform2f(resolutionUniform, target.width, target.height);
-      spatialGl.uniform1f(timeUniform, (now - startedAt) / 1000);
-      spatialGl.uniform1f(seedUniform, (props.seed % 997) / 97);
-      spatialGl.uniform1f(intensityUniform, intensity);
-      spatialGl.uniform3f(accentUniform, accent[0], accent[1], accent[2]);
-      spatialGl.uniform3f(secondaryUniform, secondary[0], secondary[1], secondary[2]);
-      spatialGl.clearColor(0, 0, 0, 0);
-      spatialGl.clear(spatialGl.COLOR_BUFFER_BIT);
-      spatialGl.drawArrays(spatialGl.TRIANGLES, 0, 3);
-      spatialFrame = window.requestAnimationFrame(render);
-    };
-    spatialFrame = window.requestAnimationFrame(render);
-  } catch (error) {
-    console.warn('[NEXUS] Spatial medium fallback:', error);
-    stopSpatialMedium();
-  }
-}
-
-function requestClose() {
-  emit('close');
+function movePointer(event: PointerEvent) {
+  if (reducedMotion.value) return;
+  environment?.setPointer(event.clientX / window.innerWidth * 2 - 1, 1 - event.clientY / window.innerHeight * 2);
 }
 
 function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && props.effect) {
-    requestClose();
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    emit('close');
+  } else if (event.key.toLowerCase() === 'h' && !event.ctrlKey && !event.metaKey && !event.altKey && !finished.value) {
+    immersive.value = !immersive.value;
+  } else if (event.key === 'Tab') {
+    const buttons = Array.from(stageRef.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []);
+    if (!buttons.length) return;
+    const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    event.preventDefault();
+    const next = index < 0 ? (event.shiftKey ? buttons.length - 1 : 0) : (index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length;
+    buttons[next].focus();
   }
 }
 
-watch(
-  () => props.effect,
-  async (effect) => {
-    if (effect) {
-      window.addEventListener('keydown', handleKeydown);
-      await nextTick();
-      if (props.effect === effect) startSpatialMedium();
+watch([() => props.effect, () => props.seed], async ([effect, seed], _old, onCleanup) => {
+  let cancelled = false;
+  onCleanup(() => { cancelled = true; stopScene(); });
+  stopScene();
+  if (!effect) { releasePlayer(); return; }
+  if (!playerOpen) {
+    restoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    previousOverflow = document.body.style.overflow;
+    const app = document.getElementById('app');
+    appWasInert = app?.inert ?? false;
+    if (app) app.inert = true;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeydown);
+    playerOpen = true;
+  }
+  finished.value = false;
+  elapsed.value = 0;
+  reducedMotion.value = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  await nextTick();
+  if (cancelled || !canvasRef.value || !option.value) return;
+  stageRef.value?.focus({ preventScroll: true });
+  try {
+    if (!reducedMotion.value) environment = new CinemaEnvironment(canvasRef.value, option.value, seed);
+  } catch (error) {
+    console.warn('[Rewards] Depth layer unavailable:', error);
+  }
+  const startedAt = performance.now();
+  let previousAt = startedAt;
+  const render = (now: number) => {
+    elapsed.value = Math.min(duration.value, now - startedAt);
+    environment?.render(elapsed.value, Math.min(64, now - previousAt));
+    previousAt = now;
+    if (elapsed.value >= duration.value) {
+      finished.value = true;
+      stopScene();
+      void nextTick(() => stageRef.value?.querySelector<HTMLButtonElement>('.cinema-return')?.focus({ preventScroll: true }));
       return;
     }
-    window.removeEventListener('keydown', handleKeydown);
-    stopSpatialMedium();
-  },
-  { immediate: true }
-);
+    frame = window.requestAnimationFrame(render);
+  };
+  frame = window.requestAnimationFrame(render);
+}, { immediate: true });
 
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleKeydown);
-  stopSpatialMedium();
-});
+onBeforeUnmount(releasePlayer);
 </script>
 
 <template>
   <Teleport to="body">
-    <div
-      v-if="props.effect && activeComponent && option && tierMeta"
+    <section
+      v-if="option && activeComponent && tierMeta"
       :key="`${props.effect}-${props.seed}`"
+      ref="stageRef"
       class="reward-effect-overlay"
-      :class="stageClasses"
+      :class="[{ 'is-immersive': immersive && !finished, 'is-finished': finished }, `is-${option.key}`]"
       :style="stageVars"
+      tabindex="-1"
       role="dialog"
       aria-modal="true"
-      :aria-label="overlayLabel"
+      :aria-label="`${option.label} · 特效剧场`"
+      @pointermove="movePointer"
+      @pointerleave="environment?.setPointer(0, 0)"
     >
-      <div class="fx-backdrop" :style="{ background: option.backdrop }" />
-      <canvas ref="spatialMediumCanvas" class="fx-spatial-medium" aria-hidden="true" />
-      <div class="fx-ambient-grid" />
-      <div class="fx-aperture">
-        <span v-for="ring in 3" :key="ring" :style="{ animationDelay: `${(ring - 1) * 180}ms` }" />
-      </div>
-      <div v-if="option.tier === 'genesis'" class="fx-genesis-rig" aria-hidden="true">
-        <span class="fx-genesis-ring is-outer" />
-        <span class="fx-genesis-ring is-inner" />
-        <span class="fx-genesis-halo" />
-      </div>
-
-      <div class="fx-camera">
-        <div class="fx-shake-rig">
-          <div class="fx-bloom" />
-          <span class="fx-shockwave" />
-          <span class="fx-shockwave is-delayed" />
-          <span class="fx-shockwave is-third" />
-          <component :is="activeComponent" :seed="props.seed" class="fx-content" />
+      <div class="cinema-atmosphere" :style="{ background: option.backdrop }" aria-hidden="true" />
+      <template v-if="!finished">
+        <div v-if="!reducedMotion" class="cinema-scene" :class="`camera-${option.camera}`" aria-hidden="true">
+          <component :is="activeComponent" :seed="props.seed" class="cinema-content" />
         </div>
+        <div v-else class="cinema-still" aria-hidden="true">
+          <component :is="option.icon" :size="64" :stroke-width="1" />
+          <span>{{ option.codename }}</span>
+          <strong>{{ option.label }}</strong>
+        </div>
+        <canvas ref="canvasRef" class="cinema-depth" aria-hidden="true" />
+        <div class="cinema-lens" aria-hidden="true" />
+        <div class="cinema-curtain" aria-hidden="true" />
+        <div class="cinema-intro" aria-hidden="true">
+          <span>{{ tierMeta.label }} / {{ option.codename }}</span>
+          <strong>{{ option.label }}</strong>
+          <i />
+        </div>
+      </template>
+
+      <header class="cinema-header">
+        <div class="cinema-identity">
+          <span class="cinema-mark"><Orbit :size="21" :stroke-width="1.25" /></span>
+          <div><span>NEXUS <b>THEATER</b></span><small>{{ option.label }}<i />{{ tierMeta.label }}</small></div>
+        </div>
+        <div class="cinema-actions">
+          <button v-if="!finished" type="button" class="cinema-tool" :aria-pressed="immersive" :aria-label="immersive ? '显示播放信息' : '隐藏播放信息'" @click="immersive = !immersive">
+            <component :is="immersive ? Eye : EyeOff" :size="16" /><span>{{ immersive ? '显示信息' : '沉浸观看' }}</span><kbd>H</kbd>
+          </button>
+          <button type="button" class="cinema-tool cinema-close" aria-label="关闭特效，返回特效库" @click="emit('close')">
+            <X :size="17" /><span>退出</span><kbd>Esc</kbd>
+          </button>
+        </div>
+      </header>
+
+      <div v-if="finished" class="cinema-finale">
+        <span class="cinema-finale-orbit" aria-hidden="true" />
+        <span class="cinema-finale-icon"><component :is="option.icon" :size="38" :stroke-width="1.25" /></span>
+        <span class="cinema-eyebrow">{{ option.codename }}</span>
+        <h2>{{ option.label }}</h2>
+        <p>{{ option.narrative }}</p>
+        <div class="cinema-finale-meta"><span>{{ tierMeta.label }}</span><i /><span>{{ (duration / 1000).toFixed(1) }} 秒演出</span><i /><span>演出完成</span></div>
+        <div class="cinema-finale-actions">
+          <button type="button" class="cinema-return" @click="emit('close')"><ArrowLeft :size="17" />返回特效库</button>
+          <button type="button" class="cinema-replay" :disabled="!props.canReplay || props.replaying" @click="emit('replay')">
+            <RotateCcw :size="16" />{{ props.replaying ? '正在启动…' : '再看一次' }}<span>{{ option.cost }} 甲币</span>
+          </button>
+        </div>
+        <span v-if="props.replayError" class="cinema-error" role="alert">{{ props.replayError }}</span>
+        <small v-else-if="!props.canReplay && !props.replaying" class="cinema-replay-hint">甲币不足，签到后再来观看</small>
       </div>
 
-      <div class="fx-injectors">
-        <span
-          v-for="beam in 8"
-          :key="beam"
-          class="fx-injector"
-          :style="{ '--beam-rotate': `${(beam - 1) * 45}deg`, animationDelay: `${(beam % 4) * 45}ms` }"
-        />
-      </div>
-
-      <div class="fx-grain" />
-      <div class="fx-scanlines" />
-      <div class="fx-chroma" />
-      <div class="fx-vignette" />
-      <span class="fx-restore" />
-
-      <div class="fx-cinebar is-top" />
-      <div class="fx-cinebar is-bottom" />
-
-      <div class="fx-hud">
-        <span class="fx-hud-bracket is-tl" />
-        <span class="fx-hud-bracket is-tr" />
-        <span class="fx-hud-bracket is-bl" />
-        <span class="fx-hud-bracket is-br" />
-        <div class="fx-hud-protocol">
-          <small>NEXUS · VISUAL PROTOCOL</small>
-          <strong>{{ option.codename }}</strong>
-          <span>
-            {{ tierMeta.codename }} CLASS · {{ option.label }}
-            <em v-if="option.apex">APEX EVENT</em>
-          </span>
+      <footer v-else class="cinema-footer">
+        <div class="cinema-caption"><span>{{ option.codename }}</span><strong>{{ option.narrative }}</strong></div>
+        <div class="cinema-timing"><span><i />{{ phaseLabel }}</span><time>{{ remaining }}</time></div>
+        <div class="cinema-progress" role="progressbar" aria-label="播放进度" :aria-valuenow="Math.round(progress)" :aria-valuemin="0" :aria-valuemax="100">
+          <span :style="{ transform: `scaleX(${progress / 100})` }" />
         </div>
-        <div class="fx-hud-status">
-          <span class="fx-hud-status-run">ENERGY −{{ option.cost }} ⬢ · SEED {{ seedLabel }} · RUNNING</span>
-          <span class="fx-hud-status-done">PROTOCOL COMPLETE · SYSTEM RESTORED</span>
-        </div>
-        <div class="fx-progress">
-          <div class="fx-progress-meta">
-            <span>{{ option.label }}</span>
-            <strong>{{ durationLabel }}</strong>
-          </div>
-          <div class="fx-progress-track">
-            <span class="fx-progress-fill" />
-          </div>
-          <div class="fx-phase-rail">
-            <span
-              v-for="phase in phaseSegments"
-              :key="phase.key"
-              class="fx-phase"
-              :style="{ flex: `${phase.ms} 1 0%` }"
-            >
-              {{ phase.label }}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <button class="fx-skip" type="button" aria-label="跳过开屏动画" @click="requestClose">
-        <span>跳过</span>
-        <kbd>Esc</kbd>
-      </button>
-      <div class="fx-flash" />
-    </div>
+      </footer>
+    </section>
   </Teleport>
 </template>
 
 <style lang="scss">
 .reward-effect-overlay {
-  --fx-accent: #60a5fa;
-  --fx-secondary: #f472b6;
-  --fx-ms: 5000ms;
-  --fx-entry-ms: 600ms;
-  --fx-exit-ms: 800ms;
-  --fx-exit-delay: 4200ms;
-  --fx-shake-amp: 0px;
-  /* 分级压制系数：默认 = 信标级，战术/奇点级逐级抬升 */
-  --fx-grain-o: 0.08;
-  --fx-scanline-o: 0.16;
-  --fx-vignette-o: 0.62;
+  --fx-accent: #93c5fd;
+  --fx-secondary: #c4b5fd;
   position: fixed;
   inset: 0;
   z-index: 10000;
-  pointer-events: none;
   overflow: hidden;
   isolation: isolate;
+  background: #03050c;
+  color: #f1f5f9;
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  outline: none;
+  animation: cinema-open 260ms ease-out both;
+
+  button { font: inherit; cursor: pointer; }
+  button:disabled { opacity: 0.42; cursor: not-allowed; }
+  button:focus-visible { outline: 2px solid var(--fx-accent); outline-offset: 5px; }
+  kbd { font: 10px ui-monospace, monospace; opacity: 0.5; border: 1px solid #ffffff24; border-radius: 4px; padding: 2px 4px; }
 }
 
-.fx-backdrop,
-.fx-spatial-medium,
-.fx-ambient-grid,
-.fx-aperture,
-.fx-camera,
-.fx-shake-rig,
-.fx-bloom,
-.fx-content,
-.fx-grain,
-.fx-scanlines,
-.fx-chroma,
-.fx-vignette,
-.fx-flash {
-  position: absolute;
-  inset: 0;
-}
-
-/* ── 背景幕：特效专属氛围（数据驱动），T3 附加环境熔化 ── */
-.fx-backdrop {
-  z-index: -4;
-  opacity: 0;
-  animation: fx-backdrop var(--fx-ms) ease both;
-}
-
-/* 实时 WebGL 空间介质：以统一 shader 为 63 款协议补充星尘、潮汐与光谱折射。 */
-.fx-spatial-medium {
-  z-index: -2;
+.cinema-atmosphere, .cinema-scene, .cinema-depth, .cinema-content, .cinema-lens, .cinema-curtain { position: absolute; inset: 0; }
+.cinema-atmosphere { opacity: 0.65; transition: opacity 1s; }
+.cinema-scene { z-index: 1; transform-origin: center; animation: cinema-settle var(--fx-ms) ease-out both; }
+.cinema-scene.camera-none, .is-littleBoy .cinema-scene { animation: none; }
+.cinema-scene.camera-drift { animation-name: cinema-drift; }
+.cinema-scene.camera-sweep { animation-name: cinema-sweep; }
+.cinema-scene.camera-ascend { animation-name: cinema-ascend; }
+.cinema-depth {
+  z-index: 2;
   width: 100%;
   height: 100%;
-  opacity: 0;
-  mix-blend-mode: screen;
-  transform: scale(1.04);
-  filter: saturate(1.18) contrast(1.05);
-  animation: fx-spatial-medium var(--fx-ms) cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.fx-tier-tactical .fx-spatial-medium {
-  filter: saturate(1.32) contrast(1.08);
-}
-
-.fx-tier-singularity .fx-spatial-medium {
-  filter: saturate(1.48) contrast(1.12);
-}
-
-.fx-apex .fx-spatial-medium {
-  mix-blend-mode: screen;
-  filter: saturate(1.65) contrast(1.16) brightness(1.08);
-}
-
-.fx-tier-genesis .fx-spatial-medium {
-  mix-blend-mode: screen;
-  filter: saturate(1.82) contrast(1.2) brightness(1.14);
-}
-
-.fx-ambient-grid {
-  z-index: -3;
-  opacity: 0;
-  background:
-    linear-gradient(color-mix(in srgb, var(--fx-accent) 16%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--fx-secondary) 12%, transparent) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: radial-gradient(circle at 50% 50%, #000 0 48%, transparent 74%);
-  transform: perspective(900px) rotateX(58deg) translateY(16vh) scale(1.22);
-  transform-origin: 50% 70%;
-  animation: fx-ambient-grid var(--fx-ms) ease both;
-}
-
-.fx-aperture {
-  z-index: 0;
-  display: grid;
-  place-items: center;
   pointer-events: none;
+  mask-image: radial-gradient(ellipse at center, transparent 12%, #0008 42%, #000 75%);
 }
-
-.fx-aperture span {
-  grid-area: 1 / 1;
-  width: min(62vmin, 620px);
-  aspect-ratio: 1;
-  border: 1px solid color-mix(in srgb, var(--fx-accent) 38%, transparent);
-  border-radius: 50%;
-  box-shadow:
-    inset 0 0 36px color-mix(in srgb, var(--fx-accent) 12%, transparent),
-    0 0 48px color-mix(in srgb, var(--fx-secondary) 10%, transparent);
-  opacity: 0;
-  transform: scale(0.72);
-  animation: fx-aperture var(--fx-ms) cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.fx-tier-singularity .fx-backdrop {
-  backdrop-filter: blur(3px) saturate(1.12);
-}
-
-.fx-tier-genesis .fx-backdrop {
-  backdrop-filter: blur(4px) saturate(1.2);
-}
-
-/* ── 相机 rig：镜头预设作用于内容 + 辉光 + 冲击波 ── */
-.fx-camera {
-  z-index: 1;
-  will-change: transform;
-  transform-origin: 50% 50%;
-}
-
-.fx-cam-still .fx-camera {
-  animation: fx-cam-still var(--fx-ms) ease both;
-}
-
-.fx-cam-drift .fx-camera {
-  animation: fx-cam-drift var(--fx-ms) ease-in-out both;
-}
-
-.fx-cam-dolly .fx-camera {
-  animation: fx-cam-dolly var(--fx-ms) cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.fx-cam-sweep .fx-camera {
-  animation: fx-cam-sweep var(--fx-ms) ease-in-out both;
-}
-
-.fx-cam-ascend .fx-camera {
-  animation: fx-cam-ascend var(--fx-ms) cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.fx-cam-warp .fx-camera {
-  animation: fx-cam-warp var(--fx-ms) ease-in-out both;
-}
-
-.fx-cam-punch .fx-camera {
-  animation: fx-cam-punch var(--fx-ms) cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.fx-cam-collapse .fx-camera {
-  animation: fx-cam-collapse var(--fx-ms) cubic-bezier(0.4, 0, 0.6, 1) both;
-}
-
-.fx-has-shake .fx-shake-rig {
-  animation: fx-shake var(--fx-ms) steps(2, jump-none) both;
-}
-
-/* ── 内容与辉光 ── */
-.fx-content {
-  z-index: 2;
-}
-
-.fx-bloom {
-  z-index: -1;
-  opacity: 0;
-  background:
-    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--fx-accent) 34%, transparent), transparent 31%),
-    radial-gradient(circle at 28% 28%, color-mix(in srgb, var(--fx-secondary) 18%, transparent), transparent 26%),
-    radial-gradient(circle at 76% 72%, color-mix(in srgb, var(--fx-accent) 20%, transparent), transparent 30%);
-  filter: blur(20px) saturate(1.18);
-  mix-blend-mode: screen;
-  transform: scale(0.82);
-  animation: fx-bloom var(--fx-ms) cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-/* ── 开幕光圈：冲击波三连（第三道仅奇点级） ── */
-.fx-shockwave {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 1;
-  width: 22vmin;
-  height: 22vmin;
-  border: 1px solid color-mix(in srgb, var(--fx-accent) 68%, rgba(255, 255, 255, 0.7));
-  border-radius: 50%;
-  box-shadow:
-    inset 0 0 24px color-mix(in srgb, var(--fx-accent) 20%, transparent),
-    0 0 42px color-mix(in srgb, var(--fx-accent) 36%, transparent);
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.22);
-  animation: fx-shockwave 1.8s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.fx-shockwave.is-delayed {
-  animation-delay: 260ms;
-}
-
-.fx-shockwave.is-third {
-  display: none;
-  border-color: color-mix(in srgb, var(--fx-secondary) 66%, rgba(255, 255, 255, 0.6));
-  animation-delay: 520ms;
-}
-
-.fx-tier-singularity .fx-shockwave.is-third,
-.fx-tier-genesis .fx-shockwave.is-third {
-  display: block;
-}
-
-/* ── 能量注入：甲币能量自屏幕边缘汇入舞台中心（entry 阶段） ── */
-.fx-injectors {
-  position: absolute;
-  inset: 0;
+.is-littleBoy .cinema-depth { opacity: 0.28; }
+.cinema-lens {
   z-index: 3;
-  display: none;
+  pointer-events: none;
+  background: linear-gradient(180deg, #03050cd9, transparent 17% 76%, #03050cf0), radial-gradient(ellipse, transparent 35%, #03050c88);
 }
-
-.fx-tier-tactical .fx-injectors,
-.fx-tier-singularity .fx-injectors,
-.fx-tier-genesis .fx-injectors {
-  display: block;
-}
-
-.fx-injector {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 56vmax;
-  height: 2px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--fx-accent) 88%, #fff) 0, color-mix(in srgb, var(--fx-accent) 40%, transparent) 42%, transparent);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--fx-accent) 46%, transparent);
-  opacity: 0;
-  transform: rotate(var(--beam-rotate)) scaleX(1);
-  transform-origin: left center;
-  animation: fx-inject var(--fx-entry-ms) cubic-bezier(0.7, 0, 0.3, 1) both;
-}
-
-/* 战术级只保留正交四束，奇点级八向全开 */
-.fx-tier-tactical .fx-injector:nth-child(even) {
-  display: none;
-}
-
-/* ── 后期处理层（屏幕空间，不随相机运动） ── */
-.fx-grain {
+.cinema-curtain {
   z-index: 4;
-  opacity: 0;
-  background-image:
-    radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.2) 0 1px, transparent 1.5px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
-  background-size: 18px 18px, 42px 42px, 42px 42px;
-  mask-image: radial-gradient(circle at center, #000 0 62%, transparent 78%);
-  mix-blend-mode: overlay;
-  animation: fx-grain var(--fx-ms) ease both;
+  background: #03050c;
+  pointer-events: none;
+  animation: cinema-curtain var(--fx-ms) linear both;
 }
-
-.fx-scanlines {
-  z-index: 5;
-  opacity: 0;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, transparent 0 48%, color-mix(in srgb, var(--fx-accent) 16%, transparent), transparent 52%);
-  background-size: 100% 5px, 180px 100%;
-  mix-blend-mode: soft-light;
-  animation: fx-scanlines var(--fx-ms) ease both;
-}
-
-/* 色差撕裂：仅奇点级，左品红右青的边缘色散 + 脉冲 */
-.fx-chroma {
-  z-index: 5;
-  display: none;
-  opacity: 0;
-  background:
-    linear-gradient(90deg, rgba(244, 62, 156, 0.16), transparent 12% 88%, rgba(34, 211, 238, 0.16)),
-    linear-gradient(0deg, rgba(34, 211, 238, 0.07), transparent 16% 84%, rgba(244, 62, 156, 0.07));
-  mix-blend-mode: screen;
-  animation: fx-chroma var(--fx-ms) ease both;
-}
-
-.fx-tier-singularity .fx-chroma,
-.fx-tier-genesis .fx-chroma {
-  display: block;
-}
-
-.fx-vignette {
-  z-index: 6;
-  opacity: 0;
-  background:
-    radial-gradient(circle at center, transparent 0 46%, rgba(2, 6, 23, 0.18) 66%, rgba(2, 6, 23, 0.58) 100%),
-    linear-gradient(90deg, color-mix(in srgb, var(--fx-secondary) 12%, transparent), transparent 26% 74%, color-mix(in srgb, var(--fx-accent) 12%, transparent));
-  animation: fx-vignette var(--fx-ms) ease both;
-}
-
-/* ── 世界回收：exit 阶段一道向心收束环 ── */
-.fx-restore {
+.cinema-intro {
   position: absolute;
+  z-index: 5;
+  top: 38%;
   left: 50%;
-  top: 50%;
-  z-index: 6;
-  width: 120vmin;
-  height: 120vmin;
-  border: 1px solid color-mix(in srgb, var(--fx-accent) 54%, rgba(255, 255, 255, 0.6));
-  border-radius: 50%;
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(1.1);
-  animation: fx-restore var(--fx-exit-ms) cubic-bezier(0.7, 0, 0.84, 0) var(--fx-exit-delay) both;
+  width: 85%;
+  display: grid;
+  justify-items: center;
+  gap: 20px;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: cinema-intro 1250ms ease both;
+  span { color: var(--fx-accent); font: 10px ui-monospace, monospace; letter-spacing: 0.3em; }
+  strong { font-size: clamp(26px, 3.4vw, 52px); font-weight: 300; letter-spacing: 0.24em; text-shadow: 0 0 36px #000; }
+  i { width: 48px; height: 1px; background: var(--fx-accent); box-shadow: 0 0 18px var(--fx-accent); }
 }
-
-/* ── 电影黑边：仅奇点级 ── */
-.fx-cinebar {
+.cinema-header {
   position: absolute;
-  left: 0;
-  right: 0;
-  z-index: 7;
-  height: 7vh;
-  display: none;
-  background: linear-gradient(180deg, rgba(1, 3, 10, 0.96), rgba(1, 3, 10, 0.88));
-}
-
-.fx-tier-singularity .fx-cinebar,
-.fx-tier-genesis .fx-cinebar {
-  display: block;
-}
-
-.fx-tier-genesis .fx-cinebar {
-  background: linear-gradient(180deg, rgba(1, 3, 10, 0.98), rgba(1, 3, 10, 0.9));
-  box-shadow: 0 0 24px rgba(250, 204, 21, 0.08);
-}
-
-.fx-cinebar.is-top {
-  top: 0;
-  transform-origin: center top;
-  animation: fx-cinebar var(--fx-ms) ease both;
-}
-
-.fx-cinebar.is-bottom {
-  bottom: 0;
-  transform-origin: center bottom;
-  animation: fx-cinebar var(--fx-ms) ease both;
-}
-
-/* ── 协议 HUD：战术级起显示，奇点级强化 ── */
-.fx-hud {
-  position: absolute;
-  inset: 0;
   z-index: 8;
-  display: none;
-  color: color-mix(in srgb, var(--fx-accent) 76%, #fff);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-
-.fx-tier-tactical .fx-hud,
-.fx-tier-singularity .fx-hud,
-.fx-tier-genesis .fx-hud {
-  display: block;
-}
-
-.fx-hud-bracket {
-  position: absolute;
-  width: 34px;
-  height: 34px;
-  border: 2px solid color-mix(in srgb, var(--fx-accent) 62%, transparent);
-  opacity: 0;
-  animation: fx-hud-in var(--fx-ms) ease both;
-}
-
-.fx-hud-bracket.is-tl {
-  left: 3.2%;
-  top: 4.4%;
-  border-right: 0;
-  border-bottom: 0;
-}
-
-.fx-hud-bracket.is-tr {
-  right: 3.2%;
-  top: 4.4%;
-  border-left: 0;
-  border-bottom: 0;
-}
-
-.fx-hud-bracket.is-bl {
-  left: 3.2%;
-  bottom: 4.4%;
-  border-right: 0;
-  border-top: 0;
-}
-
-.fx-hud-bracket.is-br {
-  right: 3.2%;
-  bottom: 4.4%;
-  border-left: 0;
-  border-top: 0;
-}
-
-.fx-tier-singularity .fx-hud-bracket.is-tl,
-.fx-tier-singularity .fx-hud-bracket.is-tr,
-.fx-tier-genesis .fx-hud-bracket.is-tl,
-.fx-tier-genesis .fx-hud-bracket.is-tr {
-  top: calc(7vh + 2.2%);
-}
-
-.fx-tier-singularity .fx-hud-bracket.is-bl,
-.fx-tier-singularity .fx-hud-bracket.is-br,
-.fx-tier-genesis .fx-hud-bracket.is-bl,
-.fx-tier-genesis .fx-hud-bracket.is-br {
-  bottom: calc(7vh + 2.2%);
-}
-
-.fx-tier-genesis .fx-hud-bracket {
-  border-color: color-mix(in srgb, #facc15 46%, var(--fx-accent));
-  box-shadow: 0 0 18px rgba(250, 204, 21, 0.18);
-}
-
-.fx-hud-protocol {
-  position: absolute;
-  left: 4.6%;
-  top: 6.4%;
-  display: grid;
-  gap: 4px;
-  text-shadow: 0 0 18px color-mix(in srgb, var(--fx-accent) 42%, transparent);
-  opacity: 0;
-  animation: fx-hud-in var(--fx-ms) ease both;
-}
-
-.fx-tier-singularity .fx-hud-protocol,
-.fx-tier-genesis .fx-hud-protocol {
-  top: calc(7vh + 3.6%);
-}
-
-.fx-hud-protocol small {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.34em;
-  opacity: 0.78;
-}
-
-.fx-hud-protocol strong {
-  font-size: 21px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  color: #fff;
-  text-shadow:
-    0 0 22px color-mix(in srgb, var(--fx-accent) 66%, transparent),
-    0 0 46px color-mix(in srgb, var(--fx-secondary) 36%, transparent);
-}
-
-.fx-apex .fx-hud-protocol strong {
-  background: linear-gradient(92deg, #fff 0%, color-mix(in srgb, var(--fx-accent) 74%, #fff) 46%, color-mix(in srgb, var(--fx-secondary) 76%, #fff) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-/* 创世级协议名：熔金流光字 */
-.fx-tier-genesis .fx-hud-protocol strong {
-  background: linear-gradient(92deg, #fff 0%, #fde047 34%, color-mix(in srgb, var(--fx-accent) 78%, #fff) 62%, #fbbf24 100%);
-  background-size: 220% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: fx-genesis-goldflow 2.8s ease-in-out infinite;
-  font-size: 23px;
-  letter-spacing: 0.22em;
-}
-
-.fx-tier-genesis .fx-hud-protocol em {
-  border-color: rgba(250, 204, 21, 0.66);
-  background: rgba(250, 204, 21, 0.14);
-  color: #fde68a;
-}
-
-.fx-hud-protocol span {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  opacity: 0.85;
-}
-
-.fx-hud-protocol em {
-  border: 1px solid color-mix(in srgb, var(--fx-secondary) 62%, transparent);
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--fx-secondary) 16%, transparent);
-  color: color-mix(in srgb, var(--fx-secondary) 78%, #fff);
-  font-size: 9px;
-  font-style: normal;
-  letter-spacing: 0.3em;
-  padding: 2px 6px 2px 8px;
-  animation: fx-apex-pulse 1.4s ease-in-out infinite;
-}
-
-.fx-hud-status {
-  position: absolute;
-  right: 4.6%;
-  bottom: 6.2%;
-  display: grid;
-  justify-items: end;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.26em;
-  text-shadow: 0 0 16px color-mix(in srgb, var(--fx-accent) 40%, transparent);
-}
-
-.fx-tier-singularity .fx-hud-status,
-.fx-tier-genesis .fx-hud-status {
-  bottom: calc(7vh + 3.2%);
-}
-
-.fx-hud-status span {
-  grid-area: 1 / 1;
-}
-
-.fx-hud-status-run {
-  opacity: 0;
-  animation: fx-status-run var(--fx-ms) ease both;
-}
-
-.fx-hud-status-done {
-  color: #fff;
-  opacity: 0;
-  animation: fx-status-done var(--fx-exit-ms) ease var(--fx-exit-delay) both;
-}
-
-.fx-progress {
-  position: absolute;
-  left: 4.6%;
-  right: 4.6%;
-  bottom: 4.2%;
-  display: grid;
-  gap: 7px;
-  opacity: 0;
-  animation: fx-progress-in var(--fx-ms) ease both;
-}
-
-.fx-tier-singularity .fx-progress,
-.fx-tier-genesis .fx-progress {
-  bottom: calc(7vh + 1.8%);
-}
-
-.fx-progress-meta,
-.fx-phase-rail {
+  top: 0;
+  inset-inline: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: color-mix(in srgb, var(--fx-accent) 70%, #fff);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.2em;
-  text-shadow: 0 0 14px color-mix(in srgb, var(--fx-accent) 34%, transparent);
+  gap: 20px;
+  padding: 28px 36px;
 }
-
-.fx-progress-meta strong {
-  color: #fff;
-  font-size: 10px;
-}
-
-.fx-progress-track {
-  position: relative;
-  height: 2px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--fx-accent) 18%, rgba(255, 255, 255, 0.16));
-}
-
-.fx-progress-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--fx-accent), color-mix(in srgb, var(--fx-secondary) 72%, #fff));
-  box-shadow: 0 0 18px color-mix(in srgb, var(--fx-accent) 48%, transparent);
-  transform-origin: left center;
-  animation: fx-progress-fill var(--fx-ms) linear both;
-}
-
-.fx-phase-rail {
-  align-items: stretch;
-  gap: 4px;
-  opacity: 0.78;
-}
-
-.fx-phase {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.fx-skip {
-  position: absolute;
-  right: 3.2%;
-  top: 3.2%;
-  z-index: 10;
-  min-width: 86px;
-  height: 32px;
-  border: 1px solid color-mix(in srgb, var(--fx-accent) 38%, rgba(255, 255, 255, 0.3));
-  border-radius: 8px;
-  background: rgba(2, 6, 23, 0.34);
-  color: rgba(255, 255, 255, 0.84);
-  cursor: pointer;
+.cinema-identity { display: flex; align-items: center; gap: 12px; transition: opacity 250ms; }
+.cinema-mark { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid #ffffff24; border-radius: 50%; color: var(--fx-accent); }
+.cinema-identity > div { display: grid; gap: 7px; }
+.cinema-identity > div > span { font: 11px ui-monospace, monospace; letter-spacing: 0.2em; }
+.cinema-identity b { font-weight: 400; opacity: 0.42; margin-left: 7px; }
+.cinema-identity small { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #a4aebb; }
+.cinema-identity i, .cinema-finale-meta i { width: 3px; height: 3px; border-radius: 50%; background: currentColor; }
+.cinema-actions { display: flex; gap: 8px; }
+.cinema-tool {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  pointer-events: auto;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid #ffffff1a;
+  border-radius: 7px;
+  color: #cbd5e1;
+  background: #090e1980;
   backdrop-filter: blur(10px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 10px 28px rgba(0, 0, 0, 0.18);
-  opacity: 0;
-  animation: fx-skip-in var(--fx-ms) ease both;
-  transition: border-color 0.16s ease, color 0.16s ease, transform 0.16s ease, background 0.16s ease;
+  transition: background 180ms, border-color 180ms;
+  span { font-size: 11px; }
+  &:hover { background: #ffffff14; border-color: #ffffff44; }
 }
-
-.fx-tier-singularity .fx-skip,
-.fx-tier-genesis .fx-skip {
-  top: calc(7vh + 1.2%);
-}
-
-.fx-skip:hover,
-.fx-skip:focus-visible {
-  border-color: color-mix(in srgb, var(--fx-accent) 72%, #fff);
-  background: color-mix(in srgb, var(--fx-accent) 18%, rgba(2, 6, 23, 0.5));
-  color: #fff;
-  outline: none;
-  transform: translateY(-1px);
-}
-
-.fx-skip kbd {
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.68);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10px;
-  line-height: 1;
-  padding: 3px 5px;
-}
-
-/* ── 起幕白闪 ── */
-.fx-flash {
-  z-index: 9;
-  opacity: 0;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.92), color-mix(in srgb, var(--fx-accent) 36%, transparent) 22%, transparent 48%);
-  mix-blend-mode: screen;
-  animation: fx-flash 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-/* ── 分级压制系数 ── */
-.fx-tier-tactical {
-  --fx-grain-o: 0.12;
-  --fx-scanline-o: 0.3;
-  --fx-vignette-o: 0.84;
-}
-
-.fx-tier-singularity {
-  --fx-grain-o: 0.17;
-  --fx-scanline-o: 0.38;
-  --fx-vignette-o: 1;
-}
-
-.fx-tier-genesis {
-  --fx-grain-o: 0.2;
-  --fx-scanline-o: 0.42;
-  --fx-vignette-o: 1;
-}
-
-/* ── 创世级专属：禁忌协议法阵（双反向鎏金环 + 呼吸圣辉） ── */
-.fx-genesis-rig {
+.cinema-footer {
   position: absolute;
-  inset: 0;
-  z-index: 0;
+  z-index: 7;
+  bottom: 0;
+  inset-inline: 0;
   display: grid;
-  place-items: center;
-  pointer-events: none;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 18px 36px;
+  padding: 32px 38px;
+  transition: opacity 250ms, transform 250ms;
 }
+.cinema-caption { display: grid; gap: 9px; }
+.cinema-caption > span { font: 10px ui-monospace, monospace; color: var(--fx-accent); letter-spacing: 0.22em; }
+.cinema-caption strong { font-size: 12px; font-weight: 400; line-height: 1.6; color: #9aa6b6; max-width: 680px; }
+.cinema-timing { display: flex; align-items: center; gap: 22px; font-size: 10px; color: #9ba8b8; white-space: nowrap; }
+.cinema-timing > span { display: flex; align-items: center; gap: 7px; }
+.cinema-timing i { width: 4px; height: 4px; border-radius: 50%; background: var(--fx-accent); box-shadow: 0 0 8px var(--fx-accent); }
+.cinema-timing time { font: 12px ui-monospace, monospace; font-variant-numeric: tabular-nums; min-width: 40px; text-align: right; color: #e2e8f0; }
+.cinema-progress { grid-column: 1 / -1; height: 2px; background: #ffffff15; overflow: hidden; }
+.cinema-progress > span { display: block; width: 100%; height: 100%; transform-origin: left; background: linear-gradient(90deg, var(--fx-secondary), var(--fx-accent)); }
+.is-immersive .cinema-identity { opacity: 0; }
+.is-immersive .cinema-footer { opacity: 0; transform: translateY(12px); pointer-events: none; }
+.is-finished .cinema-atmosphere { opacity: 0.32; }
+.cinema-still { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; color: var(--fx-accent); }
+.cinema-still span { font: 11px ui-monospace, monospace; letter-spacing: 0.25em; }
+.cinema-still strong { color: #e2e8f0; font-size: clamp(30px, 4vw, 54px); font-weight: 300; letter-spacing: 0.14em; }
+.cinema-finale {
+  position: absolute;
+  z-index: 6;
+  inset: 80px 20px 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  animation: cinema-finale 650ms ease-out both;
+  h2 { margin: 18px 0 14px; font-size: clamp(30px, 4vw, 54px); font-weight: 300; letter-spacing: 0.12em; }
+  p { max-width: 460px; margin: 0; color: #9aa7b8; font-size: 13px; line-height: 1.9; }
+}
+.cinema-finale-orbit { position: absolute; z-index: -1; width: min(68vw, 520px); aspect-ratio: 1; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--fx-accent) 10%, transparent); box-shadow: 0 0 100px color-mix(in srgb, var(--fx-accent) 6%, transparent), inset 0 0 80px color-mix(in srgb, var(--fx-accent) 4%, transparent); transform: translateY(-35px); }
+.cinema-finale-icon { display: grid; place-items: center; width: 78px; height: 78px; margin-bottom: 26px; color: var(--fx-accent); border: 1px solid color-mix(in srgb, var(--fx-accent) 24%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--fx-accent) 5%, transparent); }
+.cinema-eyebrow { font: 10px ui-monospace, monospace; color: var(--fx-accent); letter-spacing: 0.3em; }
+.cinema-finale-meta { display: flex; align-items: center; gap: 12px; margin-top: 22px; color: #708097; font-size: 10px; }
+.cinema-finale-actions { display: flex; justify-content: center; gap: 12px; margin-top: 38px; }
+.cinema-finale-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 44px; padding: 12px 20px; border-radius: 8px; font-size: 12px; transition: background 180ms; }
+.cinema-return { background: #e2e8f0; color: #101927; border: 1px solid #e2e8f0; &:hover { background: #fff; } }
+.cinema-replay { background: #ffffff06; color: #cbd5e1; border: 1px solid #ffffff26; span { color: var(--fx-accent); font-size: 10px; padding-left: 9px; border-left: 1px solid #ffffff24; } &:hover:not(:disabled) { background: #ffffff10; } }
+.cinema-error, .cinema-replay-hint { font-size: 12px; margin-top: 18px; color: #fca5a5; }
+.cinema-replay-hint { color: #8190a4; }
 
-.fx-genesis-ring {
-  grid-area: 1 / 1;
-  width: min(74vmin, 760px);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background:
-    conic-gradient(
-      from 0deg,
-      transparent 0 8%,
-      color-mix(in srgb, #facc15 52%, var(--fx-accent)) 10% 12%,
-      transparent 14% 24%,
-      color-mix(in srgb, var(--fx-accent) 66%, #fff) 26% 27%,
-      transparent 29% 41%,
-      color-mix(in srgb, #facc15 52%, var(--fx-accent)) 43% 45%,
-      transparent 47% 57%,
-      color-mix(in srgb, var(--fx-secondary) 66%, #fff) 59% 60%,
-      transparent 62% 74%,
-      color-mix(in srgb, #facc15 52%, var(--fx-accent)) 76% 78%,
-      transparent 80% 91%,
-      color-mix(in srgb, var(--fx-accent) 66%, #fff) 93% 94%,
-      transparent 96%
-    );
-  mask-image: radial-gradient(circle, transparent 0 calc(50% - 2.5px), #000 calc(50% - 1.5px) calc(50% - 0.5px), transparent 50%);
-  opacity: 0;
-  filter: drop-shadow(0 0 14px color-mix(in srgb, #facc15 36%, transparent));
-  animation:
-    fx-genesis-rig var(--fx-ms) ease both,
-    fx-genesis-spin 22s linear infinite;
-}
-
-.fx-genesis-ring.is-inner {
-  width: min(58vmin, 600px);
-  animation:
-    fx-genesis-rig var(--fx-ms) ease both,
-    fx-genesis-spin 14s linear infinite reverse;
-}
-
-.fx-genesis-halo {
-  grid-area: 1 / 1;
-  width: min(46vmin, 480px);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, #facc15 14%, transparent), transparent 66%);
-  opacity: 0;
-  animation:
-    fx-genesis-rig var(--fx-ms) ease both,
-    fx-genesis-breathe 3.4s ease-in-out infinite;
-}
-
-@keyframes fx-genesis-rig {
-  0%,
-  4% {
-    opacity: 0;
-  }
-  16%,
-  84% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes fx-genesis-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes fx-genesis-breathe {
-  0%,
-  100% {
-    transform: scale(0.94);
-    opacity: 0.5;
-  }
-  50% {
-    transform: scale(1.06);
-    opacity: 0.9;
-  }
-}
-
-@keyframes fx-genesis-goldflow {
-  0%,
-  100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
-/* ── 关键帧 ── */
-@keyframes fx-backdrop {
-  0%,
-  100% {
-    opacity: 0;
-  }
-  10%,
-  84% {
-    opacity: 1;
-  }
-}
-
-@keyframes fx-spatial-medium {
-  0%,
-  100% {
-    opacity: 0;
-    transform: scale(1.08);
-  }
-  13% {
-    opacity: 0.62;
-  }
-  52% {
-    opacity: 0.92;
-    transform: scale(1);
-  }
-  84% {
-    opacity: 0.74;
-  }
-}
-
-@keyframes fx-bloom {
-  0%,
-  100% {
-    opacity: 0;
-    transform: scale(0.82) rotate(0deg);
-  }
-  16%,
-  82% {
-    opacity: 1;
-  }
-  54% {
-    transform: scale(1.14) rotate(10deg);
-  }
-}
-
-@keyframes fx-ambient-grid {
-  0% {
-    opacity: 0;
-    background-position: 0 0, 0 0;
-  }
-  16%,
-  82% {
-    opacity: 0.22;
-  }
-  100% {
-    opacity: 0;
-    background-position: 0 72px, 72px 0;
-  }
-}
-
-@keyframes fx-aperture {
-  0%,
-  100% {
-    opacity: 0;
-    transform: scale(0.72) rotate(0deg);
-  }
-  15% {
-    opacity: 0.7;
-  }
-  58% {
-    opacity: 0.34;
-    transform: scale(1.08) rotate(18deg);
-  }
-  82% {
-    opacity: 0.24;
-  }
-}
-
-@keyframes fx-shockwave {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.22);
-  }
-  14% {
-    opacity: 0.92;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(5.6);
-  }
-}
-
-@keyframes fx-inject {
-  0% {
-    opacity: 0;
-    transform: rotate(var(--beam-rotate)) scaleX(1.04);
-  }
-  22% {
-    opacity: 0.95;
-  }
-  100% {
-    opacity: 0;
-    transform: rotate(var(--beam-rotate)) scaleX(0.02);
-  }
-}
-
-@keyframes fx-grain {
-  0%,
-  100% {
-    opacity: 0;
-    transform: scale(1);
-  }
-  22%,
-  78% {
-    opacity: var(--fx-grain-o);
-    transform: scale(1.02);
-  }
-}
-
-@keyframes fx-scanlines {
-  0% {
-    opacity: 0;
-    background-position: 0 0, -120px 0;
-  }
-  18%,
-  82% {
-    opacity: var(--fx-scanline-o);
-  }
-  100% {
-    opacity: 0;
-    background-position: 0 42px, 220px 0;
-  }
-}
-
-@keyframes fx-chroma {
-  0%,
-  100% {
-    opacity: 0;
-    transform: translateX(0);
-  }
-  8% {
-    opacity: 0.85;
-    transform: translateX(-2px);
-  }
-  12% {
-    opacity: 0.3;
-    transform: translateX(2px);
-  }
-  16%,
-  50% {
-    opacity: 0.22;
-    transform: translateX(0);
-  }
-  56% {
-    opacity: 0.8;
-    transform: translateX(2px);
-  }
-  60% {
-    opacity: 0.28;
-    transform: translateX(-1px);
-  }
-  64%,
-  84% {
-    opacity: 0.2;
-    transform: translateX(0);
-  }
-}
-
-@keyframes fx-vignette {
-  0%,
-  100% {
-    opacity: 0;
-  }
-  14%,
-  86% {
-    opacity: var(--fx-vignette-o);
-  }
-}
-
-@keyframes fx-restore {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(1.1);
-  }
-  18% {
-    opacity: 0.8;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.06);
-  }
-}
-
-@keyframes fx-cinebar {
-  0% {
-    transform: scaleY(0);
-  }
-  9%,
-  82% {
-    transform: scaleY(1);
-  }
-  100% {
-    transform: scaleY(0);
-  }
-}
-
-@keyframes fx-hud-in {
-  0% {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  10%,
-  84% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-}
-
-@keyframes fx-apex-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--fx-secondary) 34%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 14px 1px color-mix(in srgb, var(--fx-secondary) 44%, transparent);
-  }
-}
-
-@keyframes fx-status-run {
-  0%,
-  6% {
-    opacity: 0;
-  }
-  12%,
-  80% {
-    opacity: 0.9;
-  }
-  84%,
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes fx-status-done {
-  0%,
-  30% {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  44%,
-  88% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes fx-progress-in {
-  0%,
-  8%,
-  100% {
-    opacity: 0;
-    transform: translateY(5px);
-  }
-  14%,
-  86% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fx-progress-fill {
-  0% {
-    transform: scaleX(0);
-  }
-  100% {
-    transform: scaleX(1);
-  }
-}
-
-@keyframes fx-skip-in {
-  0%,
-  6%,
-  92%,
-  100% {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  12%,
-  86% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fx-flash {
-  0% {
-    opacity: 0;
-    transform: scale(0.6);
-  }
-  8% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.7);
-  }
-}
-
-/* ── 相机预设 ── */
-@keyframes fx-cam-still {
-  0% {
-    transform: scale(1.015);
-  }
-  14%,
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes fx-cam-drift {
-  0% {
-    transform: scale(1) translateY(0);
-  }
-  55% {
-    transform: scale(1.045) translateY(-0.4%);
-  }
-  100% {
-    transform: scale(1.06) translateY(-0.7%);
-  }
-}
-
-@keyframes fx-cam-dolly {
-  0% {
-    transform: scale(1.09);
-  }
-  18% {
-    transform: scale(1);
-  }
-  74% {
-    transform: scale(1.025);
-  }
-  100% {
-    transform: scale(1.07);
-  }
-}
-
-@keyframes fx-cam-sweep {
-  0% {
-    transform: scale(1.08) translateX(-1.6%);
-  }
-  22% {
-    transform: scale(1.03) translateX(-0.6%);
-  }
-  76% {
-    transform: scale(1.03) translateX(0.8%);
-  }
-  100% {
-    transform: scale(1.09) translateX(1.8%);
-  }
-}
-
-@keyframes fx-cam-ascend {
-  0% {
-    transform: scale(1.06) translateY(1.8%);
-  }
-  20% {
-    transform: scale(1.01) translateY(0.6%);
-  }
-  72% {
-    transform: scale(1.03) translateY(-1%);
-  }
-  100% {
-    transform: scale(1.1) translateY(-2.6%);
-  }
-}
-
-@keyframes fx-cam-warp {
-  0% {
-    transform: scale(1.14);
-    filter: blur(0);
-  }
-  24% {
-    transform: scale(0.96);
-    filter: blur(1.5px);
-  }
-  46% {
-    transform: scale(1.08);
-    filter: blur(0);
-  }
-  66% {
-    transform: scale(0.98);
-    filter: blur(2.5px);
-  }
-  84% {
-    transform: scale(1.04);
-    filter: blur(0);
-  }
-  100% {
-    transform: scale(1.16);
-    filter: blur(3px);
-  }
-}
-
-@keyframes fx-cam-punch {
-  0% {
-    transform: scale(1.04);
-  }
-  12% {
-    transform: scale(1);
-  }
-  30% {
-    transform: scale(1.005);
-  }
-  38% {
-    transform: scale(1.11);
-  }
-  46% {
-    transform: scale(1.035);
-  }
-  58% {
-    transform: scale(1.085);
-  }
-  72% {
-    transform: scale(1.03);
-  }
-  100% {
-    transform: scale(1.08);
-  }
-}
-
-@keyframes fx-cam-collapse {
-  0% {
-    transform: scale(1);
-  }
-  42% {
-    transform: scale(1.09);
-  }
-  58% {
-    transform: scale(1.2);
-  }
-  64% {
-    transform: scale(0.94);
-  }
-  74% {
-    transform: scale(1.06);
-  }
-  100% {
-    transform: scale(1.12);
-  }
-}
-
-@keyframes fx-shake {
-  0%,
-  13%,
-  31%,
-  51%,
-  77%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  16% {
-    transform: translate3d(var(--fx-shake-amp), calc(var(--fx-shake-amp) * -0.7), 0);
-  }
-  19% {
-    transform: translate3d(calc(var(--fx-shake-amp) * -0.8), var(--fx-shake-amp), 0);
-  }
-  23% {
-    transform: translate3d(calc(var(--fx-shake-amp) * 0.6), calc(var(--fx-shake-amp) * 0.5), 0);
-  }
-  27% {
-    transform: translate3d(calc(var(--fx-shake-amp) * -0.4), calc(var(--fx-shake-amp) * -0.3), 0);
-  }
-  55% {
-    transform: translate3d(calc(var(--fx-shake-amp) * -0.9), calc(var(--fx-shake-amp) * 0.6), 0);
-  }
-  59% {
-    transform: translate3d(var(--fx-shake-amp), calc(var(--fx-shake-amp) * -0.5), 0);
-  }
-  64% {
-    transform: translate3d(calc(var(--fx-shake-amp) * -0.5), calc(var(--fx-shake-amp) * -0.6), 0);
-  }
-  69% {
-    transform: translate3d(calc(var(--fx-shake-amp) * 0.3), calc(var(--fx-shake-amp) * 0.4), 0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .reward-effect-overlay,
-  .reward-effect-overlay *,
-  .reward-effect-overlay *::before,
-  .reward-effect-overlay *::after {
-    animation-duration: 1ms !important;
-    animation-delay: 0ms !important;
-  }
-}
+@keyframes cinema-open { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cinema-curtain { 0% { opacity: 0.85; } 16%, 84% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes cinema-intro { 0% { opacity: 0; filter: blur(8px); } 22%, 48% { opacity: 1; filter: blur(0); } 100% { opacity: 0; filter: blur(5px); transform: translate(-50%, -55%); } }
+@keyframes cinema-settle { 0% { transform: scale(1.045); } 30%, 85% { transform: scale(1); } 100% { transform: scale(1.015); } }
+@keyframes cinema-drift { 0% { transform: scale(1.025) translateX(-0.5%); } 100% { transform: scale(1.04) translateX(0.5%); } }
+@keyframes cinema-sweep { 0% { transform: scale(1.035) translateX(1%); } 100% { transform: scale(1.035) translateX(-1%); } }
+@keyframes cinema-ascend { 0% { transform: scale(1.03) translateY(0.7%); } 100% { transform: scale(1.03) translateY(-0.7%); } }
+@keyframes cinema-finale { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (max-width: 720px) {
-  .fx-hud-protocol {
-    left: 5.4%;
-    right: 5.4%;
-  }
-
-  .fx-hud-protocol strong {
-    max-width: 100%;
-    overflow-wrap: anywhere;
-    font-size: 16px;
-  }
-
-  .fx-hud-protocol span,
-  .fx-hud-status,
-  .fx-progress-meta,
-  .fx-phase-rail {
-    letter-spacing: 0.12em;
-  }
-
-  .fx-hud-status {
-    left: 5.4%;
-    right: 5.4%;
-    justify-items: start;
-    bottom: 9.8%;
-  }
-
-  .fx-progress {
-    left: 5.4%;
-    right: 5.4%;
-    bottom: 4.8%;
-  }
-
-  .fx-skip {
-    right: 5.4%;
-    top: 4.8%;
-  }
+  .cinema-header { padding: 18px; gap: 10px; }
+  .cinema-tool { padding: 8px; }
+  .cinema-tool kbd, .cinema-tool span, .cinema-identity b { display: none; }
+  .cinema-footer { padding: 24px 20px; gap: 14px; }
+  .cinema-caption strong { display: none; }
+  .cinema-timing { gap: 12px; }
+  .cinema-finale-actions { gap: 8px; }
+  .cinema-finale-actions button { padding: 12px; }
+}
+@media (max-height: 580px) {
+  .cinema-finale-icon { width: 48px; height: 48px; margin-bottom: 12px; }
+  .cinema-finale h2 { font-size: 28px; margin: 12px 0; }
+  .cinema-finale-actions { margin-top: 20px; }
+  .cinema-finale-meta { margin-top: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reward-effect-overlay, .reward-effect-overlay *, .reward-effect-overlay *::before, .reward-effect-overlay *::after { animation: none !important; transition: none !important; }
+  .cinema-curtain, .cinema-intro { display: none; }
+  .cinema-lens { opacity: 0.42; }
 }
 </style>
