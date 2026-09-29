@@ -52,8 +52,8 @@ test('release assets have unique ASCII names and exclude unpacked executables', 
   }
 });
 
-test('only main pushes publish, after checks and all packages from one commit', () => {
-  assert.deepEqual(workflow.on.push, { branches: ['main'] });
+test('main and simple-main pushes publish, after checks and all packages from one commit', () => {
+  assert.deepEqual(workflow.on.push, { branches: ['main', 'codex/main-simple'] });
   assert.ok(Object.hasOwn(workflow.on, 'workflow_dispatch'));
   assert.equal(workflow.concurrency['cancel-in-progress'], false);
   assert.equal(workflow.jobs.prepare.needs, 'verify');
@@ -110,6 +110,7 @@ function releaseFixture(t) {
       encoding: 'utf8',
       env: {
         ...process.env, GITHUB_EVENT_NAME: eventName, GITHUB_SHA: sha,
+        GITHUB_REF_NAME: 'main',
         GITHUB_OUTPUT: outputFile.replaceAll('\\', '/'),
       },
     });
