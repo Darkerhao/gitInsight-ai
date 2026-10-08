@@ -1,0 +1,9 @@
+items:
+  - slug: storage
+    status: done
+  - slug: tasks-publication
+    status: done
+  - slug: startup-backup
+    status: done
+  - slug: cleanup-verification
+    status: done

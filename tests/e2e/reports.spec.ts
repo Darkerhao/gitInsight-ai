@@ -150,3 +150,86 @@ test('欢迎页显示真实配置进度，奖励渲染不在启动时加载', as
   await page.getByRole('button', { name: '进入工作台', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
+
+for (const mode of ['hanging', 'failed']) {
+  test(`飞书 ${mode} 时仍可读取本地仓库并生成日报`, async ({ page }) => {
+    await page.goto(`/?feishu=${mode}#/generate`);
+    const generate = page.getByRole('button', { name: '重新生成当前项目', exact: true });
+    await expect(generate).toBeEnabled();
+    expect(await page.evaluate(() => window.reportTest.configSaves)).toBe(0);
+    await generate.click();
+    await expect(page.locator('.editable-report textarea')).toHaveValue(/Project A/);
+  });
+}
+
+test('配置加载失败展示错误并阻止默认配置写入，修复后可重试', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/?configReadFailure=1#/config');
+  await expect(page.getByText('无法加载本地数据', { exact: true })).toBeVisible();
+  await expect(page.getByText('配置文件损坏，请修复 config.json', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '日报配置', exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => window.reportTest.configSaves)).toBe(0);
+  await page.evaluate(() => { window.reportTest.configReadFailure = false; });
+  await page.getByRole('button', { name: '重新加载', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '日报配置', exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('后台运行通知保留任务名称、启停、新增与删除编辑', async ({ page }) => {
+  await page.goto('/?autoSyncTask=1#/config');
+  const names = page.getByPlaceholder('任务名称', { exact: true });
+  await expect(names.first()).toHaveValue('已有任务');
+  await names.first().fill('未保存的任务名称');
+  await page.locator('.auto-sync-switch').click();
+  await page.locator('.auto-sync-task-actions .el-switch').first().click();
+  await page.getByRole('button', { name: '新增同步任务', exact: true }).click();
+  await names.nth(1).fill('新任务草稿');
+  const notify = () => page.evaluate(async () => {
+    const state = await window.api.getAutoSyncState();
+    state.tasks[0].lastStatus = 'success';
+    state.tasks[0].lastMessage = '后台运行已结束';
+    window.reportTest.emitAutoSync(state);
+  });
+  await notify();
+  await expect(names).toHaveCount(2);
+  await expect(names.first()).toHaveValue('未保存的任务名称');
+  await expect(names.nth(1)).toHaveValue('新任务草稿');
+  await expect(page.getByRole('switch', { name: '自动同步总开关', exact: true })).toBeChecked();
+  await expect(page.getByRole('switch', { name: '启用任务 未保存的任务名称', exact: true })).not.toBeChecked();
+  await expect(page.getByText('后台运行已结束', { exact: true })).toBeVisible();
+  await page.locator('.auto-sync-task-card').first().getByRole('button', { name: '删除', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click();
+  await notify();
+  await expect(names).toHaveCount(1);
+  await expect(names).toHaveValue('新任务草稿');
+  expect(await page.evaluate(() => window.reportTest.configSaves)).toBe(0);
+});
+
+test('备份取消和错误可重试，保留未保存配置并反馈导出结果', async ({ page }) => {
+  await page.goto('/#/system');
+  await page.getByRole('tab', { name: '集成配置', exact: true }).click();
+  await page.getByPlaceholder('请选择工作目录').fill('/workspace/unsaved');
+  await page.getByRole('tab', { name: '安全设置', exact: true }).click();
+  await expect(page.getByText(/备份包含全部本地数据库记录和已保存配置/)).toBeVisible();
+  const exportBackup = page.getByRole('button', { name: '导出备份', exact: true });
+  const restoreBackup = page.getByRole('button', { name: '恢复备份', exact: true });
+  await exportBackup.click();
+  await restoreBackup.click();
+  await expect(restoreBackup).toBeEnabled();
+  await expect(page.locator('.el-message')).toHaveCount(0);
+  await page.evaluate(() => { window.reportTest.backupOutcome = 'error'; });
+  await exportBackup.click();
+  await expect(page.getByText('备份文件写入失败', { exact: true })).toBeVisible();
+  await restoreBackup.click();
+  await expect(page.getByText('备份文件无效，当前数据未更改', { exact: true })).toBeVisible();
+  await expect(exportBackup).toBeEnabled();
+  await expect(restoreBackup).toBeEnabled();
+  await page.evaluate(() => { window.reportTest.backupOutcome = 'success'; });
+  await exportBackup.click();
+  await expect(page.getByText('备份已保存至 /backups/local-backup.json', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.reportTest.backupCalls)).toEqual(['export', 'restore', 'export', 'restore', 'export']);
+  expect(await page.evaluate(() => window.reportTest.configSaves)).toBe(0);
+  await page.getByRole('tab', { name: '集成配置', exact: true }).click();
+  await expect(page.getByPlaceholder('请选择工作目录')).toHaveValue('/workspace/unsaved');
+});

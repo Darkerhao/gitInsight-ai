@@ -2,6 +2,7 @@
 
 import type {
   AppConfig,
+  BackupOperationResult,
   AiConnectionTestPayload,
   AiConnectionTestResult,
   AutoSyncRunResult,
@@ -17,8 +18,6 @@ import type {
   FeishuProjectOption,
   FeishuProjectOptionsPayload,
   FeishuSubmissionRecordsPayload,
-  FeishuDuplicateCheckPayload,
-  FeishuDuplicateCheckResult,
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
   GenerateReportParams,
@@ -51,7 +50,6 @@ declare global {
       cancelReportGeneration: (requestId: string) => Promise<void>;
       loginFeishu: (payload: FeishuLoginPayload) => Promise<FeishuAuthSnapshot>;
       openFeishuSubmissionRecords: (payload: FeishuSubmissionRecordsPayload) => Promise<boolean>;
-      checkFeishuDuplicate: (payload: FeishuDuplicateCheckPayload) => Promise<FeishuDuplicateCheckResult>;
       listFeishuFields: (payload: FeishuProjectOptionsPayload) => Promise<FeishuFieldOption[]>;
       listFeishuProjects: (payload: FeishuProjectOptionsPayload) => Promise<FeishuProjectOption[]>;
       testSubmitFeishu: (payload: FeishuTestSubmitPayload) => Promise<FeishuSubmitResult>;
@@ -75,6 +73,8 @@ declare global {
       generateWeeklySummary: (params: WeeklySummaryParams) => Promise<WeeklySummaryRecord>;
       saveWeeklySummary: (payload: SaveWeeklySummaryPayload) => Promise<WeeklySummaryRecord>;
       getStorageInfo: () => Promise<import('@shared/types').StorageInfo>;
+      exportDataBackup: () => Promise<BackupOperationResult>;
+      restoreDataBackup: () => Promise<BackupOperationResult>;
       getCheckinWalletSnapshot: () => Promise<CheckinWalletSnapshot>;
       runDailyCheckin: () => Promise<CheckinResult>;
       importCheckinWallet: (payload: CheckinWalletImportPayload) => Promise<CheckinWalletSnapshot>;

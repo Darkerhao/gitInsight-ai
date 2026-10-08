@@ -157,6 +157,19 @@ test('external failures use stable user-facing messages', async () => {
   assert.equal(publishDraft.publishMessage, '提交结果未确认，请先核对飞书提交记录');
 });
 
+test('cancelled publication stays unpublished and displays cancellation instead of unknown submission', async () => {
+  const api: ProjectReportApi = {
+    generateReport: async () => makeResult(),
+    saveDailyReport: async () => makeRecord(42),
+    syncFeishuDaily: async () => { throw new Error("Error invoking remote method 'feishu:sync-daily': Error: 已取消发布，未提交飞书日报"); },
+  };
+  const draft = makeDraft();
+  const actions = createProjectReportActions<WeeklyReportDraft>({ api, config: makeConfig(), getProjectOptions: () => [], displayRepoName: () => 'repo', getScope: fullDayReportScope });
+  assert.equal(await actions.publishDraft(draft), false);
+  assert.equal(draft.publishStatus, 'idle');
+  assert.equal(draft.publishMessage, '已取消发布，未提交飞书日报');
+});
+
 test('a failed project draft can be generated again independently', async () => {
   let generateCount = 0;
   const api: ProjectReportApi = {

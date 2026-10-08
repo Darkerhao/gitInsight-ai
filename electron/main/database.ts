@@ -1,6 +1,6 @@
 import { app, safeStorage } from 'electron';
 import { existsSync } from 'node:fs';
-import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import initSqlJs from 'sql.js';
 import { APP_EDITION, APP_EDITION_LABEL, APP_PRODUCT_NAME } from '../../src/shared/edition.js';
@@ -22,6 +22,7 @@ import type {
   StructuredReportMetadata,
 } from '../../src/shared/types.js';
 import { ensureConfigDir, getConfigPath, getDatabasePath, getSecretsPath } from './paths.js';
+import { writeFileAtomically } from './atomicFile.js';
 import { ensureReflectionSchema } from './reflectionStore.js';
 import { ensureWeeklySummarySchema } from './weeklySummaryStore.js';
 import { backfillTimelineSnapshots, ensureTimelineSchema, upsertTimelineSnapshot } from './timeline.js';
@@ -49,15 +50,19 @@ export async function getDatabase(): Promise<import('sql.js').Database> {
   return databaseInitialization;
 }
 
-async function initializeDatabase() {
-  await ensureConfigDir();
-  const SQL = await initSqlJs({
+export function loadSqlEngine() {
+  return initSqlJs({
     locateFile: (file) => {
       const unpackedPath = join(process.resourcesPath, 'app.asar.unpacked', 'node_modules/sql.js/dist', file);
       if (existsSync(unpackedPath)) return unpackedPath;
       return join(process.cwd(), 'node_modules/sql.js/dist', file);
     },
   });
+}
+
+async function initializeDatabase() {
+  await ensureConfigDir();
+  const SQL = await loadSqlEngine();
   const databasePath = getDatabasePath();
   sqlDatabase = existsSync(databasePath) ? new SQL.Database(await readFile(databasePath)) : new SQL.Database();
   sqlDatabase.run(`
@@ -102,53 +107,6 @@ async function initializeDatabase() {
       created_at TEXT NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS jiazi_farm_state (
-      id INTEGER PRIMARY KEY CHECK(id = 1),
-      cycle_start_date TEXT NOT NULL,
-      water INTEGER NOT NULL DEFAULT 0,
-      sunlight INTEGER NOT NULL DEFAULT 0,
-      nutrient INTEGER NOT NULL DEFAULT 0,
-      growth INTEGER NOT NULL DEFAULT 0,
-      level INTEGER NOT NULL DEFAULT 1,
-      total_harvests INTEGER NOT NULL DEFAULT 0,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS jiazi_farm_task_claims (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      date TEXT NOT NULL,
-      task_key TEXT NOT NULL,
-      resource_type TEXT NOT NULL,
-      reward_amount INTEGER NOT NULL,
-      growth_amount INTEGER NOT NULL,
-      claimed_at TEXT NOT NULL,
-      UNIQUE(date, task_key)
-    );
-    CREATE INDEX IF NOT EXISTS idx_jiazi_farm_task_claims_date ON jiazi_farm_task_claims(date);
-
-    CREATE TABLE IF NOT EXISTS jiazi_farm_harvests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      date TEXT NOT NULL,
-      ganzhi_name TEXT NOT NULL,
-      crop_name TEXT NOT NULL,
-      level INTEGER NOT NULL,
-      resources_summary_json TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_jiazi_farm_harvests_created_at ON jiazi_farm_harvests(created_at);
-
-    CREATE TABLE IF NOT EXISTS jiazi_farm_plots (
-      slot INTEGER PRIMARY KEY,
-      crop_tier INTEGER NOT NULL DEFAULT 1,
-      water INTEGER NOT NULL DEFAULT 0,
-      sunlight INTEGER NOT NULL DEFAULT 0,
-      nutrient INTEGER NOT NULL DEFAULT 0,
-      growth INTEGER NOT NULL DEFAULT 0,
-      level INTEGER NOT NULL DEFAULT 1,
-      total_harvests INTEGER NOT NULL DEFAULT 0,
-      updated_at TEXT NOT NULL
-    );
-
     CREATE TABLE IF NOT EXISTS checkin_wallet (
       id INTEGER PRIMARY KEY CHECK(id = 1),
       coins INTEGER NOT NULL DEFAULT 0,
@@ -172,7 +130,6 @@ async function initializeDatabase() {
   ensureDailyReportTimeRangeColumns(sqlDatabase);
   ensureReflectionSchema(sqlDatabase);
   ensureWeeklySummarySchema(sqlDatabase);
-  ensureJiaziFarmPlots(sqlDatabase);
   ensureTimelineSchema(sqlDatabase);
   await backfillTimelineSnapshots(sqlDatabase);
   await persistDatabase();
@@ -184,14 +141,7 @@ export function persistDatabase(): Promise<void> {
   const save = databaseWriteQueue.then(async () => {
     if (!sqlDatabase) return;
     await ensureConfigDir();
-    const databasePath = getDatabasePath();
-    const temporaryPath = `${databasePath}.tmp`;
-    try {
-      await writeFile(temporaryPath, sqlDatabase.export());
-      await rename(temporaryPath, databasePath);
-    } finally {
-      await rm(temporaryPath, { force: true }).catch(() => {});
-    }
+    await writeFileAtomically(getDatabasePath(), sqlDatabase.export());
   });
   databaseWriteQueue = save.catch(() => {});
   return save;
@@ -239,47 +189,6 @@ export function ensureDailyReportTimeRangeColumns(db: import('sql.js').Database)
   if (!columns.has('end_datetime')) db.run('ALTER TABLE daily_reports ADD COLUMN end_datetime TEXT');
   if (!columns.has('time_range_label')) db.run('ALTER TABLE daily_reports ADD COLUMN time_range_label TEXT');
   if (!columns.has('structured_json')) db.run('ALTER TABLE daily_reports ADD COLUMN structured_json TEXT');
-}
-
-
-/**
- * 农场多地块迁移：为 jiazi_farm_state 补充「已解锁作物档次/地块数」两列，
- * 并把老用户的单行农场进度迁移进 jiazi_farm_plots 的 slot=1，保住已有成长/等级。
- */
-export function ensureJiaziFarmPlots(db: import('sql.js').Database) {
-  const stateColumns = new Set(
-    (db.exec('PRAGMA table_info(jiazi_farm_state)')[0]?.values ?? []).map((row) => String(row[1])),
-  );
-  if (!stateColumns.has('unlocked_crop_tier')) {
-    db.run('ALTER TABLE jiazi_farm_state ADD COLUMN unlocked_crop_tier INTEGER NOT NULL DEFAULT 1');
-  }
-  if (!stateColumns.has('unlocked_plot_count')) {
-    db.run('ALTER TABLE jiazi_farm_state ADD COLUMN unlocked_plot_count INTEGER NOT NULL DEFAULT 1');
-  }
-
-  const plotCount = Number(db.exec('SELECT COUNT(*) AS count FROM jiazi_farm_plots')[0]?.values[0]?.[0]) || 0;
-  if (plotCount > 0) return;
-
-  const legacyRows = db.exec(
-    'SELECT water, sunlight, nutrient, growth, level, total_harvests, updated_at FROM jiazi_farm_state WHERE id = 1',
-  )[0]?.values[0];
-  if (!legacyRows) return;
-
-  const [water, sunlight, nutrient, growth, level, totalHarvests, updatedAt] = legacyRows;
-  db.run(
-    `INSERT INTO jiazi_farm_plots
-      (slot, crop_tier, water, sunlight, nutrient, growth, level, total_harvests, updated_at)
-     VALUES (1, 1, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      Number(water) || 0,
-      Number(sunlight) || 0,
-      Number(nutrient) || 0,
-      Number(growth) || 0,
-      Number(level) || 1,
-      Number(totalHarvests) || 0,
-      String(updatedAt || new Date().toISOString()),
-    ],
-  );
 }
 
 

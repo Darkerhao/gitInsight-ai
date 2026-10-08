@@ -151,9 +151,12 @@ export function createProjectReportActions<T extends ProjectReportDraft>(ctx: Ac
       draft.publishStatus = 'success';
       draft.publishMessage = result.warning || '已提交飞书日报';
       return true;
-    } catch {
-      draft.publishStatus = 'failed';
-      draft.publishMessage = '提交结果未确认，请先核对飞书提交记录';
+    } catch (error) {
+      const blockedMessage = error instanceof Error
+        ? error.message.match(/(?:已取消发布，未提交飞书日报|同一日报正在检查或提交，请等待当前操作完成)$/)?.[0]
+        : undefined;
+      draft.publishStatus = blockedMessage?.startsWith('已取消') ? 'idle' : 'failed';
+      draft.publishMessage = blockedMessage || '提交结果未确认，请先核对飞书提交记录';
       return false;
     }
   }

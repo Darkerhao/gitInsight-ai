@@ -1,6 +1,29 @@
+---
+path: Refactor
+stage: ship
+current_sprint_slug: desktop-reliability
+current_roadmap_slug: desktop-reliability
+route_confidence: 0.98
+next_action: ""
+---
+
 # AI State Index
 
-本轮入口：main 推送自动递增版本并完成桌面打包发布。
+本轮入口：完成当前桌面可靠性审计提出的七项完善。
+
+## 本轮状态（2026-10-08）
+
+- path: Refactor
+- stage: ship（本地实现与验收完成，未提交/推送）
+- current_sprint_slug: desktop-reliability
+- current_roadmap_slug: desktop-reliability
+- design: `.ai_state/sprints/desktop-reliability/design.md`
+- route_confidence: 0.98
+- next_action: 本轮本地交付完成；无待实施项
+- evidence: `.ai_state/sprints/desktop-reliability/runtime-verify.md`
+- review: 代码审查、规格审查、最终评估及 polish 均 PASS
+- 验收：全量测试、70项可靠性回归、类型检查、构建、19项系统 Chrome E2E、隔离 Electron 启动及备份恢复通过。
+- 工作区：复用当前干净 checkout，互斥写集；不提交或推送。
 
 ## 本轮状态（2026-09-29）
 
@@ -40,6 +63,8 @@
 - current_sprint_slug: weekly-summary
 
 ## route_history
+
+- 2026-10-08 桌面可靠性：Refactor + roadmap，七项明确改进涉及数据、任务、发布和 renderer；既有复现支撑，置信度 0.98。
 
 - 2026-09-29 main 自动发布：Refactor，单一 CI 发布闭环，涉及工作流、旧脚本清理、契约测试与说明文档；置信度 0.96。复用当前 checkout，保留三处前端在途修改。
 

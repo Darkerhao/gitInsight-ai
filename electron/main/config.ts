@@ -1,5 +1,5 @@
 import { safeStorage } from 'electron';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import {
   DEFAULT_AI_BASE_URL_OPTIONS,
   DEFAULT_AI_PROFILE,
@@ -17,6 +17,7 @@ import {
   normalizeWorkHours,
 } from './autoSyncCore.js';
 import { ensureConfigDir, getConfigPath, getSecretsPath } from './paths.js';
+import { writeFileAtomically } from './atomicFile.js';
 
 export {
   normalizeAutoSyncConfig,
@@ -118,24 +119,14 @@ export function mergeSensitiveConfig(config: AppConfig, sensitiveConfig: ReturnT
 }
 
 
-export async function loadSensitiveConfig() {
-  try {
-    const encrypted = JSON.parse(await readFile(getSecretsPath(), 'utf-8')) as { payload?: string };
-    if (!encrypted.payload || !safeStorage.isEncryptionAvailable()) return pickSensitiveConfig(normalizeConfig());
-    const raw = safeStorage.decryptString(Buffer.from(encrypted.payload, 'base64'));
-    return pickSensitiveConfig(normalizeConfig(JSON.parse(raw)));
-  } catch {
-    return pickSensitiveConfig(normalizeConfig());
-  }
-}
-
-
-export async function saveSensitiveConfig(config: AppConfig) {
-  const sensitiveConfig = pickSensitiveConfig(config);
-  if (!safeStorage.isEncryptionAvailable()) return;
-  await ensureConfigDir();
-  const encrypted = safeStorage.encryptString(JSON.stringify(sensitiveConfig)).toString('base64');
-  await writeFile(getSecretsPath(), JSON.stringify({ payload: encrypted }, null, 2), 'utf-8');
+async function loadSensitiveConfig() {
+  const contents = await readOptionalFile(getSecretsPath());
+  if (contents === null) return pickSensitiveConfig(normalizeConfig());
+  const encrypted = parseConfigObject(contents) as { payload?: string };
+  if (typeof encrypted.payload !== 'string' || !encrypted.payload) throw new Error('密钥文件格式无效。');
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('密钥保护不可用，无法读取现有密钥配置。');
+  const raw = safeStorage.decryptString(Buffer.from(encrypted.payload, 'base64'));
+  return pickSensitiveConfig(normalizeConfig(parseConfigObject(raw)));
 }
 
 
@@ -260,25 +251,97 @@ export function normalizeOptions(options: unknown, fallbackOptions: string[]) {
 }
 
 
-export async function loadConfig(): Promise<AppConfig> {
+let configQueue: Promise<unknown> = Promise.resolve();
+
+function queueConfig<T>(operation: () => Promise<T>): Promise<T> {
+  const result = configQueue.then(operation);
+  configQueue = result.catch(() => {});
+  return result;
+}
+
+async function readOptionalFile(filename: string): Promise<string | null> {
   try {
-    const raw = await readFile(getConfigPath(), 'utf-8');
-    const diskConfig = normalizeConfig(JSON.parse(raw));
-    const sensitiveConfig = await loadSensitiveConfig();
-    return mergeSensitiveConfig(diskConfig, sensitiveConfig);
-  } catch {
-    return mergeSensitiveConfig(normalizeConfig(), await loadSensitiveConfig());
+    return await readFile(filename, 'utf-8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
   }
 }
 
+function parseConfigObject(contents: string): Partial<AppConfig> & Record<string, unknown> {
+  const parsed: unknown = JSON.parse(contents);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('配置文件格式无效。');
+  return parsed as Partial<AppConfig> & Record<string, unknown>;
+}
 
-export async function saveConfig(config: AppConfig) {
+// The journal contains the previous pair (secrets stay encrypted). A crash or
+// failed second replacement must never pair a new secret with an old config.
+async function recoverConfigTransactionUnlocked(): Promise<void> {
+  const journalPath = `${getConfigPath()}.transaction.json`;
+  const contents = await readOptionalFile(journalPath);
+  if (contents === null) return;
+  const previous = parseConfigObject(contents);
+  if (![previous.config, previous.secrets].every(value => value === null || typeof value === 'string')) {
+    throw new Error('配置恢复文件格式无效，已停止读取。');
+  }
+  for (const [filename, value] of [[getSecretsPath(), previous.secrets], [getConfigPath(), previous.config]] as const) {
+    if (value === null) await rm(filename, { force: true });
+    else await writeFileAtomically(filename, value as string);
+  }
+  await rm(journalPath);
+}
+
+export function recoverConfigTransaction(): Promise<void> {
+  return queueConfig(recoverConfigTransactionUnlocked);
+}
+
+async function loadConfigUnlocked(): Promise<AppConfig> {
+  await recoverConfigTransactionUnlocked();
+  const raw = await readOptionalFile(getConfigPath());
+  const diskConfig = normalizeConfig(raw === null ? undefined : parseConfigObject(raw));
+  return mergeSensitiveConfig(diskConfig, await loadSensitiveConfig());
+}
+
+export function loadConfig(): Promise<AppConfig> {
+  return queueConfig(loadConfigUnlocked);
+}
+
+async function saveConfigUnlocked(config: AppConfig): Promise<AppConfig> {
+  await recoverConfigTransactionUnlocked();
   await ensureConfigDir();
   const normalizedConfig = normalizeConfig(config);
   if (hasSensitiveConfig(normalizedConfig) && !safeStorage.isEncryptionAvailable()) {
     throw new Error('密钥保护不可用，已阻止保存包含 AI Key、飞书 Cookie 或 CSRF Token 的配置，避免敏感配置保存后丢失。');
   }
-  await saveSensitiveConfig(normalizedConfig);
-  await writeFile(getConfigPath(), JSON.stringify(stripSensitiveConfig(normalizedConfig), null, 2), 'utf-8');
+  const sensitiveConfig = hasSensitiveConfig(normalizedConfig)
+    ? JSON.stringify({ payload: safeStorage.encryptString(JSON.stringify(pickSensitiveConfig(normalizedConfig))).toString('base64') }, null, 2)
+    : null;
+  const journalPath = `${getConfigPath()}.transaction.json`;
+  const previous = {
+    config: await readOptionalFile(getConfigPath()),
+    secrets: await readOptionalFile(getSecretsPath()),
+  };
+  await writeFileAtomically(journalPath, JSON.stringify(previous));
+  try {
+    if (sensitiveConfig === null) await rm(getSecretsPath(), { force: true });
+    else await writeFileAtomically(getSecretsPath(), sensitiveConfig);
+    await writeFileAtomically(getConfigPath(), JSON.stringify(stripSensitiveConfig(normalizedConfig), null, 2));
+    await rm(journalPath);
+  } catch (error) {
+    try {
+      await recoverConfigTransactionUnlocked();
+    } catch (recoveryError) {
+      throw new AggregateError([error, recoveryError], '配置保存失败，旧配置尚未恢复；请检查磁盘后重新启动。');
+    }
+    throw error;
+  }
   return normalizedConfig;
+}
+
+export function saveConfig(config: AppConfig): Promise<AppConfig> {
+  return queueConfig(() => saveConfigUnlocked(config));
+}
+
+export function updateConfig(mutator: (config: AppConfig) => AppConfig): Promise<AppConfig> {
+  return queueConfig(async () => saveConfigUnlocked(mutator(await loadConfigUnlocked())));
 }

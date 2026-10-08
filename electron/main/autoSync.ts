@@ -19,7 +19,7 @@ import {
   resolveTaskWorkHours,
   selectDueAutoSyncTasks,
 } from './autoSyncCore.js';
-import { loadConfig, normalizeConfig, saveConfig } from './config.js';
+import { loadConfig, normalizeConfig, updateConfig } from './config.js';
 import { syncFeishuDaily } from './feishuForm.js';
 import { requireFeishuConfigValue, resolveFeishuAuth } from './feishuAuth.js';
 import { generateReport } from './report.js';
@@ -101,22 +101,22 @@ export async function updateAutoSyncTaskStatus(
     success?: boolean;
   },
 ) {
-  const latestConfig = await loadConfig();
-  const tasks = latestConfig.autoSync.tasks.map((task) =>
-    task.id !== taskId
-      ? task
-      : {
-          ...task,
-          lastRunAt: options.ranAt,
-          lastStatus: status,
-          lastMessage: message,
-          lastRunKey: options.runKey,
-          lastScheduledRunKey: options.scheduled ? options.runKey : task.lastScheduledRunKey,
-          lastSuccessAt: options.success ? options.ranAt : task.lastSuccessAt,
-          lastSuccessKey: options.success ? options.runKey : task.lastSuccessKey,
-        },
-  );
-  const savedConfig = await saveConfig({ ...latestConfig, autoSync: { ...latestConfig.autoSync, tasks } });
+  const savedConfig = await updateConfig((current) => ({
+    ...current,
+    autoSync: {
+      ...current.autoSync,
+      tasks: current.autoSync.tasks.map((task) => task.id !== taskId ? task : {
+        ...task,
+        lastRunAt: options.ranAt,
+        lastStatus: status,
+        lastMessage: message,
+        lastRunKey: options.runKey,
+        lastScheduledRunKey: options.scheduled ? options.runKey : task.lastScheduledRunKey,
+        lastSuccessAt: options.success ? options.ranAt : task.lastSuccessAt,
+        lastSuccessKey: options.success ? options.runKey : task.lastSuccessKey,
+      }),
+    },
+  }));
   emitAutoSyncState(savedConfig);
   return savedConfig;
 }
@@ -394,8 +394,27 @@ export async function runAutoSync(trigger: 'scheduled' | 'manual', taskId?: stri
 
 
 export async function saveConfigAndReschedule(config: AppConfig) {
-  const savedConfig = await saveConfig(config);
+  const submitted = normalizeConfig(config);
+  const savedConfig = await updateConfig((current) => ({
+    ...submitted,
+    autoSync: {
+      ...submitted.autoSync,
+      tasks: submitted.autoSync.tasks.map((task) => {
+        const latest = current.autoSync.tasks.find((item) => item.id === task.id);
+        if (!latest) return task;
+        return {
+          ...task,
+          lastRunAt: latest.lastRunAt,
+          lastSuccessAt: latest.lastSuccessAt,
+          lastStatus: latest.lastStatus,
+          lastMessage: latest.lastMessage,
+          lastRunKey: latest.lastRunKey,
+          lastScheduledRunKey: latest.lastScheduledRunKey,
+          lastSuccessKey: latest.lastSuccessKey,
+        };
+      }),
+    },
+  }));
   scheduleAutoSync(savedConfig);
-  emitAutoSyncState(savedConfig);
   return savedConfig;
 }

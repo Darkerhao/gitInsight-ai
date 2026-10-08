@@ -266,30 +266,35 @@ function createAssistant() {
       ...(config.autoSync.enabled ? ['autoSync'] : []),
     ];
 
-    if (config.feishuForm.shareToken) {
-      await feishuState.loadFeishuFields({ silent: true });
-      if (config.feishuForm.projectFieldId) {
-        await feishuState.loadFeishuProjects({ silent: true });
-      }
-    }
-
     if (config.workspaceDirs.length) {
       await repoState.refreshRepos();
     }
 
-    await autoSyncStateApi.refreshAutoSyncState();
     configState.markConfigSaved();
   }
 
   async function init() {
+    dispose();
+    await loadConfig();
+    await localDataState.refreshLocalData();
     removeAutoSyncListener = window.api.onAutoSyncUpdated(autoSyncStateApi.applyAutoSyncState);
+    try {
+      await autoSyncStateApi.refreshAutoSyncState();
+    } catch (error) {
+      dispose();
+      throw error;
+    }
     removeFeishuAuthListener = window.api.onFeishuAuthUpdated((snapshot) => {
       void feishuState.applyFeishuAuthSnapshot(snapshot).catch((error: unknown) => {
         ElMessage.error(error instanceof Error ? error.message : '同步飞书登录态失败');
       });
     });
-    await loadConfig();
-    await localDataState.refreshLocalData();
+    if (config.feishuForm.shareToken) {
+      void feishuState.loadFeishuFields({ silent: true, background: true });
+      if (config.feishuForm.projectFieldId) {
+        void feishuState.loadFeishuProjects({ silent: true, background: true });
+      }
+    }
   }
 
   function dispose() {

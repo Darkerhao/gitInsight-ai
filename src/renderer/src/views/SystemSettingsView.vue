@@ -21,6 +21,7 @@ const assistant = useAssistant();
 const { config, activeAiProfile, projectOptions, storageInfo, refreshLocalData, saveSettings } = assistant;
 
 const activeTab = ref('basic');
+const backupOperation = ref<'export' | 'restore' | ''>('');
 
 const WELCOME_STORAGE_KEY = 'gitinsight:welcome-finished';
 const WELCOME_ANIMATION_ENABLED_KEY = 'gitinsight:welcome-animation-enabled';
@@ -90,6 +91,19 @@ function formatBytes(value: number) {
 async function refreshStorage() {
   await refreshLocalData();
   ElMessage.success('本地数据状态已刷新');
+}
+
+async function runBackupOperation(operation: 'export' | 'restore') {
+  if (backupOperation.value) return;
+  backupOperation.value = operation;
+  try {
+    const result = operation === 'export' ? await window.api.exportDataBackup() : await window.api.restoreDataBackup();
+    if (!result.canceled && operation === 'export') ElMessage.success(`备份已保存至 ${result.filePath}`);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '备份操作失败，请重试');
+  } finally {
+    backupOperation.value = '';
+  }
 }
 
 async function resetSettings() {
@@ -214,6 +228,14 @@ const operationCards = [
               </div>
             </el-descriptions-item>
           </el-descriptions>
+          <div class="panel-head" style="margin-top: 24px">
+            <h3>数据备份与恢复</h3>
+          </div>
+          <p class="muted-text">备份包含全部本地数据库记录和已保存配置，不包含 AI 密钥或飞书登录凭证。恢复会重启应用并关闭自动同步，请重新配置密钥、连接飞书并核对仓库路径。</p>
+          <div class="button-row">
+            <el-button :icon="FolderArchive" :loading="backupOperation === 'export'" :disabled="Boolean(backupOperation)" @click="runBackupOperation('export')">导出备份</el-button>
+            <el-button :icon="RefreshCw" type="warning" plain :loading="backupOperation === 'restore'" :disabled="Boolean(backupOperation)" @click="runBackupOperation('restore')">恢复备份</el-button>
+          </div>
         </div>
 
         <div v-if="activeTab === 'logs'" class="settings-section">

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
   AppConfig,
+  BackupOperationResult,
   AiConnectionTestPayload,
   AiConnectionTestResult,
   AutoSyncRunResult,
@@ -18,8 +19,6 @@ import type {
   FeishuProjectOption,
   FeishuProjectOptionsPayload,
   FeishuSubmissionRecordsPayload,
-  FeishuDuplicateCheckPayload,
-  FeishuDuplicateCheckResult,
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
   GenerateReportParams,
@@ -57,8 +56,6 @@ contextBridge.exposeInMainWorld('api', {
   loginFeishu: (payload: FeishuLoginPayload) => ipcRenderer.invoke('feishu:login', payload) as Promise<FeishuAuthSnapshot>,
   openFeishuSubmissionRecords: (payload: FeishuSubmissionRecordsPayload) =>
     ipcRenderer.invoke('feishu:open-submission-records', payload) as Promise<boolean>,
-  checkFeishuDuplicate: (payload: FeishuDuplicateCheckPayload) =>
-    ipcRenderer.invoke('feishu:check-duplicate', payload) as Promise<FeishuDuplicateCheckResult>,
   listFeishuFields: (payload: FeishuProjectOptionsPayload) =>
     ipcRenderer.invoke('feishu:list-fields', payload) as Promise<FeishuFieldOption[]>,
   listFeishuProjects: (payload: FeishuProjectOptionsPayload) =>
@@ -95,6 +92,8 @@ contextBridge.exposeInMainWorld('api', {
   saveWeeklySummary: (payload: SaveWeeklySummaryPayload) =>
     ipcRenderer.invoke('weekly-summary:save', payload) as Promise<WeeklySummaryRecord>,
   getStorageInfo: () => ipcRenderer.invoke('storage:info') as Promise<StorageInfo>,
+  exportDataBackup: () => ipcRenderer.invoke('storage:export-backup') as Promise<BackupOperationResult>,
+  restoreDataBackup: () => ipcRenderer.invoke('storage:restore-backup') as Promise<BackupOperationResult>,
   getCheckinWalletSnapshot: () =>
     ipcRenderer.invoke('checkin-wallet:get-snapshot') as Promise<CheckinWalletSnapshot>,
   runDailyCheckin: () =>

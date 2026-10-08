@@ -1,6 +1,6 @@
 # 发布与打包工作流
 
-项目使用 `electron-vite` 构建应用代码，使用 `electron-builder.config.cjs` 生成 Lite、Standard 两个发行版的桌面安装包。
+项目使用 `electron-vite` 构建应用代码，所有打包命令统一通过 `scripts/dist-edition.mjs` 加载唯一的 `electron-builder.config.cjs`，生成 Lite、Standard 两个发行版的桌面安装包。
 
 ## 推送 main 自动发布
 

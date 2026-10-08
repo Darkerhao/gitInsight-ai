@@ -1,3 +1,4 @@
+import { dialog } from 'electron';
 import { DEFAULT_FEISHU_FORM_CONFIG } from '../../src/shared/types.js';
 import type {
   FeishuFieldOption,
@@ -12,7 +13,9 @@ import type {
 import { fetchWithTimeout } from './networkRequest.js';
 import { normalizeWorkHours } from './config.js';
 import { recordErrorLog, recordSyncLog } from './database.js';
+import { mainWindow } from './windows.js';
 import {
+  checkFeishuDuplicate,
   getFeishuCookieHeader,
   getFeishuCsrfToken,
   getFeishuRequestContext,
@@ -402,14 +405,65 @@ export async function testSubmitFeishuForm(payload: FeishuTestSubmitPayload): Pr
 }
 
 
+const publicationsInFlight = new Set<string>();
+
 export async function syncFeishuDaily(payload: SyncFeishuDailyPayload): Promise<SyncFeishuDailyResult> {
   const formConfig: FeishuFormConfig = {
     ...DEFAULT_FEISHU_FORM_CONFIG,
     ...payload.config,
   };
+  const identity = JSON.stringify([
+    parseFeishuEndpointUrl(formConfig.endpoint).origin,
+    getFeishuShareToken(formConfig),
+    payload.date.trim(),
+    formConfig.reporterUserId.trim(),
+    formConfig.projectOptionId.trim(),
+  ]);
+  if (publicationsInFlight.has(identity)) {
+    throw new Error('同一日报正在检查或提交，请等待当前操作完成');
+  }
+  publicationsInFlight.add(identity);
+  try {
+    return await submitFeishuDaily({ ...payload, config: formConfig });
+  } finally {
+    publicationsInFlight.delete(identity);
+  }
+}
+
+async function submitFeishuDaily(payload: SyncFeishuDailyPayload): Promise<SyncFeishuDailyResult> {
+  const formConfig = payload.config;
   const startedAt = Date.now();
   try {
     const auth = await resolveFeishuAuth(formConfig, '同步飞书日报失败');
+    const duplicate = await checkFeishuDuplicate({
+      config: formConfig,
+      targetDate: payload.date,
+      projectName: formConfig.projectName,
+      projectOptionId: formConfig.projectOptionId,
+      workHours: normalizeWorkHours(payload.workHours, formConfig.defaultWorkHours),
+    }).catch(() => ({ available: false, matches: 0 }));
+    if (!duplicate.available || duplicate.matches > 0) {
+      const reason = duplicate.available
+        ? `飞书已存在 ${duplicate.matches} 条可能重复的日报`
+        : '无法读取飞书提交记录';
+      if (payload.triggerType === 'scheduled') {
+        throw new Error(`待核对：${reason}，自动同步已停止，请核对提交记录`);
+      }
+      const options: Electron.MessageBoxOptions = {
+        type: 'warning',
+        title: '核对飞书日报',
+        message: reason,
+        detail: `${payload.date}「${formConfig.projectName || formConfig.projectOptionId}」${normalizeWorkHours(payload.workHours, formConfig.defaultWorkHours)} 小时。请先在“飞书提交记录”中核对；继续发布可能产生重复日报。`,
+        buttons: ['取消发布', '仍然发布'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      };
+      const confirmation = mainWindow && !mainWindow.isDestroyed()
+        ? await dialog.showMessageBox(mainWindow, options)
+        : await dialog.showMessageBox(options);
+      if (confirmation.response !== 1) throw new Error('已取消发布，未提交飞书日报');
+    }
     const requestId = `gitinsight-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
     const response = await fetchWithTimeout(auth.endpoint, {
