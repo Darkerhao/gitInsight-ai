@@ -31,6 +31,7 @@ const WELCOME_ANIMATION_ENABLED_KEY = 'gitinsight:welcome-animation-enabled';
 const themeMode = ref<ThemeMode>(getInitialThemeMode());
 const showWelcome = ref(shouldShowWelcomeOnLaunch());
 const assistantReady = ref(false);
+const initializationError = ref('');
 const route = useRoute();
 const router = useRouter();
 const { zoomFactor, canZoomOut, canZoomIn, initializePageZoom, zoomIn, zoomOut, resetPageZoom } = usePageZoom();
@@ -226,12 +227,20 @@ watch(
   { flush: 'sync', immediate: true },
 );
 
-onMounted(async () => {
-  window.addEventListener('keydown', handlePageZoomShortcut, true);
+async function initializeAssistant() {
+  initializationError.value = '';
+  try {
+    await assistant.init();
+    assistantReady.value = true;
+  } catch (error) {
+    initializationError.value = error instanceof Error ? error.message : '本地数据加载失败';
+  }
+}
 
-  await initializePageZoom();
-  await assistant.init();
-  assistantReady.value = true;
+onMounted(() => {
+  window.addEventListener('keydown', handlePageZoomShortcut, true);
+  void initializePageZoom();
+  void initializeAssistant();
 });
 
 onBeforeUnmount(() => {
@@ -241,9 +250,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <WelcomeGate v-if="showWelcome" :metrics="welcomeMetrics" @finished="finishWelcome" @navigate="handleNavigate" />
+  <WelcomeGate v-if="showWelcome && !initializationError" :metrics="welcomeMetrics" @finished="finishWelcome" @navigate="handleNavigate" />
 
-  <div class="app-layout atelier-app" :inert="showWelcome || undefined">
+  <div class="app-layout atelier-app" :inert="(showWelcome && !initializationError) || undefined">
     <AppSidebar v-model:active-nav="activeNav" />
 
     <main class="app-main">
@@ -259,7 +268,14 @@ onBeforeUnmount(() => {
       />
 
       <div class="app-scroll atelier-scroll" :class="{ 'is-immersive': activeNav === 'timeline' }">
-        <Transition name="route-switch" mode="out-in">
+        <el-result v-if="initializationError" icon="error" title="无法加载本地数据" :sub-title="initializationError">
+          <template #extra>
+            <p>请检查本地配置文件或磁盘状态，修复后重新加载。</p>
+            <el-button type="primary" @click="initializeAssistant">重新加载</el-button>
+          </template>
+        </el-result>
+        <el-empty v-else-if="!assistantReady" description="正在加载本地数据…" />
+        <Transition v-else name="route-switch" mode="out-in">
           <component :is="activeView" :key="activeNav" :active-nav="activeNav" @navigate="handleNavigate" />
         </Transition>
 

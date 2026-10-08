@@ -1,7 +1,7 @@
 import { computed } from 'vue';
 import type { Ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { DEFAULT_AI_PROFILE, DEFAULT_AUTO_SYNC_CONFIG, DEFAULT_AUTO_SYNC_TASK_CONFIG } from '@shared/types';
+import { DEFAULT_AI_PROFILE, DEFAULT_AUTO_SYNC_TASK_CONFIG } from '@shared/types';
 import type { AiProfile, AppConfig, AutoSyncTaskConfig } from '@shared/types';
 import { normalizeRepoDisplayNames } from '@shared/repositoryName';
 import {
@@ -248,8 +248,10 @@ export function createConfigState(ctx: ConfigStateContext) {
 
 
   async function persistConfig() {
-    const saved = await window.api.saveConfig(getConfigPayload());
-    markConfigSaved();
+    const payload = getConfigPayload();
+    const signature = getEditableConfigSignature();
+    const saved = await window.api.saveConfig(payload);
+    savedConfigSignature.value = signature;
     return saved;
   }
 
@@ -268,12 +270,7 @@ export function createConfigState(ctx: ConfigStateContext) {
     const payload = getConfigPayload();
     if (!(await validateAutoSyncBeforeSave(payload))) return;
     try {
-      const saved = await persistConfig();
-      Object.assign(config.autoSync, {
-        enabled: Boolean(saved.autoSync?.enabled ?? DEFAULT_AUTO_SYNC_CONFIG.enabled),
-        tasks: (saved.autoSync?.tasks ?? []).map((task) => ({ ...task, repoPaths: [...(task.repoPaths ?? [])] })),
-      });
-      markConfigSaved();
+      await persistConfig();
       await refreshAutoSyncState();
       ElMessage.success('配置已保存');
     } catch (error) {

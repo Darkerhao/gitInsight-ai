@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import * as fs from 'node:fs';
 import * as files from 'node:fs/promises';
 import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { compileFunction } from 'node:vm';
 import ts from 'typescript';
@@ -27,9 +28,13 @@ async function database(t, overrides = {}) {
   const filename = path.join(directory, 'reports.sqlite');
   const SQL = await initSqlJs();
   let initializations = 0;
+  const atomicFile = await loadModule('atomicFile', {
+    'node:crypto': crypto, 'node:fs/promises': { ...files, ...overrides },
+  });
   const api = await loadModule('database', {
     electron: {}, 'node:fs': fs, 'node:fs/promises': { ...files, ...overrides }, 'node:path': path,
     'sql.js': async () => { initializations++; return SQL; },
+    './atomicFile.js': atomicFile,
     '../../src/shared/edition.js': {},
     './paths.js': { ensureConfigDir: async () => {}, getDatabasePath: () => filename },
     './reflectionStore.js': { ensureReflectionSchema() {} },
@@ -102,6 +107,7 @@ async function publication({ remoteError, logError } = {}) {
     return new Response(JSON.stringify({ code: 0 }));
   };
   const api = await loadModule('feishuForm', {
+    electron: {},
     '../../src/shared/types.js': { DEFAULT_FEISHU_FORM_CONFIG: {} },
     './config.js': { normalizeWorkHours: () => 8 },
     './database.js': {
@@ -109,9 +115,13 @@ async function publication({ remoteError, logError } = {}) {
       async recordErrorLog() { if (logError) throw logError; },
     },
     './networkRequest.js': { fetchWithTimeout: fetch },
+    './windows.js': {},
     './feishuAuth.js': {
       resolveFeishuAuth: async () => ({ endpoint: 'https://example.test/submit' }),
       requireFeishuConfigValue: (value) => value,
+      parseFeishuEndpointUrl: endpoint => new URL(endpoint),
+      getFeishuShareToken: config => config.shareToken,
+      checkFeishuDuplicate: async () => ({ available: true, matches: 0 }),
     },
   });
   // Also cover the original implementation before it adopts fetchWithTimeout.
@@ -120,7 +130,8 @@ async function publication({ remoteError, logError } = {}) {
   try {
     return { result: await api.syncFeishuDaily({
       date: '2026-09-29', report: 'work', reporterName: 'Tester',
-      config: { reporterName: '', reporterAvatarUrl: '' },
+      config: { reporterName: '', reporterAvatarUrl: '', endpoint: 'https://example.test/submit',
+        shareToken: 'shr-test', reporterUserId: 'tester', projectOptionId: 'project' },
     }), logs, submissions };
   } finally { globalThis.fetch = originalFetch; }
 }

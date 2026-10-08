@@ -165,11 +165,15 @@ export function createFeishuState(ctx: FeishuStateContext) {
   }
 
 
-  async function loadFeishuFields(options: { silent?: boolean } = {}) {
+  async function loadFeishuFields(options: { silent?: boolean; background?: boolean } = {}) {
     fieldLoading.value = true;
     try {
-      await persistConfigBeforeAction('解析飞书字段');
-      feishuFieldOptions.value = await window.api.listFeishuFields({ config: getConfigPayload().feishuForm });
+      if (!options.background) await persistConfigBeforeAction('解析飞书字段');
+      const requestConfig = { ...config.feishuForm, projectWorkHours: { ...config.feishuForm.projectWorkHours } };
+      const signature = JSON.stringify(requestConfig);
+      const fields = await window.api.listFeishuFields({ config: requestConfig });
+      if (signature !== JSON.stringify(config.feishuForm)) return;
+      feishuFieldOptions.value = fields;
       status.value = `已解析 ${feishuFieldOptions.value.length} 个飞书表单字段`;
       if (!options.silent) ElMessage.success('飞书字段已解析');
     } catch (error) {
@@ -182,7 +186,7 @@ export function createFeishuState(ctx: FeishuStateContext) {
   }
 
 
-  async function loadFeishuProjects(options: { silent?: boolean } = {}) {
+  async function loadFeishuProjects(options: { silent?: boolean; background?: boolean } = {}) {
     if (!config.feishuForm.projectFieldId.trim()) {
       if (!options.silent) ElMessage.warning('请先选择或填写所属项目字段 ID');
       return;
@@ -190,10 +194,14 @@ export function createFeishuState(ctx: FeishuStateContext) {
 
     projectLoading.value = true;
     try {
-      await persistConfigBeforeAction('刷新飞书项目');
-      projectOptions.value = await window.api.listFeishuProjects({ config: getConfigPayload().feishuForm });
-      const selected = projectOptions.value.find((item) => item.id === config.feishuForm.projectOptionId);
-      if (selected) {
+      if (!options.background) await persistConfigBeforeAction('刷新飞书项目');
+      const requestConfig = { ...config.feishuForm, projectWorkHours: { ...config.feishuForm.projectWorkHours } };
+      const signature = JSON.stringify(requestConfig);
+      const projects = await window.api.listFeishuProjects({ config: requestConfig });
+      if (signature !== JSON.stringify(config.feishuForm)) return;
+      projectOptions.value = projects;
+      const selected = projects.find((item) => item.id === config.feishuForm.projectOptionId);
+      if (selected && !options.background) {
         config.feishuForm.projectName = selected.name;
       }
       status.value = `已获取 ${projectOptions.value.length} 个飞书项目选项`;

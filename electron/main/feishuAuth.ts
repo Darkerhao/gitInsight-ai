@@ -291,16 +291,19 @@ function buildFeishuDuplicateCheckScript(payload: Pick<FeishuDuplicateCheckPaylo
   })];
   const text = documents.map((doc) => doc.body?.innerText || '').join('\\n');
   if (!text || !/(我的提交记录|提交记录)/.test(text)) return { available: false, matches: 0 };
+  const recordText = (element) => normalize(element.innerText || element.textContent);
+  const hasRecordFields = (element) => {
+    const value = recordText(element);
+    return normalizeDate(value) && value.includes('所属项目') && /(?:每日工作时长|工作时长)[：:]?([0-9]+(?:\\.[0-9]+)?)/.test(value);
+  };
   const cards = documents.flatMap((doc) => Array.from(doc.querySelectorAll('body *')))
-    .filter((element) => {
-      const value = normalize(element.innerText || element.textContent);
-      if (value.length < 20 || value.length > 1800 || !normalizeDate(value).includes(date)) return false;
-      if (!value.includes('所属项目') && !value.includes('工作时长') && !value.includes('每日工作时长')) return false;
-      return !Array.from(element.children || []).some((child) => normalize(child.innerText || child.textContent).includes(date));
-    });
+    .filter((element) => hasRecordFields(element) && !Array.from(element.children || []).some(hasRecordFields));
+  // A header is visible before record loading finishes; an empty/unrecognized page is not proof of no duplicates.
+  if (!cards.length) return { available: false, matches: 0 };
   const project = normalize(projectName) || normalize(projectOptionId);
   const matches = cards.filter((card) => {
-    const value = normalize(card.innerText || card.textContent);
+    const value = recordText(card);
+    if (normalizeDate(value) !== date) return false;
     if (project && !value.includes(project)) return false;
     const hours = value.match(/(?:每日工作时长|工作时长)[：:]?([0-9]+(?:\\.[0-9]+)?)/);
     return hours ? Number(hours[1]) === targetHours : false;
@@ -668,26 +671,37 @@ export async function openFeishuSubmissionRecords(payload: FeishuSubmissionRecor
 export async function checkFeishuDuplicate(payload: FeishuDuplicateCheckPayload): Promise<FeishuDuplicateCheckResult> {
   const formConfig = { ...DEFAULT_FEISHU_FORM_CONFIG, ...payload.config };
   const targetUrl = getFeishuFormPageUrl(formConfig);
-  watchFeishuAuthSession(formConfig);
-  if (!feishuWindow || feishuWindow.isDestroyed()) {
-    await openFeishuSubmissionRecords({ config: formConfig });
-  } else {
-    feishuWindow.show();
-    feishuWindow.focus();
-    await feishuWindow.loadURL(targetUrl);
-    await focusFeishuSubmissionRecords(feishuWindow);
-  }
-  if (!feishuWindow || feishuWindow.isDestroyed()) return { available: false, matches: 0 };
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    try {
-      const result = await feishuWindow.webContents.executeJavaScript(buildFeishuDuplicateCheckScript(payload), true);
-      if (result && typeof result === 'object' && 'available' in result) return result as FeishuDuplicateCheckResult;
-    } catch {
-      // The records page may still be rendering.
+  const checkWindow = new BrowserWindow({
+    width: 1200,
+    height: 860,
+    show: false,
+    webPreferences: {
+      partition: FEISHU_PARTITION,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      backgroundThrottling: false,
+    },
+  });
+  try {
+    await checkWindow.loadURL(targetUrl);
+    if (!(await focusFeishuSubmissionRecords(checkWindow))) return { available: false, matches: 0 };
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      if (checkWindow.isDestroyed()) break;
+      try {
+        const result = await checkWindow.webContents.executeJavaScript(buildFeishuDuplicateCheckScript(payload), true);
+        if (result?.available === true && Number.isInteger(result.matches) && result.matches >= 0) {
+          return result as FeishuDuplicateCheckResult;
+        }
+      } catch {
+        // The records page may still be rendering.
+      }
+      await wait(400);
     }
-    await wait(400);
+    return { available: false, matches: 0 };
+  } finally {
+    if (!checkWindow.isDestroyed()) checkWindow.destroy();
   }
-  return { available: false, matches: 0 };
 }
 
 

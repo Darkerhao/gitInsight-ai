@@ -72,11 +72,20 @@ export function createAutoSyncState(ctx: AutoSyncStateContext) {
   function applyAutoSyncState(state: AutoSyncState) {
     const tasks = state.tasks ?? [];
     autoSyncState.value = { ...state, tasks };
-    config.autoSync.enabled = Boolean(state.enabled);
-    config.autoSync.tasks = tasks.map((task) => {
-      const { nextRunAt: _nextRunAt, isRunning: _isRunning, ...taskConfig } = task;
-      return { ...taskConfig, repoPaths: [...(taskConfig.repoPaths ?? [])] };
-    });
+    const runtimeById = new Map(tasks.map((task) => [task.id, task]));
+    for (const task of config.autoSync.tasks) {
+      const runtime = runtimeById.get(task.id);
+      if (!runtime) continue;
+      Object.assign(task, {
+        lastRunAt: runtime.lastRunAt,
+        lastSuccessAt: runtime.lastSuccessAt,
+        lastStatus: runtime.lastStatus,
+        lastMessage: runtime.lastMessage,
+        lastRunKey: runtime.lastRunKey,
+        lastScheduledRunKey: runtime.lastScheduledRunKey,
+        lastSuccessKey: runtime.lastSuccessKey,
+      });
+    }
   }
 
 
