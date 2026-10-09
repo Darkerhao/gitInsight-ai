@@ -1,15 +1,25 @@
 ---
 path: Refactor
 stage: ship
-current_sprint_slug: desktop-reliability
-current_roadmap_slug: desktop-reliability
-route_confidence: 0.98
+current_sprint_slug: about-updates
+current_roadmap_slug: ""
+route_confidence: 0.97
 next_action: ""
 ---
 
 # AI State Index
 
-本轮入口：完成当前桌面可靠性审计提出的七项完善。
+## 本轮状态（2026-10-09）
+
+- 关于与应用内更新：Refactor，单一客户端更新闭环，覆盖主进程、IPC、界面与发布清单。
+- design: `.ai_state/sprints/about-updates/design.md`
+- evidence: `.ai_state/sprints/about-updates/runtime-verify.md`
+- review: `.ai_state/sprints/about-updates/reviews/pass2.md`（代码、规格与 evaluator 均 PASS，退出路径 P2 已关闭）
+- 验收：165 项单测、28 项浏览器回归、5 项 updater 实跑、桌面回归、类型检查、构建及 Windows NSIS 打包通过。
+- 当前工作区初始干净，所有改动已集成；未提交、推送或发布。
+- 临时 worktree 已完成职责，但删除被自动审批策略拒绝，保留 `.cache/worktrees/about-updates`。
+
+本轮入口：新增关于页与应用内自动更新。
 
 ## 本轮状态（2026-10-08）
 
@@ -63,6 +73,8 @@ next_action: ""
 - current_sprint_slug: weekly-summary
 
 ## route_history
+
+- 2026-10-09 关于与应用内更新：Refactor，现有客户端无 updater，需统一接入两个发行版的检测、下载、安装和发布清单；置信度 0.97。
 
 - 2026-10-08 桌面可靠性：Refactor + roadmap，七项明确改进涉及数据、任务、发布和 renderer；既有复现支撑，置信度 0.98。
 

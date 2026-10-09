@@ -82,6 +82,7 @@ jobs:
               release/*/lite/MajiAI-*.exe
               release/*/lite/MajiAI-*.zip
               release/*/lite/MajiAI-*.blockmap
+              release/*/lite/lite.yml
           - name: Windows
             edition: standard
             editionLabel: Standard
@@ -92,6 +93,7 @@ jobs:
               release/*/standard/MajiAI-*.exe
               release/*/standard/MajiAI-*.zip
               release/*/standard/MajiAI-*.blockmap
+              release/*/standard/standard.yml
           - name: macOS
             edition: lite
             editionLabel: Lite
@@ -102,6 +104,7 @@ jobs:
               release/*/lite/MajiAI-*.dmg
               release/*/lite/MajiAI-*.zip
               release/*/lite/MajiAI-*.blockmap
+              release/*/lite/lite-mac.yml
           - name: macOS
             edition: standard
             editionLabel: Standard
@@ -112,6 +115,7 @@ jobs:
               release/*/standard/MajiAI-*.dmg
               release/*/standard/MajiAI-*.zip
               release/*/standard/MajiAI-*.blockmap
+              release/*/standard/standard-mac.yml
           - name: Linux
             edition: lite
             editionLabel: Lite
@@ -124,6 +128,7 @@ jobs:
               release/*/lite/MajiAI-*.rpm
               release/*/lite/MajiAI-*.tar.gz
               release/*/lite/MajiAI-*.blockmap
+              release/*/lite/lite-linux.yml
           - name: Linux
             edition: standard
             editionLabel: Standard
@@ -136,6 +141,7 @@ jobs:
               release/*/standard/MajiAI-*.rpm
               release/*/standard/MajiAI-*.tar.gz
               release/*/standard/MajiAI-*.blockmap
+              release/*/standard/standard-linux.yml
 
     env:
       APP_EDITION: ${{ matrix.edition }}
@@ -190,6 +196,16 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
-          files: release-assets/**/MajiAI-*
+          files: |
+            release-assets/**/MajiAI-*
+            release-assets/**/lite*.yml
+            release-assets/**/standard*.yml
           fail_on_unmatched_files: true
           generate_release_notes: true
+          draft: true
+      - name: Publish completed release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: gh release edit "$RELEASE_TAG" --draft=false --latest

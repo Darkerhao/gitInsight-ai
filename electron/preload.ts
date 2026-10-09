@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { AppLink, AppUpdateState } from '../src/shared/appUpdate.js';
 import type {
   AppConfig,
   BackupOperationResult,
@@ -45,6 +46,17 @@ import type {
 } from '../src/shared/types.js';
 
 contextBridge.exposeInMainWorld('api', {
+  getAppUpdateState: () => ipcRenderer.invoke('app-update:get-state') as Promise<AppUpdateState>,
+  checkForAppUpdates: () => ipcRenderer.invoke('app-update:check') as Promise<AppUpdateState>,
+  downloadAppUpdate: () => ipcRenderer.invoke('app-update:download') as Promise<AppUpdateState>,
+  setAutomaticUpdates: (enabled: boolean) => ipcRenderer.invoke('app-update:set-automatic', enabled) as Promise<AppUpdateState>,
+  installAppUpdate: () => ipcRenderer.invoke('app-update:install') as Promise<void>,
+  openAppLink: (link: AppLink) => ipcRenderer.invoke('app:open-link', link) as Promise<void>,
+  onAppUpdateState: (callback: (state: AppUpdateState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: AppUpdateState) => callback(state);
+    ipcRenderer.on('app-update:state', listener);
+    return () => ipcRenderer.removeListener('app-update:state', listener);
+  },
   loadConfig: () => ipcRenderer.invoke('app:load-config') as Promise<AppConfig>,
   saveConfig: (config: AppConfig) => ipcRenderer.invoke('app:save-config', config) as Promise<AppConfig>,
   testAiConnection: (payload: AiConnectionTestPayload) =>

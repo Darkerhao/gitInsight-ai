@@ -1,5 +1,7 @@
 /// <reference types="vite/client" />
 
+import type { AppLink, AppUpdateState } from '@shared/appUpdate';
+
 import type {
   AppConfig,
   BackupOperationResult,
@@ -41,6 +43,13 @@ import type {
 declare global {
   interface Window {
     api: {
+      getAppUpdateState: () => Promise<AppUpdateState>;
+      checkForAppUpdates: () => Promise<AppUpdateState>;
+      downloadAppUpdate: () => Promise<AppUpdateState>;
+      setAutomaticUpdates: (enabled: boolean) => Promise<AppUpdateState>;
+      installAppUpdate: () => Promise<void>;
+      openAppLink: (link: AppLink) => Promise<void>;
+      onAppUpdateState: (callback: (state: AppUpdateState) => void) => () => void;
       loadConfig: () => Promise<AppConfig>;
       saveConfig: (config: AppConfig) => Promise<AppConfig>;
       testAiConnection: (payload: AiConnectionTestPayload) => Promise<AiConnectionTestResult>;

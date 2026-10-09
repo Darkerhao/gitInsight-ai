@@ -1,6 +1,7 @@
 import { test as base, expect } from '@playwright/test';
 import { DEFAULT_AI_PROFILE, DEFAULT_AUTO_SYNC_CONFIG, DEFAULT_AUTO_SYNC_TASK_CONFIG, DEFAULT_FEISHU_FORM_CONFIG } from '../../src/shared/types';
 import type { AutoSyncState, GenerateReportParams, SaveDailyReportPayload, SyncFeishuDailyPayload } from '../../src/shared/types';
+import type { AppUpdateState } from '../../src/shared/appUpdate';
 
 declare global {
   interface Window {
@@ -17,6 +18,14 @@ declare global {
       generations: GenerateReportParams[];
       saves: SaveDailyReportPayload[];
       submissions: SyncFeishuDailyPayload[];
+      updateState: AppUpdateState;
+      updateChecks: number;
+      updateDownloads: number;
+      updateInstalls: number;
+      updateFailure: boolean;
+      updatePreferenceFailure: boolean;
+      openedLinks: string[];
+      emitUpdate: (patch: Partial<AppUpdateState>) => void;
     };
   }
 }
@@ -41,6 +50,12 @@ export const test = base.extend({
         configReadFailure: params.has('configReadFailure'), configSaves: 0, emitAutoSync: () => {},
         backupOutcome: 'canceled', backupCalls: [],
         generations: [], saves: [], submissions: [],
+        updateState: {
+          status: 'idle', supported: true, autoUpdate: false, currentVersion: '3.8.8', latestVersion: '',
+          releaseNotes: '', releaseDate: '', lastCheckedAt: '', message: '', progress: null,
+        },
+        updateChecks: 0, updateDownloads: 0, updateInstalls: 0, updateFailure: false,
+        updatePreferenceFailure: false, openedLinks: [], emitUpdate: () => {},
       };
       async function metadata<T>(value: T): Promise<T> {
         if (params.get('feishu') === 'hanging') return new Promise(() => {});
@@ -49,6 +64,29 @@ export const test = base.extend({
       }
       let id = 100;
       window.api = {
+        getAppUpdateState: async () => state.updateState,
+        onAppUpdateState: listener => {
+          state.emitUpdate = patch => { Object.assign(state.updateState, patch); listener(structuredClone(state.updateState)); };
+          return () => { state.emitUpdate = () => {}; };
+        },
+        checkForAppUpdates: async () => {
+          state.updateChecks++;
+          if (state.updateFailure) throw new Error('无法连接更新服务，请重试');
+          state.emitUpdate({ status: 'not-available', lastCheckedAt: '2026-10-09T00:00:00.000Z', message: '' });
+          return state.updateState;
+        },
+        downloadAppUpdate: async () => {
+          state.updateDownloads++;
+          state.emitUpdate({ status: 'downloading', progress: { percent: 37, transferred: 37 * 1048576, total: 100 * 1048576, bytesPerSecond: 2 * 1048576 } });
+          return state.updateState;
+        },
+        setAutomaticUpdates: async enabled => {
+          if (state.updatePreferenceFailure) throw new Error('无法保存更新设置');
+          state.emitUpdate({ autoUpdate: enabled });
+          return state.updateState;
+        },
+        installAppUpdate: async () => { state.updateInstalls++; },
+        openAppLink: async link => { state.openedLinks.push(link); },
         loadConfig: async () => {
           if (state.configReadFailure) throw new Error('配置文件损坏，请修复 config.json');
           return config;
@@ -62,7 +100,7 @@ export const test = base.extend({
         listFeishuFields: async (payload) => { structuredClone(payload); return metadata([]); },
         listFeishuProjects: async (payload) => { structuredClone(payload); return metadata([{ id: 'target', name: '测试项目' }]); },
         listDailyReports: async () => [], listSyncLogs: async () => [], listErrorLogs: async () => [],
-        getStorageInfo: async () => ({ appVersion: 'test', reportsCount: 0, syncLogsCount: 0, errorLogsCount: 0 }),
+        getStorageInfo: async () => ({ appName: '码迹 AI 轻量版', appVersion: '3.8.8', appEdition: 'lite', appEditionLabel: '轻量版', reportsCount: 0, syncLogsCount: 0, errorLogsCount: 0 }),
         exportDataBackup: async () => {
           state.backupCalls.push('export');
           if (state.backupOutcome === 'error') throw new Error('备份文件写入失败');

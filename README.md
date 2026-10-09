@@ -19,6 +19,7 @@
 | 时间长河 | 基于真实日报与提交的年度工程轨迹：提交热力图、里程碑、轨迹回放 |
 | 签到奖励 | 每日签到赚「甲币」，兑换播放几十种全屏特效 |
 | 系统设置 | 明暗主题、开屏动画、本地存储与加密状态查看、数据备份与恢复 |
+| 关于 | 查看当前版本与更新说明、应用内检查和下载更新、重启安装、自动更新开关 |
 
 应用分 **简洁版（Lite）** 和 **标准版（Standard）** 两个发行版，功能完全一致，仅产品名称与安装包不同，按团队习惯任选其一即可。
 
@@ -27,6 +28,10 @@
 ## 下载安装
 
 前往 [GitHub Releases](https://github.com/Darkerhao/gitInsight-ai/releases) 下载对应平台、对应版本（Lite / Standard）的安装包，安装后启动即可。
+
+安装带有更新功能的新版本后，可在 **设置 → 关于** 中直接更新。默认启动后自动检查并下载新版本，正常退出应用时安装；也可点击 **重启安装** 立即更新，或关闭自动更新、改为手动检查。Lite 与 Standard 分别更新，不会切换发行版。
+
+自动安装支持 Windows 安装版（NSIS）和 Linux AppImage/deb/rpm；Windows 便携版、解压版及当前未签名的 macOS 发行版会显示不支持的原因。首次从没有更新功能的旧版本升级，仍需安装一次新安装包。
 
 也可以从源码运行，见文末[开发者](#开发者)一节。
 
@@ -195,6 +200,7 @@ npm run typecheck  # vue-tsc 类型检查
 npm test           # 业务与持久化回归、发布契约测试
 npm run test:e2e   # 浏览器回归（需先安装 Playwright Chromium）
 npm run test:desktop # 构建后使用隔离数据目录验证真实 Electron 启动
+npm run test:app-update:desktop # Windows 更新实跑：本地 HTTP、校验和 IPC，拦截实际安装
 
 # 打包发行版：dist:<win|mac|linux>:<lite|standard>，产物在 release/<版本>/<发行版>/
 npm run dist:win:standard
