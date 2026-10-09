@@ -1,5 +1,14 @@
 # 当前架构要点
 
+## 关于与客户端更新（2026-10-09）
+
+- 关于页通过单一 `appUpdate` 主进程模块访问 electron-updater；preload 仅提供固定的检查、下载、偏好、安装、链接和订阅操作，更新控制只接受主窗口调用。
+- 主进程保存更新状态并通过事件推送；renderer 复用单一快照，避免较早的 IPC 响应覆盖较新的下载事件。旧 about→system 映射和无消费者的 about-* 全局样式已移除。
+- 自动更新偏好独立保存在 `updater-settings.json`，复用原子写入。启动稍后及每 6 小时检查，下载后正常退出安装；主入口早期 quit 监听先应用最新偏好，覆盖普通退出与备份恢复直接退出，不打断编辑。
+- GitHub 稳定 Release 使用 lite/standard 独立清单，随包生成更新源配置；CI 先上传完整草稿再公开 Release。下载和安装使用官方校验与平台 updater。
+- 当前支持 Windows NSIS、Linux AppImage/deb/rpm；开发环境、免安装包和未签名 macOS 包明确显示限制。
+- [运行证据](../sprints/about-updates/runtime-verify.md) · [发布说明](../../docs/release-workflow.md)。
+
 ## 桌面数据与工作流（2026-10-08）
 
 - 主入口先获取单实例锁；pending 恢复和配置校验成功后才注册 IPC、创建窗口及启动同步。启动失败明确报告并停止。

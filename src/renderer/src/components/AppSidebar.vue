@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
-import { Bot, BrainCog, CalendarDays, FileCog, FileText, FolderKanban, History, Lightbulb, Settings, Sparkles, Sprout, ClipboardList } from 'lucide-vue-next';
+import { Bot, BrainCog, CalendarDays, FileCog, FileText, FolderKanban, History, Info, Lightbulb, Settings, Sparkles, Sprout, ClipboardList } from 'lucide-vue-next';
+import { useAppUpdates } from '@/composables/useAppUpdates';
+
+const { hasUpdate } = useAppUpdates();
 
 const props = defineProps<{
   activeNav: string;
@@ -43,6 +46,7 @@ const navGroups: NavGroup[] = [
     children: [
       { key: 'ai', label: 'AI 设置', icon: BrainCog, enabled: true },
       { key: 'system', label: '系统设置', icon: Settings, enabled: true },
+      { key: 'about', label: '关于', icon: Info, enabled: true },
     ],
   },
 ];
@@ -123,7 +127,10 @@ onBeforeUnmount(() => {
               :disabled="!child.enabled"
             >
               <component :is="child.icon" :size="16" class="sidebar-menu-icon" />
-              <span class="sidebar-menu-label">{{ child.label }}</span>
+              <el-badge v-if="child.key === 'about'" is-dot :hidden="!hasUpdate">
+                <span class="sidebar-menu-label">{{ child.label }}</span>
+              </el-badge>
+              <span v-else class="sidebar-menu-label">{{ child.label }}</span>
             </el-menu-item>
           </el-sub-menu>
 

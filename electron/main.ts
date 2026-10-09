@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, powerMonitor } from 'electron';
 import { clearAutoSyncTimer, refreshAutoSyncSchedule } from './main/autoSync.js';
 import { applyPendingRestore } from './main/backup.js';
+import { initializeAppUpdates, stopAppUpdates } from './main/appUpdate.js';
 import { loadConfig } from './main/config.js';
 import { disposeFeishuAuthWatchers } from './main/feishuAuth.js';
 import { registerIpcHandlers } from './main/ipc.js';
@@ -11,6 +12,9 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   let initialized = false;
   let stopping = false;
+
+  // Register before the updater's quit hook. app.exit() also emits quit, but skips before-quit.
+  app.on('quit', stopAppUpdates);
 
   function stopWithError(error: unknown) {
     if (stopping) return;
@@ -32,6 +36,8 @@ if (!app.requestSingleInstanceLock()) {
     await applyPendingRestore();
     if (stopping) return;
     await loadConfig();
+    if (stopping) return;
+    await initializeAppUpdates();
     if (stopping) return;
     registerIpcHandlers();
     createMainWindow();

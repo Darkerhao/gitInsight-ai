@@ -1,5 +1,8 @@
 import { exportDataBackup, restoreDataBackup } from './backup.js';
-import { dialog, ipcMain } from 'electron';
+import { dialog, ipcMain, shell } from 'electron';
+import { APP_LINKS } from '../../src/shared/appUpdate.js';
+import type { AppLink } from '../../src/shared/appUpdate.js';
+import { checkForAppUpdates, downloadAppUpdate, getAppUpdateState, installAppUpdate, setAutomaticUpdates } from './appUpdate.js';
 import type {
   AppConfig,
   AiConnectionTestPayload,
@@ -35,6 +38,19 @@ import { generateWeeklySummary, getWeeklySummary, getWeeklySummaryHistory, getWe
 import { changePageZoom, clampPageZoom } from '../../src/shared/pageZoom.js';
 
 export function registerIpcHandlers() {
+  const requireMainWindow = (event: Electron.IpcMainInvokeEvent) => {
+    if (event.sender !== getMainWindow()?.webContents) throw new Error('此操作仅限应用主窗口。');
+  };
+  ipcMain.handle('app-update:get-state', event => { requireMainWindow(event); return getAppUpdateState(); });
+  ipcMain.handle('app-update:check', event => { requireMainWindow(event); return checkForAppUpdates(); });
+  ipcMain.handle('app-update:download', event => { requireMainWindow(event); return downloadAppUpdate(); });
+  ipcMain.handle('app-update:set-automatic', (event, enabled: boolean) => { requireMainWindow(event); return setAutomaticUpdates(enabled); });
+  ipcMain.handle('app-update:install', event => { requireMainWindow(event); installAppUpdate(); });
+  ipcMain.handle('app:open-link', async (event, link: AppLink) => {
+    requireMainWindow(event);
+    if (link !== 'home' && link !== 'releases') throw new Error('不支持的应用链接。');
+    await shell.openExternal(APP_LINKS[link]);
+  });
   const generations = new Map<string, { owner: number; controller: AbortController }>();
   ipcMain.handle('app:load-config', async () => loadConfig());
   ipcMain.handle('app:save-config', async (_event, config: AppConfig) => saveConfigAndReschedule(config));

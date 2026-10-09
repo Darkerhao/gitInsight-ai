@@ -1,10 +1,14 @@
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const { execFileSync, spawnSync } = require('node:child_process');
 const { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
 const { join, resolve } = require('node:path');
 const { tmpdir } = require('node:os');
 const { test } = require('node:test');
 const { expandMacro } = require('app-builder-lib/out/util/macroExpander');
+const { createUpdateInfoTasks, writeUpdateInfoFiles } = require('app-builder-lib/out/publish/updateInfoBuilder');
+const { Platform } = require('app-builder-lib');
+const { Arch } = require('builder-util');
 const { load } = require('js-yaml');
 const { minimatch } = require('minimatch');
 const { version } = require('../package.json');
@@ -13,7 +17,8 @@ const workflow = load(readFileSync(join(__dirname, '../.github/workflows/release
 test('release assets have unique ASCII names and exclude unpacked executables', () => {
   const originalEdition = process.env.APP_EDITION;
   const allNames = new Set();
-  const publishPattern = workflow.jobs.release.steps.find(step => step.uses?.startsWith('softprops/action-gh-release@')).with.files;
+  const publishPatterns = workflow.jobs.release.steps.find(step => step.uses?.startsWith('softprops/action-gh-release@')).with.files.trim().split(/\s+/);
+  const isPublished = file => publishPatterns.some(pattern => minimatch(file, pattern));
   try {
     for (const job of workflow.jobs.package.strategy.matrix.include) {
       process.env.APP_EDITION = job.edition;
@@ -36,7 +41,7 @@ test('release assets have unique ASCII names and exclude unpacked executables', 
           allNames.add(name);
           assert.ok(matches(`${base}/${name}`), `Missing upload: ${name}`);
           // Artifact extraction retains the version/edition directories below release/.
-          assert.ok(minimatch(`release-assets/${version}/${job.edition}/${name}`, publishPattern), `Missing release asset: ${name}`);
+          assert.ok(isPublished(`release-assets/${version}/${job.edition}/${name}`), `Missing release asset: ${name}`);
           assert.ok(!matches(`${base}/win-unpacked/${name}`));
         }
       }
@@ -44,6 +49,16 @@ test('release assets have unique ASCII names and exclude unpacked executables', 
       assert.ok(!matches(`${base}/win-unpacked/码迹 AI 标准版.exe`));
       assert.ok(!matches(`${base}/elevate.exe`));
       assert.ok(matches(`${base}/MajiAI-${job.editionLabel}-${version}-Windows-x64.exe.blockmap`));
+      assert.equal(config.publish.channel, job.edition);
+      assert.equal(config.publish.owner, 'Darkerhao');
+      assert.equal(config.publish.repo, 'gitInsight-ai');
+      const suffix = { Windows: '', macOS: '-mac', Linux: '-linux' }[job.name];
+      const manifest = `${job.edition}${suffix}.yml`;
+      assert.ok(!allNames.has(manifest), `Duplicate update manifest: ${manifest}`);
+      allNames.add(manifest);
+      assert.ok(matches(`${base}/${manifest}`), `Missing manifest upload: ${manifest}`);
+      assert.ok(isPublished(`release-assets/${version}/${job.edition}/${manifest}`), `Missing published manifest: ${manifest}`);
+      assert.ok(!matches(`${base}/latest${suffix}.yml`), 'Editions must not share a latest manifest');
     }
   } finally {
     if (originalEdition === undefined) delete process.env.APP_EDITION;
@@ -73,6 +88,62 @@ test('main and simple-main pushes publish, after checks and all packages from on
     .filter(step => step.uses?.startsWith('softprops/action-gh-release@'));
   assert.equal(publishers.length, 1);
   assert.equal(publishers[0].with.tag_name, '${{ needs.prepare.outputs.tag }}');
+  assert.equal(publishers[0].with.draft, true, 'Clients must not see a release before all assets are uploaded');
+  const publishComplete = workflow.jobs.release.steps.at(-1);
+  assert.equal(publishComplete.env.RELEASE_TAG, '${{ needs.prepare.outputs.tag }}');
+  assert.match(publishComplete.run, /gh release edit .*--draft=false --latest/);
+});
+
+test('electron-builder generates separate edition manifests with actual hashes and both Mac architectures', async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'maji-update-manifests-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const originalEdition = process.env.APP_EDITION;
+  try {
+    for (const job of workflow.jobs.package.strategy.matrix.include) {
+      process.env.APP_EDITION = job.edition;
+      delete require.cache[require.resolve('../electron-builder.config.cjs')];
+      const config = require('../electron-builder.config.cjs');
+      const platform = { Windows: Platform.WINDOWS, macOS: Platform.MAC, Linux: Platform.LINUX }[job.name];
+      const outDir = join(directory, job.artifact);
+      mkdirSync(outDir);
+      const emitted = [];
+      const packager = {
+        config, platform, platformSpecificBuildOptions: config[platform.buildConfigurationKey],
+        appInfo: { version }, info: { metadata: require('../package.json') },
+        getResource: async () => null,
+        emitArtifactCreated: async event => emitted.push(event.file),
+      };
+      const targets = job.name === 'Windows' ? [['exe', 'x64']]
+        : job.name === 'macOS' ? [['zip', 'x64'], ['zip', 'arm64']]
+          : [['AppImage', 'x64'], ['deb', 'x64'], ['rpm', 'x64']];
+      const tasks = [];
+      for (const [ext, arch] of targets) {
+        const name = `MajiAI-${job.editionLabel}-${version}-${platform.buildConfigurationKey}-${arch}.${ext}`;
+        const file = join(outDir, name);
+        writeFileSync(file, `Fixture installer ${name}`);
+        tasks.push(...await createUpdateInfoTasks({ file, packager, target: { outDir }, arch: Arch[arch] }, [config.publish]));
+      }
+      await writeUpdateInfoFiles(tasks, packager);
+      const suffix = job.name === 'Windows' ? '' : `-${platform.buildConfigurationKey}`;
+      const manifestPath = join(outDir, `${job.edition}${suffix}.yml`);
+      assert.deepEqual(emitted, [manifestPath]);
+      const manifest = load(readFileSync(manifestPath, 'utf8'));
+      assert.equal(manifest.version, version);
+      assert.equal(manifest.files.length, targets.length);
+      for (const file of manifest.files) {
+        assert.ok(file.url.startsWith(`MajiAI-${job.editionLabel}-${version}-`));
+        assert.equal(file.sha512, createHash('sha512').update(readFileSync(join(outDir, file.url))).digest('base64'));
+      }
+      if (job.name === 'macOS') {
+        assert.ok(manifest.files.some(file => file.url.includes('-arm64.zip')));
+        assert.ok(manifest.files.some(file => file.url.includes('-x64.zip')));
+      }
+    }
+  } finally {
+    if (originalEdition === undefined) delete process.env.APP_EDITION;
+    else process.env.APP_EDITION = originalEdition;
+    delete require.cache[require.resolve('../electron-builder.config.cjs')];
+  }
 });
 
 // Run the actual workflow shell step against disposable local repositories.

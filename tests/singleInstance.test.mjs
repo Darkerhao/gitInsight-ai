@@ -4,7 +4,7 @@ import { compileFunction } from 'node:vm';
 import { test } from 'node:test';
 import ts from 'typescript';
 
-async function start({ lock = true, restoreError, configError, resumeError, pendingRestore } = {}) {
+async function start({ lock = true, restoreError, configError, resumeError, pendingRestore, pendingUpdates } = {}) {
   const calls = [];
   const handlers = new Map();
   const powerHandlers = new Map();
@@ -22,6 +22,7 @@ async function start({ lock = true, restoreError, configError, resumeError, pend
       if (resumeError && calls.filter(value => value === 'schedule').length > 1) throw resumeError;
     } },
     './main/feishuAuth.js': { disposeFeishuAuthWatchers: () => calls.push('dispose') },
+    './main/appUpdate.js': { initializeAppUpdates: async () => { calls.push('updates'); await pendingUpdates; }, stopAppUpdates: () => calls.push('stop-updates') },
     './main/ipc.js': { registerIpcHandlers: () => calls.push('ipc') },
     './main/windows.js': { mainWindow: window, createMainWindow: () => calls.push('window') },
     './main/config.js': { loadConfig: async () => { calls.push('config'); if (configError) throw configError; } },
@@ -45,11 +46,13 @@ test('second process exits before readiness, restore, IPC, database or schedulin
 
 test('primary process restores data and validates config before initializing UI and scheduler', async () => {
   const { calls, handlers } = await start();
-  assert.deepEqual(calls, ['lock', 'ready', 'pending', 'config', 'ipc', 'window', 'schedule']);
+  assert.deepEqual(calls, ['lock', 'ready', 'pending', 'config', 'updates', 'ipc', 'window', 'schedule']);
   handlers.get('second-instance')();
   assert.deepEqual(calls.slice(-3), ['restore-window', 'show', 'focus']);
   handlers.get('before-quit')();
   assert.deepEqual(calls.slice(-2), ['clear', 'dispose']);
+  handlers.get('quit')();
+  assert.equal(calls.at(-1), 'stop-updates');
 });
 
 test('restore and config errors show a fatal message and never initialize application services', async () => {
@@ -79,13 +82,15 @@ test('resume failures are handled and stop the app instead of becoming unhandled
 });
 
 test('quitting during startup prevents later service initialization', async () => {
-  let release;
-  const pendingRestore = new Promise(resolve => { release = resolve; });
-  const { calls, handlers } = await start({ pendingRestore });
-  handlers.get('before-quit')();
-  release();
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(calls.includes('ipc'), false);
-  assert.equal(calls.includes('window'), false);
-  assert.equal(calls.includes('schedule'), false);
+  for (const pending of ['pendingRestore', 'pendingUpdates']) {
+    let release;
+    const promise = new Promise(resolve => { release = resolve; });
+    const { calls, handlers } = await start({ [pending]: promise });
+    handlers.get('before-quit')();
+    release();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(calls.includes('ipc'), false);
+    assert.equal(calls.includes('window'), false);
+    assert.equal(calls.includes('schedule'), false);
+  }
 });

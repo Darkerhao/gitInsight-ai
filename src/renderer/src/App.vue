@@ -13,6 +13,8 @@ import WeeklyReflectionView from '@/views/WeeklyReflectionView.vue';
 import HistoryLogsView from '@/views/HistoryLogsView.vue';
 import JiaziTimelineView from '@/views/JiaziTimelineView.vue';
 import SystemSettingsView from '@/views/SystemSettingsView.vue';
+import AboutView from '@/views/AboutView.vue';
+import { useAppUpdates } from '@/composables/useAppUpdates';
 import { usePageZoom } from '@/composables/usePageZoom';
 import { navKeys } from '@/router';
 import type { NavKey } from '@/router';
@@ -25,6 +27,7 @@ type ViewTransitionDocument = Document & {
 };
 
 const assistant = useAssistant();
+const appUpdates = useAppUpdates();
 const THEME_STORAGE_KEY = 'gitinsight:theme-mode';
 const WELCOME_STORAGE_KEY = 'gitinsight:welcome-finished';
 const WELCOME_ANIMATION_ENABLED_KEY = 'gitinsight:welcome-animation-enabled';
@@ -43,7 +46,6 @@ const legacyNavMap: Record<string, NavKey> = {
   'sync:calendar': 'config',
   messages: 'history',
   help: 'system',
-  about: 'system',
   farm: 'timeline',
 };
 
@@ -57,6 +59,7 @@ const viewMap = {
   timeline: JiaziTimelineView,
   ai: ReportConfigView,
   system: SystemSettingsView,
+  about: AboutView,
 };
 
 const routeNav = computed<NavKey>(() => {
@@ -241,11 +244,13 @@ onMounted(() => {
   window.addEventListener('keydown', handlePageZoomShortcut, true);
   void initializePageZoom();
   void initializeAssistant();
+  void appUpdates.initialize();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handlePageZoomShortcut, true);
   assistant.dispose();
+  appUpdates.dispose();
 });
 </script>
 

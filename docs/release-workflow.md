@@ -10,7 +10,7 @@
 2. 检查通过后自动递增 `package.json` 的补丁版本，例如 `3.8.6 → 3.8.7`；同时更新 `package-lock.json` 的根版本和项目版本。
 3. 自动提交 `chore(release): v3.8.7`，原子推送版本提交到 `main` 并创建 `v3.8.7` 标签。
 4. 六个打包任务使用同一个版本提交，构建三平台的 Lite、Standard 安装包。
-5. 全部打包任务成功后，统一创建 GitHub Release、生成发布说明并上传安装包。
+5. 全部打包任务成功后，创建 Release 草稿，上传安装包、blockmap 与更新清单；全部上传成功后公开 Release 并标记为最新版本，客户端才会发现该版本。
 
 `main` 的检查统一由发布流程调用，避免重复执行；PR 与 `master` 推送仍独立执行检查。
 
@@ -62,7 +62,27 @@ npm run dist:linux:standard
 - macOS：`dmg`、`zip`
 - Linux：`AppImage`、`deb`、`rpm`、`tar.gz`
 
-每个成功的打包任务都会上传 artifacts，保留 30 天。本流程负责版本升级与安装包发布；当前客户端没有接入自动下载、安装新版本的更新流程。
+每个成功的打包任务都会上传 artifacts，保留 30 天。
+
+## 应用内更新
+
+客户端使用 `electron-updater`，从 `Darkerhao/gitInsight-ai` 的正式 GitHub Release 检测更新，不接受预发布或降级。`electron-builder` 生成随应用分发的 `resources/app-update.yml`，无需在客户端手写 feed URL。
+
+同一 Release 中两个发行版使用独立 channel，必须同时保留安装包与以下清单：
+
+| 平台 | Lite | Standard |
+| --- | --- | --- |
+| Windows | `lite.yml` | `standard.yml` |
+| macOS | `lite-mac.yml` | `standard-mac.yml` |
+| Linux | `lite-linux.yml` | `standard-linux.yml` |
+
+macOS 的同一清单由 builder 合并 x64/arm64 文件；所有清单均包含安装包的 SHA-512 校验信息。CI 先上传完整草稿再公开，避免更新清单先于安装包可用。
+
+**设置 → 关于** 提供手动检查、下载进度、更新说明及重启安装。自动更新默认开启，启动 15 秒后检查，此后每 6 小时检查；下载完成后等待正常退出安装。关闭自动更新后停止后台检查与退出安装，已经开始的下载继续完成，可手动安装。开关即时保存到 `userData/updater-settings.json`，不保存或覆盖业务配置。
+
+支持 Windows NSIS 安装版、Linux AppImage/deb/rpm。便携/解压运行方式不可原地安装，页面明确提示使用安装版。当前 macOS 配置为 `identity: null`，未满足官方自动更新签名要求，因此页面明确禁用更新；将来开启 macOS 更新前须完成签名配置及该平台运行验证。不会关闭签名或下载校验来绕过限制。[官方更新要求](https://www.electron.build/v26/docs/features/auto-update)
+
+旧客户端没有更新入口，需要先安装一次包含该功能的新安装包。缺少更新清单的历史 Release 会显示可重试的错误；新流程发布完整版本后即可更新。检查和下载仍需能够访问 GitHub 的网络，但不需要用户打开网页手动下载。
 
 ## Windows 代码签名
 

@@ -35,6 +35,9 @@ module.exports = {
   },
   publish: {
     provider: 'github',
+    owner: 'Darkerhao',
+    repo: 'gitInsight-ai',
+    channel: edition,
     releaseType: 'release',
   },
   win: {
