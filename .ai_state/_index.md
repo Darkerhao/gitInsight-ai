@@ -13,7 +13,7 @@ pointers:
 
 ## 本轮状态（2026-10-12）
 
-- main 与 feature/simple-version 功能在新分支 `codex/unified-version` 整合，原分支保持不变。
+- main 与 feature/simple-version 功能在新分支 `feature/unified-version` 整合，原分支保持不变。
 - design: `.ai_state/sprints/unified-version/design.md`
 - evidence: `.ai_state/sprints/unified-version/runtime-verify.md`
 - review: `.ai_state/sprints/unified-version/reviews/pass2.md`，代码、规格及 evaluator 均 PASS，历史草稿覆盖 P2 已关闭。

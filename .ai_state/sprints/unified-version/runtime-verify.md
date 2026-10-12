@@ -13,7 +13,7 @@
 ## 实现证据
 
 - 原生子任务 unified-ui、unified-material、unified-report 在独立工作树完成；主线程仅同步各自明确拥有的文件。当前桌面工具未写入安装态 SubagentStart hook 记录，未伪造该记录，以原生任务结果、实际 diff 与测试结果为证据。
-- root 当前分支为 codex/unified-version。本地合并提交双父分别为 `800e5ce354e6737dc4668c47c60d3a2d273079aa` 与 `07abbac45f8ab70563fb3945f2b6a9f0f1dec400`；两个原分支 SHA 不变，两次 `git merge-base --is-ancestor` 均返回 0。语义整合以新版为基础重接 main 独有能力，最终文档包含在本地合并提交中。
+- root 当前分支为 feature/unified-version。本地合并提交双父分别为 `800e5ce354e6737dc4668c47c60d3a2d273079aa` 与 `07abbac45f8ab70563fb3945f2b6a9f0f1dec400`；两个原分支 SHA 不变，两次 `git merge-base --is-ancestor` 均返回 0。语义整合以新版为基础重接 main 独有能力，最终文档包含在本地合并提交中。
 
 ## 验证边界
 

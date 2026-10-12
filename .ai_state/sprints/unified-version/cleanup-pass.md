@@ -14,7 +14,7 @@
 
 ## Finishing-a-development-branch
 
-- 用户明确要求在新分支整合，交付保留 `codex/unified-version` 的本地双父合并提交，不移动原分支，不创建 PR 或推送发布。
+- 用户明确要求在新分支整合，交付保留 `feature/unified-version` 的本地双父合并提交，不移动原分支，不创建 PR 或推送发布。
 - 验证记录见 runtime-verify.md：完整单测 178 项、类型检查/构建、浏览器回归与隔离 Electron 均通过；最终历史保护修复后合篇 5/5、历史 6/6 和 check 通过。
 - polish 仅文档和空白清理，未重复运行不受影响的完整测试；最后暂存与提交范围再次执行 diff check。
 - 本次三个临时 detached worktree 已清理：先验证绝对路径与 node_modules junction 目标，解除 junction 后移除工作树，并确认根目录依赖仍在。此前 about-updates 和 .claude 工作树保留。

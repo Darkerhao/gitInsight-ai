@@ -2,7 +2,7 @@
 
 ## Scope
 
-用户明确要求在新分支整合 `main` 与 `feature/simple-version` 的功能。工作分支为 `codex/unified-version`，基线分别为 `07abbac` 与 `800e5ce`；原分支不移动，不推送或发布。
+用户明确要求在新分支整合 `main` 与 `feature/simple-version` 的功能。工作分支为 `feature/unified-version`，基线分别为 `07abbac` 与 `800e5ce`；原分支不移动，不推送或发布。
 
 候选为直接 Git 合并或以新版实现为基础恢复缺失功能。直接合并有大量重复签到特效和布局冲突，选择后者，并在最终整合提交记录两个父版本。路径 Refactor，置信度 0.96。
 
@@ -22,7 +22,7 @@
 
 ## Acceptance Criteria
 
-- [x] AC1: 当前分支为 codex/unified-version，原 main 和 feature/simple-version SHA 不变，合并结果包含两者历史。
+- [x] AC1: 当前分支为 feature/unified-version，原 main 和 feature/simple-version SHA 不变，合并结果包含两者历史。
 - [x] AC2: 工作台、仓库、消息、帮助与现有日报/周报/复盘/时间长河/关于路由可访问，入口使用同一导航。
 - [x] AC3: 同步任务编辑、手动执行和日历读取同一多任务模型；无旧全局 time/lastStatus 写入。
 - [x] AC4: 两类素材日报可不选 Git 仓库完成素材保存、生成、编辑、保存、发布、历史续编；生成失败与保存失败不丢内容，不错误提交。

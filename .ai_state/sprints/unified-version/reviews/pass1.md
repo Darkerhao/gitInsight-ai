@@ -15,7 +15,7 @@
 
 | AC | 判定 | 依据 |
 | --- | --- | --- |
-| AC1 | MISSING（收尾待补） | codex/unified-version，两个原 SHA 不变，MERGE_HEAD 指向 main；待双父提交及 ancestry 验证 |
+| AC1 | MISSING（收尾待补） | feature/unified-version，两个原 SHA 不变，MERGE_HEAD 指向 main；待双父提交及 ancestry 验证 |
 | AC2 | SATISFIED | 统一导航访问新旧页面，旧任务地址跳转 |
 | AC3 | SATISFIED | 编辑/执行复用 AutoSyncCard，日历读取多任务及日志 |
 | AC4 | SATISFIED | 无 Git 素材生成/保存/发布/历史闭环及失败、上下文隔离回归 |

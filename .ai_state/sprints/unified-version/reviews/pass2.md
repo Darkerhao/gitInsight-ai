@@ -21,7 +21,7 @@
 
 - 最后代码修改后的 `npm run check` 退出码 0，类型检查和构建通过（check-review-fix.log）。
 - `git diff --check` 通过。
-- AC1 已补齐：本地合并提交双父为 feature/simple-version `800e5ce` 与 main `07abbac`；当前 codex/unified-version，原两分支 SHA 未变，两次 ancestry 检查通过，提交后工作树干净。
+- AC1 已补齐：本地合并提交双父为 feature/simple-version `800e5ce` 与 main `07abbac`；当前 feature/unified-version，原两分支 SHA 未变，两次 ancestry 检查通过，提交后工作树干净。
 
 ## Evidence Cross-Check
 

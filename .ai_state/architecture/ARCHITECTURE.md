@@ -2,7 +2,7 @@
 
 ## 版本整合（2026-10-12）
 
-- `codex/unified-version` 以简洁版 3.8.9 为基础恢复 main 的工作台、仓库、消息、帮助和任务日历；使用同一导航、useAssistant 和现有组件。日历读取多任务配置与执行日志，不恢复旧单任务实现。
+- `feature/unified-version` 以简洁版 3.8.9 为基础恢复 main 的工作台、仓库、消息、帮助和任务日历；使用同一导航、useAssistant 和现有组件。日历读取多任务配置与执行日志，不恢复旧单任务实现。
 - 日报状态表示生成结果；飞书提交结果来自 sync_logs，工作台分别统计，不混算。
 - 合篇草稿通过 sourceRepos 保存全部真实来源，复用 projectReportActions 的生成、保存与发布。历史合篇恢复为一篇，保留原始输入和统计；不再拆成多份相同正文。历史续编替换未保存草稿前确认，取消不改变正文、素材与全局范围。
 - 素材日报由 materialReport 主进程模块、共享分区定义和 useMaterialReports 编辑器承载；事实来源为手工素材，共用现有 AI 客户端、daily_reports、飞书防重和备份链路。
