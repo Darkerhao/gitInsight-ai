@@ -86,7 +86,7 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByLabel('今日推进事项', { exact: true })).toHaveValue('旧版项目推进素材');
 });
 
-test('无需仓库完成素材保存、生成、手改、复制导出与发布，失败保留正文', async ({ page }) => {
+test('无需仓库完成素材保存、生成、手改、复制导出与发布，失败保留正文', async ({ page, context }) => {
   await page.getByLabel('今日推进事项', { exact: true }).fill('完成项目里程碑评审');
   await page.getByRole('button', { name: '保存素材', exact: true }).click();
   await expect(page.locator('.material-status')).toHaveText('素材已保存');
@@ -106,8 +106,10 @@ test('无需仓库完成素材保存、生成、手改、复制导出与发布�
   await expect(page.locator('.material-error')).toContainText('保存日报失败');
   expect(await page.evaluate(() => window.materialTest.submissions.length)).toBe(0);
   await page.evaluate(() => { window.materialTest.failSave = false; });
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://127.0.0.1:15175' });
   await page.getByRole('button', { name: '复制', exact: true }).click();
   await expect(page.getByText('日报已复制', { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('手改正文：推进里程碑，明确后续安排');
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: '导出 Markdown', exact: true }).click();
   expect((await download).suggestedFilename()).toBe('2026-10-12-项目经理日报.md');
