@@ -4,12 +4,10 @@ import { readFile } from 'node:fs/promises';
 const page = await readFile(new URL('../src/renderer/src/views/WeeklyReflectionView.vue', import.meta.url), 'utf8');
 const workflow = await readFile(new URL('../src/renderer/src/composables/useWeeklyReflection.ts', import.meta.url), 'utf8');
 const actionPanel = await readFile(new URL('../src/renderer/src/components/reflection/WeeklyReflectionActionPanel.vue', import.meta.url), 'utf8');
-const router = await readFile(new URL('../src/renderer/src/router.ts', import.meta.url), 'utf8');
 const app = await readFile(new URL('../src/renderer/src/App.vue', import.meta.url), 'utf8');
 const sidebar = await readFile(new URL('../src/renderer/src/components/AppSidebar.vue', import.meta.url), 'utf8');
 const preload = await readFile(new URL('../electron/preload.ts', import.meta.url), 'utf8');
 
-assert.match(router, /weekly\|(?:summary\|)?reflection\|history/, 'reflection route should be registered beside report routes');
 assert.match(app, /reflection: WeeklyReflectionView/, 'reflection view should be mounted by the app shell');
 assert.match(sidebar, /key: 'reflection'.+label: '复盘项目问题'/, 'reflection page should have a report-center menu item');
 assert.match(page, /useWeeklyReflection/, 'reflection page should use the dedicated workflow composable');

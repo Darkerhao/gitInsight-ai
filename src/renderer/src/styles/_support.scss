@@ -41,6 +41,32 @@
   transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
+.message-card.el-button,
+.help-module-card.el-button,
+.help-list-item.el-button {
+  height: auto;
+  margin-left: 0;
+  white-space: normal;
+}
+
+.message-card.el-button > span {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.help-module-card.el-button > span,
+.help-list-item.el-button > span {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+}
+
 .help-list-item:hover,
 .help-module-card:hover,
 .message-card:hover {
@@ -269,6 +295,11 @@
   grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(140px, 0.7fr)) minmax(220px, 0.9fr) auto;
   gap: 12px;
   align-items: center;
+}
+
+.message-toolbar-grid .el-date-editor {
+  width: 100%;
+  min-width: 0;
 }
 
 .message-unread-count {

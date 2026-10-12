@@ -1,7 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
 
-export const navKeys = ['config', 'generate', 'weekly', 'summary', 'reflection', 'history', 'timeline', 'ai', 'system', 'about'] as const;
+export const navKeys = ['dashboard', 'repositories', 'sync', 'messages', 'help', 'material', 'config', 'generate', 'weekly', 'summary', 'reflection', 'history', 'timeline', 'ai', 'system', 'about'] as const;
 export type NavKey = (typeof navKeys)[number];
 
 const EmptyRouteView = {
@@ -14,6 +14,8 @@ function getLastRoute() {
   try {
     const value = window.localStorage.getItem('gitinsight:last-route');
     if (!value || value === '/') return fallback;
+    if (value === '/sync:list') return '/sync?tab=list';
+    if (value === '/sync:calendar') return '/sync?tab=calendar';
     const nav = value.replace(/^\//, '').split('?')[0];
     return navKeys.includes(nav as NavKey) ? value : fallback;
   } catch {
@@ -31,7 +33,11 @@ const routes: RouteRecordRaw[] = [
     redirect: '/timeline',
   },
   {
-    path: '/:nav(config|generate|weekly|summary|reflection|history|timeline|ai|system|about)',
+    path: '/sync\\::tab(list|calendar)',
+    redirect: (to) => ({ path: '/sync', query: { tab: to.params.tab } }),
+  },
+  {
+    path: `/:nav(${navKeys.join('|')})`,
     component: EmptyRouteView,
   },
   {

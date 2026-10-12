@@ -13,6 +13,11 @@ import type {
   FeishuSubmissionRecordsPayload,
   FeishuTestSubmitPayload,
   GenerateReportParams,
+  GenerateFromMaterialParams,
+  MaterialRole,
+  MaterialReportResult,
+  RoleMaterialPayload,
+  RoleMaterialRecord,
   HistoryLogQuery,
   SaveDailyReportPayload,
   SyncFeishuDailyPayload,
@@ -24,12 +29,13 @@ import type {
 import { getAutoSyncState, runAutoSync, saveConfigAndReschedule, validateAutoSync } from './autoSync.js';
 import { getCheckinWalletSnapshot, importCheckinWallet, runDailyCheckin, spendCheckinCoins } from './checkinWallet.js';
 import { loadConfig } from './config.js';
-import { getDatabase, getStorageInfo, listDailyReports, listErrorLogs, listHistoryProjects, listSyncLogs, queryHistoryLogs, saveDailyReport } from './database.js';
+import { getDatabase, getDailyReportById, loadMaterialReport, loadRoleMaterial, saveRoleMaterial, getStorageInfo, listDailyReports, listErrorLogs, listHistoryProjects, listSyncLogs, queryHistoryLogs, saveDailyReport } from './database.js';
 import { getTimelineSnapshot } from './timeline.js';
 import type { TimelineQuery } from '../../src/shared/types.js';
 import { listFeishuFieldOptions, listFeishuProjectOptions, syncFeishuDaily, testSubmitFeishuForm } from './feishuForm.js';
 import { openFeishuLogin, openFeishuSubmissionRecords } from './feishuAuth.js';
 import { generateReport } from './report.js';
+import { generateReportFromMaterial } from './materialReport.js';
 import { scanRepositories } from './repoScan.js';
 import { getMainWindow } from './windows.js';
 import { testAiConnection } from './aiClient.js';
@@ -82,6 +88,11 @@ export function registerIpcHandlers() {
     const generation = generations.get(requestId);
     if (generation?.owner === event.sender.id) generation.controller.abort(new Error('已取消生成'));
   });
+  ipcMain.handle('report:generate-from-material', async (_event, params: GenerateFromMaterialParams) => generateReportFromMaterial(params));
+  ipcMain.handle('role-material:save', async (_event, payload: RoleMaterialPayload) => saveRoleMaterial(payload));
+  ipcMain.handle('role-material:load', async (_event, params: { role: MaterialRole; date: string }) => loadRoleMaterial(params.role, params.date));
+  ipcMain.handle('material-report:load', async (_event, params: { role: MaterialRole; date: string }) => loadMaterialReport(params.role, params.date));
+  ipcMain.handle('daily-report:get', async (_event, id: number) => getDailyReportById(id));
   ipcMain.handle('daily-report:list', async (_event, limit?: number) => listDailyReports(limit));
   ipcMain.handle('daily-report:save', async (_event, payload: SaveDailyReportPayload) => saveDailyReport(payload));
   ipcMain.handle('timeline:get-snapshot', async (_event, query?: TimelineQuery) =>

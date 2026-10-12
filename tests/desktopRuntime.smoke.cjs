@@ -10,6 +10,11 @@ const { spawn } = require('node:child_process');
 const projectRoot = path.resolve(__dirname, '..');
 const prefix = 'DESKTOP_SMOKE ';
 const fakeKey = 'runtime-smoke-fake-key';
+const legacyMaterial = {
+  role: 'projectManager', date: '2026-01-02',
+  sections: [{ key: 'progress', label: '今日推进事项', content: '旧版本已保存的里程碑进度' }],
+  extraNotes: '旧素材保持可读',
+};
 
 function checkedRoot(value) {
   const root = path.resolve(value || '.');
@@ -98,6 +103,7 @@ async function electronMain() {
       try {
         const result = await window.webContents.executeJavaScript(`(async () => {
           const config = await window.api.loadConfig();
+          const material = await window.api.loadRoleMaterial('projectManager', '2026-01-02');
           if (${JSON.stringify(phase)} === 'write') {
             config.reporterName = 'Desktop runtime smoke';
             config.aiApiKey = ${JSON.stringify(fakeKey)};
@@ -108,10 +114,29 @@ async function electronMain() {
               repoNames: ['isolated-repository'], repoPaths: [${JSON.stringify(path.join(root, 'repository'))}],
               report: 'Persisted desktop smoke report', status: 'draft', commitsCount: 1, filesCount: 1,
             });
+            config.aiProfiles = config.aiProfiles.map(profile => ({ ...profile, enabled: false }));
+            await window.api.saveConfig(config);
+            const productMaterial = {
+              role: 'productManager', date: '2026-01-03',
+              sections: [{ key: 'requirement', label: '需求进展', content: '完成版本需求评审' }], extraNotes: '',
+            };
+            await window.api.saveRoleMaterial(productMaterial);
+            for (const input of [material, productMaterial]) {
+              const generated = await window.api.generateReportFromMaterial({ ...input, reporterName: config.reporterName });
+              if (!generated.report.includes(input.sections[0].content)) throw new Error('素材事实必须保留');
+              await window.api.saveDailyReport({
+                date: input.date, reporterName: config.reporterName, repoNames: [], repoPaths: [],
+                report: generated.report, status: 'draft', commitsCount: 0, filesCount: 0,
+                rawInput: { gitLogs: '', files: '', diff: '', materialRole: input.role, material: input },
+              });
+            }
           }
           return {
             config: await window.api.loadConfig(), storage: await window.api.getStorageInfo(),
             reports: await window.api.listDailyReports(),
+            legacyMaterial: material,
+            productMaterial: await window.api.loadRoleMaterial('productManager', '2026-01-03'),
+            materialReport: await window.api.loadMaterialReport('projectManager', '2026-01-02'),
             mounted: Boolean(document.querySelector('#app')?.children.length),
           };
         })()`);
@@ -119,9 +144,15 @@ async function electronMain() {
         assert.equal(result.config.reporterName, 'Desktop runtime smoke');
         assert.equal(result.config.aiApiKey, isRestored ? '' : fakeKey);
         assert.equal(result.storage.userDataPath, profile);
-        assert.equal(result.storage.reportsCount, 1);
-        assert.equal(result.reports.length, 1);
-        assert.equal(result.reports[0].report, 'Persisted desktop smoke report');
+        assert.equal(result.storage.reportsCount, 3);
+        assert.equal(result.reports.length, 3);
+        assert.ok(result.reports.some(report => report.report === 'Persisted desktop smoke report'));
+        assert.deepEqual(result.legacyMaterial.sections, legacyMaterial.sections);
+        assert.equal(result.legacyMaterial.extraNotes, legacyMaterial.extraNotes);
+        assert.equal(result.productMaterial.sections[0].content, '完成版本需求评审');
+        assert.equal(result.materialReport.materialRole, 'projectManager');
+        assert.deepEqual(result.materialReport.repoPaths, []);
+        assert.deepEqual(result.materialReport.material.sections, legacyMaterial.sections);
         assert.equal(window.isVisible(), false);
         if (isRestored) {
           assert.ok(result.config.aiProfiles.every(profile => profile.apiKey === ''));
@@ -155,7 +186,7 @@ async function electronMain() {
           })()`);
           assert.deepEqual(exported.exported, { canceled: false, filePath: backupPath });
           assert.equal(exported.config.reporterName, 'Mutated after export');
-          assert.equal(exported.reports.length, 2);
+          assert.equal(exported.reports.length, 4);
           // Restore exits the main process before invoke can resolve. Its pending
           // file and relaunch request are verified by the parent after exit.
           await window.webContents.executeJavaScript('void window.api.restoreDataBackup(); true');
@@ -169,6 +200,19 @@ async function electronMain() {
 async function nodeMain() {
   assert.ok(fs.existsSync(path.join(projectRoot, 'out/main/main.js')), 'Run npm run build first');
   const root = checkedRoot(fs.mkdtempSync(path.join(tmpdir(), 'gitinsight-desktop-smoke-')));
+  // Seed the exact main-branch schema, then let the real application migrate it.
+  const SQL = await require('sql.js')();
+  const oldDatabase = new SQL.Database();
+  oldDatabase.run(`CREATE TABLE role_materials (
+    role TEXT NOT NULL, date TEXT NOT NULL, sections_json TEXT NOT NULL,
+    extra_notes TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL, PRIMARY KEY (role, date)
+  )`);
+  oldDatabase.run('INSERT INTO role_materials VALUES (?, ?, ?, ?, ?)', [
+    legacyMaterial.role, legacyMaterial.date, JSON.stringify(legacyMaterial.sections), legacyMaterial.extraNotes, '2026-01-02T10:00:00Z',
+  ]);
+  fs.mkdirSync(path.join(root, 'profile'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'profile', 'gitinsight.db'), Buffer.from(oldDatabase.export()));
+  oldDatabase.close();
   const children = [];
   const executable = require('electron');
   const env = { ...process.env, GITINSIGHT_SMOKE_ROOT: root };
@@ -267,7 +311,7 @@ async function nodeMain() {
     await restoredAgain.ready;
     await restoredAgain.exit;
     assert.deepEqual(fs.readFileSync(originalPath), originalSnapshot, 'Later startup must preserve the original snapshot byte for byte');
-    console.log(`Desktop runtime smoke passed (Electron ${require('electron/package.json').version}): renderer + preload IPC, encrypted credentials and database restart persistence, single-instance rejection, backup export/restore restart with credentials cleared, sync disabled and original snapshot preserved. All data isolated; no visible windows or network requests.`);
+    console.log(`Desktop runtime smoke passed (Electron ${require('electron/package.json').version}): renderer + preload IPC, encrypted credentials, legacy material migration, both material roles generated and persisted without Git, backup round trip including material identity, single-instance rejection and original snapshot preservation. All data isolated; no visible windows or network requests.`);
   } finally {
     for (const child of children) {
       if (child.exitCode === null && child.signalCode === null) {

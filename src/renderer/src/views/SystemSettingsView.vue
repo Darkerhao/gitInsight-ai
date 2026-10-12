@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import {
   Bell,
+  Copy,
   Database,
   FolderArchive,
   KeyRound,
@@ -91,6 +92,17 @@ function formatBytes(value: number) {
 async function refreshStorage() {
   await refreshLocalData();
   ElMessage.success('本地数据状态已刷新');
+}
+
+async function copyDataDirectory() {
+  const path = storageInfo.value?.userDataPath;
+  if (!path) return;
+  try {
+    await navigator.clipboard.writeText(path);
+    ElMessage.success('本地数据目录已复制');
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '复制目录失败');
+  }
 }
 
 async function runBackupOperation(operation: 'export' | 'restore') {
@@ -305,6 +317,7 @@ const operationCards = [
           <div>
             <strong>本地数据目录</strong>
             <span>{{ storageInfo?.userDataPath || '读取中' }}</span>
+            <el-button :icon="Copy" :disabled="!storageInfo?.userDataPath" text @click="copyDataDirectory">复制目录</el-button>
           </div>
         </section>
       </aside>

@@ -11,6 +11,8 @@ import { toPlainRawInput, toPlainReportTimeRange, toPlainStructuredJson } from '
 export interface ProjectReportDraft {
   key: string;
   repo: RepoInfo;
+  sourceRepos?: RepoInfo[];
+  restoredRecord?: DailyReportRecord;
   report: string;
   manualWorkContent: string;
   reportId: number | null;
@@ -69,6 +71,7 @@ export function createProjectReportActions<T extends ProjectReportDraft>(ctx: Ac
       });
       // A completed request may already be persisted, even if cancellation raced with it.
       draft.lastReportResult = result;
+      draft.restoredRecord = undefined;
       draft.reportId = result.historyId ?? null;
       draft.report = result.report;
       draft.generateStatus = 'success';
@@ -89,21 +92,24 @@ export function createProjectReportActions<T extends ProjectReportDraft>(ctx: Ac
       return false;
     }
     const result = draft.lastReportResult;
+    const restored = draft.restoredRecord;
+    const sourceRepos = draft.sourceRepos ?? [draft.repo];
     const scope = ctx.getScope(draft);
     try {
       const record = await ctx.api.saveDailyReport({
         id: draft.reportId ?? undefined, date: scope.date,
         timeRange: toPlainReportTimeRange(scope.timeRange),
         reporterName: ctx.config.reporterName,
-        repoNames: [ctx.displayRepoName(draft.repo)], repoPaths: [draft.repo.path],
-        report: draft.report.trim(), status: result?.commits.length ? 'success' : 'draft',
-        commitsCount: result?.commits.length ?? 0, filesCount: countWeeklyReportFiles(result),
-        generatedAt: result?.generatedAt,
+        repoNames: sourceRepos.map(ctx.displayRepoName), repoPaths: sourceRepos.map((repo) => repo.path),
+        report: draft.report.trim(), status: result?.commits.length ? 'success' : restored?.status ?? 'draft',
+        commitsCount: result?.commits.length ?? restored?.commitsCount ?? 0,
+        filesCount: result ? countWeeklyReportFiles(result) : restored?.filesCount ?? 0,
+        generatedAt: result?.generatedAt ?? restored?.generatedAt,
         rawInput: {
-          ...(toPlainRawInput(result?.rawInput) ?? { gitLogs: '', files: '', diff: '' }),
+          ...(toPlainRawInput(result?.rawInput ?? restored?.rawInput) ?? { gitLogs: '', files: '', diff: '' }),
           manualWorkContent: draft.manualWorkContent.trim() || undefined,
         },
-        structuredJson: toPlainStructuredJson(result?.structuredJson),
+        structuredJson: toPlainStructuredJson(result?.structuredJson ?? restored?.structuredJson),
       });
       draft.reportId = record.id;
       draft.dirty = false;

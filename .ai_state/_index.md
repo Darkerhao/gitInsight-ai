@@ -1,13 +1,24 @@
 ---
 path: Refactor
 stage: ship
-current_sprint_slug: about-updates
-current_roadmap_slug: ""
-route_confidence: 0.97
-next_action: ""
+current_sprint_slug: unified-version
+current_roadmap_slug: unified-version
+route_confidence: 0.96
+next_action: "本地新分支整合交付完成，无待实施项；未推送或发布"
+pointers:
+  latest_architecture_update: architecture/ARCHITECTURE.md
 ---
 
 # AI State Index
+
+## 本轮状态（2026-10-12）
+
+- main 与 feature/simple-version 功能在新分支 `codex/unified-version` 整合，原分支保持不变。
+- design: `.ai_state/sprints/unified-version/design.md`
+- evidence: `.ai_state/sprints/unified-version/runtime-verify.md`
+- review: `.ai_state/sprints/unified-version/reviews/pass2.md`，代码、规格及 evaluator 均 PASS，历史草稿覆盖 P2 已关闭。
+- 验证：178 项完整单测、44 项全量 E2E、16 项增量 E2E，修复后合篇 5/5、历史 6/6、类型检查和构建通过；隔离 Electron 冒烟通过。
+- 本地双父 merge commit 已完成，代码、规格、evaluator 与 polish 均 PASS；原分支不变，未推送或发布。
 
 ## 本轮状态（2026-10-09）
 
@@ -73,6 +84,8 @@ next_action: ""
 - current_sprint_slug: weekly-summary
 
 ## route_history
+
+- 2026-10-12: Refactor / unified-version；以简洁版新数据链路恢复 main 独有页面与素材日报，仅新分支整合；置信度 0.96。
 
 - 2026-10-09 关于与应用内更新：Refactor，现有客户端无 updater，需统一接入两个发行版的检测、下载、安装和发布清单；置信度 0.97。
 

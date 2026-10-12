@@ -20,6 +20,7 @@ function createPage(t, queryHistoryLogs) {
   const exports = {};
   const imports = {
     vue: { ...vue, onMounted: () => {} },
+    'vue-router': { useRouter: () => ({ push: async () => {} }) },
     'element-plus': { ElMessage: { error: (message) => messages.push(message) } },
     '@/composables/useAssistant': {
       useAssistant: () => ({ repos: vue.ref([]), config: {}, dailyReports: vue.ref([]) }),

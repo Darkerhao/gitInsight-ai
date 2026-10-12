@@ -86,6 +86,10 @@ function displayRepoName(repo: RepoInfo) {
   return getRepoDisplayName(repo, config.repoDisplayNames);
 }
 
+function displayDraftName(draft: ProjectReportDraft) {
+  return draft.sourceRepos ? `${draft.sourceRepos.map(displayRepoName).join('、')}（合并）` : displayRepoName(draft.repo);
+}
+
 const selectedRepoNames = computed(() => selectedRepos.value.map(displayRepoName));
 const selectedRepoNamesText = computed(() => selectedRepoNames.value.join('、'));
 
@@ -113,6 +117,12 @@ const reportRangeLabel = computed(() => {
 });
 
 const activeDraft = computed(() => projectDrafts.value.find((item) => item.key === activeDraftKey.value) ?? projectDrafts.value[0]);
+const combinedDraft = computed(() => projectDrafts.value.find((draft) => draft.sourceRepos));
+const combinedSourcesMatch = computed(() => {
+  const sources = combinedDraft.value?.sourceRepos;
+  return sources?.length === selectedRepos.value.length
+    && selectedRepos.value.every((repo) => sources.some((source) => source.path === repo.path));
+});
 const hasAnyReport = computed(() => projectDrafts.value.some((item) => item.report.trim().length > 0));
 const hasAnyDirtyReport = computed(() => projectDrafts.value.some((item) => item.dirty && item.report.trim().length > 0));
 const activeHasReport = computed(() => Boolean(activeDraft.value?.report.trim()));
@@ -126,7 +136,7 @@ const activeMetrics = computed(() => {
   const reportLineCount = draft?.report.split(/\r?\n/).filter((line) => line.trim()).length ?? 0;
 
   return [
-    { label: '已生成项目', value: projectDrafts.value.filter((item) => item.report.trim()).length },
+    { label: '已生成日报', value: projectDrafts.value.filter((item) => item.report.trim()).length },
     { label: '提交记录', value: result?.commits.length ?? 0 },
     { label: '影响文件', value: touchedFiles.length },
     { label: '正文行数', value: draft?.report ? reportLineCount : 0 },
@@ -136,8 +146,8 @@ const activeMetrics = computed(() => {
 const editorDrafts = computed(() =>
   projectDrafts.value.map((draft) => ({
     key: draft.key,
-    repoName: draft.repo.name,
-    repoPath: draft.repo.path,
+    repoName: displayDraftName(draft),
+    repoPath: (draft.sourceRepos ?? [draft.repo]).map((repo) => repo.path).join('、'),
     report: draft.report,
     hasReport: draft.report.trim().length > 0,
     hasLastReportResult: Boolean(draft.lastReportResult),
@@ -145,7 +155,7 @@ const editorDrafts = computed(() =>
     generateStatus: draft.generateStatus,
     generateMessage: draft.generateMessage,
     publishStatus: draft.publishStatus,
-    reportTitle: `${draft.repo.name} ${form.date || '未选择日期'} 研发日报`,
+    reportTitle: `${displayDraftName(draft)} ${form.date || '未选择日期'} 研发日报`,
     reportSubtitle: draft.report.trim() ? reportRangeLabel.value : '生成后的日报会在这里进入可编辑状态',
     generatedAtText: formatDateTime(draft.lastReportResult?.generatedAt),
   })),
@@ -156,7 +166,7 @@ const activePublishDraft = computed(() => {
   if (!draft) return undefined;
   return {
     key: draft.key,
-    repoName: draft.repo.name,
+    repoName: displayDraftName(draft),
     hasReport: draft.report.trim().length > 0,
     projectOptionId: draft.projectOptionId,
     workHours: draft.workHours,
@@ -171,7 +181,7 @@ const activePublishDraft = computed(() => {
 const publishDraftItems = computed(() =>
   projectDrafts.value.map((draft) => ({
     key: draft.key,
-    repoName: draft.repo.name,
+    repoName: displayDraftName(draft),
     hasReport: draft.report.trim().length > 0,
     projectOptionId: draft.projectOptionId,
     workHours: draft.workHours,
@@ -239,6 +249,7 @@ const completedRequiredCheckCount = computed(() => requiredGenerationChecks.valu
 const blockedGenerationCheck = computed(() => generationChecks.value.find((item) => item.required && !item.ok));
 const pendingGenerationChecks = computed(() => generationChecks.value.filter((item) => !item.ok));
 const generateButtonLabel = computed(() => {
+  if (combinedDraft.value) return '按项目分别生成';
   if (!projectDrafts.value.length) return '生成全部日报';
   return hasAnyReport.value ? '重新生成全部日报' : `生成 ${projectDrafts.value.length} 个项目日报`;
 });
@@ -256,6 +267,8 @@ const readinessProgressLabel = computed(() => `${completedRequiredCheckCount.val
 watch(
   selectedRepos,
   (repos) => {
+    // Generated content keeps its source identity until a confirmed scope change.
+    if (combinedDraft.value) return;
     const previousDrafts = new Map(projectDrafts.value.map((draft) => [draft.key, draft]));
     projectDrafts.value = repos.map((repo) => {
       const previous = previousDrafts.get(repo.path);
@@ -279,6 +292,37 @@ watch(
   },
   { immediate: true },
 );
+
+async function confirmDraftReplacement(action: string) {
+  if (!projectDrafts.value.some((draft) => draft.report.trim() || draft.manualWorkContent.trim())) return true;
+  try {
+    await ElMessageBox.confirm(`${action}会替换当前编辑区的日报与补充工作。未保存的修改将丢失，请先保存需要保留的内容。`, '切换生成范围', {
+      confirmButtonText: '确认切换', cancelButtonText: '保留当前日报', type: 'warning',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function setCombinedDraft(repos: RepoInfo[], manualWorkContent = '') {
+  projectDrafts.value = repos.length ? [createProjectReportDraft(repos[0], { sourceRepos: [...repos], manualWorkContent })] : [];
+  activeDraftKey.value = projectDrafts.value[0]?.key ?? '';
+}
+
+async function handleGenerateCombined() {
+  if (loading.value || pushing.value || !validateGenerationReady()) return;
+  const repos = selectedRepos.value;
+  if (repos.length < 2) return ElMessage.warning('请至少选择两个仓库');
+  if (!combinedSourcesMatch.value) {
+    if (!(await confirmDraftReplacement('合并生成'))) return;
+    const manualWorkContent = projectDrafts.value
+      .filter((draft) => draft.manualWorkContent.trim())
+      .map((draft) => `${displayDraftName(draft)}\n${draft.manualWorkContent.trim()}`).join('\n\n');
+    setCombinedDraft(repos, manualWorkContent);
+  }
+  await handleGenerateCurrent(true);
+}
 
 function getProjectWorkHours(optionId: string) {
   const projectHours = normalizeProjectWorkHours(config.feishuForm.projectWorkHours);
@@ -518,14 +562,14 @@ async function generateDraft(draftKey: string, options: { updateStatus?: boolean
     return false;
   }
 
-  if (options.updateStatus !== false) status.value = `正在生成 ${draft.repo.name} 的日报`;
+  if (options.updateStatus !== false) status.value = `正在生成 ${displayDraftName(draft)} 的日报`;
   const requestId = crypto.randomUUID();
   activeGenerationRequests.add(requestId);
   try {
     const success = await draftActions.generateDraft(draft, {
       requestId, signal: generationController.signal, promptStyle: reportPromptStyle.value,
     });
-    if (options.updateStatus !== false) status.value = success ? `${draft.repo.name} 日报已生成` : draft.generateMessage;
+    if (options.updateStatus !== false) status.value = success ? `${displayDraftName(draft)} 日报已生成` : draft.generateMessage;
     return success;
   } finally {
     activeGenerationRequests.delete(requestId);
@@ -552,10 +596,15 @@ function syncActiveWorkflowStage(entries: IntersectionObserverEntry[]) {
   }
 }
 
-async function handleGenerateCurrent() {
+async function handleGenerateCurrent(generationReady = false) {
   if (loading.value) return;
+  if (!generationReady && !validateGenerationReady()) return;
+  if (combinedDraft.value && !combinedSourcesMatch.value) {
+    if (!(await confirmDraftReplacement('变更合并仓库'))) return;
+    setCombinedDraft(selectedRepos.value);
+  }
   const draft = activeDraft.value;
-  if (!draft || !validateGenerationReady()) return;
+  if (!draft) return;
 
   loading.value = true;
   generationController = new AbortController();
@@ -577,7 +626,7 @@ async function handleGenerateCurrent() {
       const allocation = recalculateProjectWorkHours();
       activeDraftKey.value = draftKey;
       const allocationMessage = allocation.estimatedCount ? `，已自动分配项目工时` : '';
-      status.value = `${latestDraft?.repo.name ?? draft.repo.name} 日报已生成${allocationMessage}`;
+      status.value = `${displayDraftName(latestDraft ?? draft)} 日报已生成${allocationMessage}`;
       ElMessage.success(status.value);
       if (!latestDraft?.lastReportResult?.commits.length && !latestDraft?.manualWorkContent.trim()) {
         ElMessage.warning('当前项目未匹配到可用于生成日报的提交记录');
@@ -597,6 +646,11 @@ async function handleGenerateCurrent() {
 async function handleGenerateAll() {
   if (loading.value) return;
   if (!validateGenerationReady()) return;
+  if (combinedDraft.value) {
+    if (!(await confirmDraftReplacement('按项目分别生成'))) return;
+    projectDrafts.value = selectedRepos.value.map((repo) => createProjectReportDraft(repo));
+    activeDraftKey.value = projectDrafts.value[0]?.key ?? '';
+  }
   if (!projectDrafts.value.length) {
     ElMessage.warning('请至少选择一个项目');
     return;
@@ -662,7 +716,7 @@ async function handleSaveCurrentReport() {
   const draft = activeDraft.value;
   if (!draft) return;
   if (!(await draftActions.saveDraft(draft))) return ElMessage.error(draft.publishMessage);
-  ElMessage.success(`${draft.repo.name} 日报已保存`);
+  ElMessage.success(`${displayDraftName(draft)} 日报已保存`);
   try { await refreshLocalData(); }
   catch { ElMessage.warning('日报已保存，本地记录刷新失败'); }
 }
@@ -687,7 +741,7 @@ async function copyReport() {
     return;
   }
   await navigator.clipboard.writeText(draft.report);
-  ElMessage.success(`${draft.repo.name} 日报内容已复制`);
+  ElMessage.success(`${displayDraftName(draft)} 日报内容已复制`);
 }
 
 function exportMarkdown() {
@@ -699,7 +753,7 @@ function exportMarkdown() {
   const blob = new Blob([draft.report], { type: 'text/markdown;charset=utf-8' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  link.download = `研发日报-${draft.repo.name}-${form.date}.md`;
+  link.download = `研发日报-${displayDraftName(draft)}-${form.date}.md`;
   link.click();
   URL.revokeObjectURL(link.href);
   ElMessage.success('Markdown 已导出');
@@ -801,7 +855,7 @@ async function publishActiveReport() {
     ElMessage.warning('请选择飞书发布目标');
     return;
   }
-  const confirmed = await confirmPublishDate(`当前项目「${draft.repo.name}」`);
+  const confirmed = await confirmPublishDate(`当前日报「${displayDraftName(draft)}」`);
   if (!confirmed) return;
 
   pushing.value = true;
@@ -810,7 +864,7 @@ async function publishActiveReport() {
     const success = await draftActions.publishDraft(draft);
     await refreshAfterPublish();
     if (success && draft.publishMessage !== '已提交飞书日报') ElMessage.warning(draft.publishMessage);
-    else if (success) ElMessage.success(`${draft.repo.name} 已同步到飞书日报表`);
+    else if (success) ElMessage.success(`${displayDraftName(draft)} 已同步到飞书日报表`);
     else ElMessage.error(draft.publishMessage || '同步飞书失败');
   } catch {
     draft.publishStatus = 'failed';
@@ -868,6 +922,12 @@ async function handleOpenFeishuSubmissionRecords() {
 }
 
 async function handleToggleRepo(path: string) {
+  if (combinedDraft.value) {
+    if (!(await confirmDraftReplacement('变更合并仓库'))) return;
+    toggleRepo(path);
+    setCombinedDraft(selectedRepos.value);
+    return;
+  }
   if (!isRepoSelected(path)) {
     toggleRepo(path);
     return;
@@ -910,13 +970,17 @@ async function promptRenameRepo(item: RepoInfo) {
 
 async function confirmRemoveRepo(item: RepoInfo) {
   const repoName = displayRepoName(item);
+  const replacesCombined = combinedDraft.value?.sourceRepos?.some((repo) => repo.path === item.path);
   try {
-    await ElMessageBox.confirm(`确定从列表中移除「${repoName}」吗？这不会删除本地仓库文件。`, '移除仓库', {
+    await ElMessageBox.confirm(`确定从列表中移除「${repoName}」吗？这不会删除本地仓库文件。${replacesCombined ? '当前合篇正文与补充工作也会清空，请先保存需要保留的修改。' : ''}`, '移除仓库', {
       confirmButtonText: '移除',
       cancelButtonText: '取消',
       type: 'warning',
     });
     await removeRepo(item.path);
+    if (replacesCombined) {
+      setCombinedDraft(selectedRepos.value);
+    }
   } catch (error) {
     if (error === 'cancel' || error === 'close') return;
     ElMessage.error(error instanceof Error ? error.message : '移除仓库失败');
@@ -1009,6 +1073,13 @@ onBeforeUnmount(() => {
           @remove-repo="confirmRemoveRepo"
         />
 
+        <div class="surface-card report-generation-mode" aria-label="日报生成方式">
+          <el-button :disabled="loading || pushing || selectedRepos.length < 2" plain @click="handleGenerateCombined">
+            {{ combinedDraft ? '重新合并生成一篇' : '合并生成一篇' }}
+          </el-button>
+          <span class="muted-text">{{ combinedDraft ? (combinedSourcesMatch ? '当前为合篇日报，将作为一篇保存和发布' : '已选仓库范围已变化，重新生成时将确认替换当前合篇') : '所选仓库可合并为一篇日报，也可按项目分别生成' }}</span>
+        </div>
+
         <ReportEditorCard
           id="stage-generate"
           class="atelier-stage atelier-stage-card atelier-stage-generate"
@@ -1016,6 +1087,7 @@ onBeforeUnmount(() => {
           aria-label="日报生成"
           :drafts="editorDrafts"
           :active-draft-key="activeDraftKey"
+          :active-result="activeDraft?.lastReportResult ?? null"
           :manual-work-content="activeDraft?.manualWorkContent ?? ''"
           :status="status"
           :setup-ready="setupReady"
@@ -1078,3 +1150,13 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.report-generation-mode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+</style>

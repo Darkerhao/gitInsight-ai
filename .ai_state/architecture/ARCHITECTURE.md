@@ -1,5 +1,16 @@
 # 当前架构要点
 
+## 版本整合（2026-10-12）
+
+- `codex/unified-version` 以简洁版 3.8.9 为基础恢复 main 的工作台、仓库、消息、帮助和任务日历；使用同一导航、useAssistant 和现有组件。日历读取多任务配置与执行日志，不恢复旧单任务实现。
+- 日报状态表示生成结果；飞书提交结果来自 sync_logs，工作台分别统计，不混算。
+- 合篇草稿通过 sourceRepos 保存全部真实来源，复用 projectReportActions 的生成、保存与发布。历史合篇恢复为一篇，保留原始输入和统计；不再拆成多份相同正文。历史续编替换未保存草稿前确认，取消不改变正文、素材与全局范围。
+- 素材日报由 materialReport 主进程模块、共享分区定义和 useMaterialReports 编辑器承载；事实来源为手工素材，共用现有 AI 客户端、daily_reports、飞书防重和备份链路。
+- 旧 role_materials 表按角色与日期保留，输出的素材身份存于 raw_input_json。角色/日期切换与异步操作有单一编辑上下文，更新已有日报时校验身份。
+- `published` 由成功同步日志与日报更新时间派生，不新增状态列；旧简洁版备份允许没有素材表，启动时正常建表。
+
+设计和验收见 [版本整合](../sprints/unified-version/design.md)。
+
 ## 关于与客户端更新（2026-10-09）
 
 - 关于页通过单一 `appUpdate` 主进程模块访问 electron-updater；preload 仅提供固定的检查、下载、偏好、安装、链接和订阅操作，更新控制只接受主窗口调用。
@@ -31,7 +42,7 @@
 
 ## 日报可靠性（2026-09-29）
 
-- renderer 的 ProjectReportDraft 独立持有 manualWorkContent；历史合并日报只向首项目恢复素材并提示核对归属。
+- renderer 的 ProjectReportDraft 独立持有 manualWorkContent；历史合篇通过 sourceRepos 保持单篇和完整素材。
 - 单日生成和一周批量生成复用 runGenerationQueue，最多三项并发。单日页面通过 requestId 取消活跃 IPC 请求并停止排队任务；一周页面本轮仅复用并发上限，未添加取消入口。
 - IPC 按调用窗口绑定 AbortController；生成在采集、AI、结构化提取与写入前检查取消。已进入持久化的完成结果允许返回并保留；取消不会回退生成模板。Git 采集本身不强杀进程，结束后检查取消。
 - networkRequest 为非流式 JSON 集成提供包含响应体读取的超时：默认 60 秒，结构化提取 20 秒，模型诊断 10 秒。取消信号贯穿 AI 请求及诊断。

@@ -664,3 +664,20 @@ export async function callAiWeeklySummary(
   if (typeof content !== 'string' || !content.trim()) throw new Error('AI接口未返回有效的周报内容');
   return parseWeeklySummaryMetadata(content);
 }
+
+export async function callAiMaterialReport(config: AiRuntimeConfig, prompt: string): Promise<string> {
+  const url = getChatCompletionsUrl(config.aiBaseUrl);
+  const response = await fetchAi(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.aiApiKey}` },
+    body: JSON.stringify({ model: config.aiModel, temperature: 0.3, messages: [
+      { role: 'system', content: '你是一名严谨的中文日报助手，只依据用户提供的工作素材整理，绝不编造。' },
+      { role: 'user', content: prompt },
+    ] }),
+  });
+  if (!response.ok) throw new Error(await buildAiErrorMessage(config, response, await response.text()));
+  const data = await readAiJsonResponse(response, url) as { choices?: Array<{ message?: { content?: unknown } }> };
+  const content = data.choices?.[0]?.message?.content;
+  if (typeof content !== 'string' || !content.trim()) throw new Error('AI接口未返回有效的日报内容');
+  return content.trim();
+}

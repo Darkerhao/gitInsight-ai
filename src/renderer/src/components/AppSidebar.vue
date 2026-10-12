@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
-import { Bot, BrainCog, CalendarDays, FileCog, FileText, FolderKanban, History, Info, Lightbulb, Settings, Sparkles, Sprout, ClipboardList } from 'lucide-vue-next';
+import { Bot, BrainCog, CalendarClock, CalendarDays, FileCog, FileText, FolderKanban, History, Info, LayoutDashboard, Lightbulb, MessageSquare, BookOpen, Settings, Sparkles, Sprout, ClipboardList } from 'lucide-vue-next';
 import { useAppUpdates } from '@/composables/useAppUpdates';
+import { useMessages } from '@/composables/useMessages';
 
 const { hasUpdate } = useAppUpdates();
+const { unreadCount } = useMessages();
 
 const props = defineProps<{
   activeNav: string;
@@ -19,11 +21,23 @@ type NavItem = ({ type: 'group' } & NavGroup) | ({ type: 'leaf' } & NavLeaf);
 
 const navGroups: NavGroup[] = [
   {
+    id: 'workspace',
+    label: '工作区',
+    icon: LayoutDashboard,
+    children: [
+      { key: 'dashboard', label: '工作台', icon: LayoutDashboard, enabled: true },
+      { key: 'repositories', label: '仓库中心', icon: FolderKanban, enabled: true },
+      { key: 'sync', label: '同步任务', icon: CalendarClock, enabled: true },
+      { key: 'messages', label: '消息中心', icon: MessageSquare, enabled: true },
+    ],
+  },
+  {
     id: 'report',
     label: '日报中心',
     icon: FolderKanban,
     children: [
       { key: 'generate', label: '写今日日报', icon: FileText, enabled: true },
+      { key: 'material', label: '素材日报', icon: ClipboardList, enabled: true },
       { key: 'weekly', label: '批量补日报', icon: CalendarDays, enabled: true },
       { key: 'summary', label: '汇总本周工作', icon: ClipboardList, enabled: true },
       { key: 'reflection', label: '复盘项目问题', icon: Lightbulb, enabled: true },
@@ -46,6 +60,7 @@ const navGroups: NavGroup[] = [
     children: [
       { key: 'ai', label: 'AI 设置', icon: BrainCog, enabled: true },
       { key: 'system', label: '系统设置', icon: Settings, enabled: true },
+      { key: 'help', label: '使用帮助', icon: BookOpen, enabled: true },
       { key: 'about', label: '关于', icon: Info, enabled: true },
     ],
   },
@@ -130,6 +145,9 @@ onBeforeUnmount(() => {
               <el-badge v-if="child.key === 'about'" is-dot :hidden="!hasUpdate">
                 <span class="sidebar-menu-label">{{ child.label }}</span>
               </el-badge>
+              <el-badge v-else-if="child.key === 'messages'" is-dot :hidden="!unreadCount">
+                <span class="sidebar-menu-label">{{ child.label }}</span>
+              </el-badge>
               <span v-else class="sidebar-menu-label">{{ child.label }}</span>
             </el-menu-item>
           </el-sub-menu>
@@ -152,9 +170,9 @@ onBeforeUnmount(() => {
       <div class="sidebar-tip-icon"><Bot :size="28" /></div>
       <div class="sidebar-tip-title">
         <Sparkles :size="14" />
-        <span>轻量版提示</span>
+        <span>工作流提示</span>
       </div>
-      <p class="sidebar-tip-desc">串联单日生成、一周日报、项目周反思与历史查看，形成完整工作闭环。</p>
+      <p class="sidebar-tip-desc">从 Git 提交或工作素材生成日报，串联同步、周报、复盘与历史记录。</p>
       <el-button class="sidebar-tip-btn" @click="emit('update:activeNav', 'generate')">开始生成日报</el-button>
     </div>
   </aside>

@@ -1,5 +1,4 @@
 import { reactive, ref } from 'vue';
-import { restoredManualWorkContent } from './assistant/projectGeneration';
 import { ElMessage } from 'element-plus';
 import {
   DEFAULT_AI_BASE_URL_OPTIONS,
@@ -101,7 +100,7 @@ function createAssistant() {
   function createProjectReportDraft(repo: RepoInfo, initial: Partial<ProjectReportDraft> = {}): ProjectReportDraft {
     const projectOptionId = initial.projectOptionId ?? config.feishuForm.projectOptionId ?? '';
     return {
-      key: repo.path,
+      key: initial.sourceRepos ? `combined:${JSON.stringify(initial.sourceRepos.map((item) => item.path).sort())}` : repo.path,
       repo,
       report: '',
       manualWorkContent: '',
@@ -124,40 +123,38 @@ function createAssistant() {
       const existingRepo = repos.value.find((repo) => repo.path === path);
       return existingRepo ?? { path, name: record.repoNames[index] || path };
     });
-    const fallbackRepos = recordRepos.length ? recordRepos : [{ path: `history-report-${record.id}`, name: record.repoNames[0] || `历史日报 ${record.id}` }];
+    if (!recordRepos.length) {
+      ElMessage.warning('该日报没有可恢复的来源仓库');
+      return;
+    }
     const knownPaths = new Set(repos.value.map((repo) => repo.path));
-    const missingRepos = fallbackRepos.filter((repo) => !knownPaths.has(repo.path));
+    const missingRepos = recordRepos.filter((repo) => !knownPaths.has(repo.path));
     if (missingRepos.length) {
       repos.value = [...repos.value, ...missingRepos].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
     }
 
-    selectedRepoPaths.value = normalizeRepoSelections([...selectedRepoPaths.value, ...fallbackRepos.map((repo) => repo.path)]);
-    const previousDrafts = new Map(projectDrafts.value.map((draft) => [draft.key, draft]));
-    const loadedDrafts = fallbackRepos.map((repo, index) => {
-      const previous = previousDrafts.get(repo.path);
-      const projectOptionId = previous?.projectOptionId || config.feishuForm.projectOptionId || '';
-      return createProjectReportDraft(repo, {
-        ...previous,
-        repo,
-        report: record.report,
-        manualWorkContent: restoredManualWorkContent(record.manualWorkContent, index),
-        reportId: record.id,
-        lastReportResult: null,
-        projectOptionId,
-        workHours: previous?.workHours ?? getProjectWorkHours(projectOptionId),
-        generateStatus: record.status === 'failed' ? 'failed' : 'success',
-        generateMessage: '',
-        publishStatus: 'idle',
-        publishMessage: '',
-        dirty: false,
-      });
+    const combined = recordRepos.length > 1;
+    const previous = projectDrafts.value.find((draft) => draft.reportId === record.id || (!combined && draft.key === recordRepos[0].path));
+    const projectOptionId = previous?.projectOptionId || config.feishuForm.projectOptionId || '';
+    const draft = createProjectReportDraft(recordRepos[0], {
+      sourceRepos: combined ? recordRepos : undefined,
+      restoredRecord: record,
+      report: record.report,
+      manualWorkContent: record.manualWorkContent ?? record.rawInput?.manualWorkContent ?? '',
+      reportId: record.id,
+      lastReportResult: null,
+      projectOptionId,
+      workHours: previous?.workHours ?? getProjectWorkHours(projectOptionId),
+      workHoursSource: previous?.workHoursSource ?? 'default',
+      generateStatus: record.status === 'failed' ? 'failed' : 'success',
+      generateMessage: '',
+      publishStatus: 'idle',
+      publishMessage: '',
+      dirty: false,
     });
-    const loadedKeys = new Set(loadedDrafts.map((draft) => draft.key));
-    projectDrafts.value = [...projectDrafts.value.filter((draft) => !loadedKeys.has(draft.key)), ...loadedDrafts];
-    activeDraftKey.value = loadedDrafts[0]?.key ?? activeDraftKey.value;
-    if (fallbackRepos.length > 1 && record.manualWorkContent?.trim()) {
-      ElMessage.warning('历史合并日报的补充工作已放入首个项目，请核对归属后再生成');
-    }
+    projectDrafts.value = combined ? [draft] : [...projectDrafts.value.filter((item) => !item.sourceRepos && item.key !== draft.key), draft];
+    selectedRepoPaths.value = normalizeRepoSelections(combined ? record.repoPaths : [...selectedRepoPaths.value, ...record.repoPaths]);
+    activeDraftKey.value = draft.key;
   }
 
   let repoState: ReturnType<typeof createRepoState>;

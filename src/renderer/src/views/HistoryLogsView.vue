@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import { createProjectReportActions } from '@/composables/projectReportActions';
+import { useRouter } from 'vue-router';
 import { useAssistant } from '@/composables/useAssistant';
 import type { HistoryLogRecord, HistoryLogStatusFilter, HistoryLogTypeFilter } from '@shared/types';
 
@@ -13,6 +14,7 @@ const emit = defineEmits<{
 }>();
 
 const assistant = useAssistant();
+const router = useRouter();
 const { repos, config, dailyReports, pushing, applyReportTimeRange, loadDailyReportDraft } = assistant;
 
 const keyword = ref('');
@@ -167,11 +169,26 @@ function exportActiveLog() {
   ElMessage.success('详情内容已导出');
 }
 
-function loadActiveReport() {
+async function loadActiveReport() {
   const record = activeLog.value?.reportRecord;
   if (!record) {
     ElMessage.warning('请选择一条日报生成记录');
     return;
+  }
+  if (record.materialRole) {
+    void router.push({ path: '/material', query: { role: record.materialRole, date: record.date, reportId: String(record.id) } });
+    return;
+  }
+  const replacesUnsavedDraft = assistant.projectDrafts.value.some((draft) => {
+    const replaced = record.repoPaths.length > 1 || draft.sourceRepos || draft.key === record.repoPaths[0];
+    return replaced && (draft.dirty || (!draft.reportId && (draft.report.trim() || draft.manualWorkContent.trim())));
+  });
+  if (replacesUnsavedDraft) {
+    try {
+      await ElMessageBox.confirm('加载历史日报会替换当前编辑区中未保存的正文或补充素材，请先保存需要保留的内容。', '加载历史日报', {
+        confirmButtonText: '加载历史日报', cancelButtonText: '保留当前日报', type: 'warning',
+      });
+    } catch { return; }
   }
   applyReportTimeRange(record.date, record.timeRange);
   config.reporterName = record.reporterName || config.reporterName;
@@ -184,6 +201,11 @@ async function republishActiveReport() {
   const record = activeLog.value?.reportRecord;
   if (!record) {
     ElMessage.warning('请选择一条日报生成记录');
+    return;
+  }
+  if (record.materialRole) {
+    loadActiveReport();
+    ElMessage.info('已打开素材日报，请核对后发布');
     return;
   }
   if (pushing.value) return;

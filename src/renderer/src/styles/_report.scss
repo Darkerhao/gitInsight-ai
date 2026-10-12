@@ -1210,6 +1210,22 @@
   text-align: left;
 }
 
+.repo-center-main.el-button {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.repo-center-main.el-button > span {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+}
+
 .repo-center-check {
   width: 20px;
   height: 20px;

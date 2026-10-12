@@ -27,7 +27,7 @@ interface DataBackup {
   database: string;
 }
 
-// Every actively used table/column must exist before a restore can replace live data.
+// Required tables predate backup v1. New tables may be absent and are created on startup.
 const requiredColumns: Record<string, string[]> = {
   daily_reports: ['id', 'date', 'start_datetime', 'end_datetime', 'time_range_label', 'reporter_name', 'repo_names_json',
     'repo_paths_json', 'report', 'status', 'commits_count', 'files_count', 'generated_at', 'updated_at', 'raw_input_json', 'structured_json'],
@@ -118,8 +118,10 @@ async function validateBackup(value: unknown): Promise<{ backup: DataBackup; dat
   try {
     const integrity = db.exec('PRAGMA integrity_check')[0]?.values;
     if (integrity?.length !== 1 || integrity[0]?.[0] !== 'ok') throw new Error('备份数据库完整性校验失败。');
-    for (const [table, required] of Object.entries(requiredColumns)) {
+    const optionalColumns = { role_materials: ['role', 'date', 'sections_json', 'extra_notes', 'updated_at'] };
+    for (const [table, required] of Object.entries({ ...requiredColumns, ...optionalColumns })) {
       const tableType = db.exec(`SELECT type FROM sqlite_master WHERE name = '${table}'`)[0]?.values[0]?.[0];
+      if (!tableType && table in optionalColumns) continue;
       const columns = new Set((db.exec(`PRAGMA table_info(${table})`)[0]?.values ?? []).map(row => String(row[1])));
       if (tableType !== 'table' || required.some(column => !columns.has(column))) throw new Error(`备份数据库缺少必需表或字段：${table}`);
     }

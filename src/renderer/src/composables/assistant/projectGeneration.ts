@@ -1,11 +1,6 @@
-/** Keep manual material scoped to the selected project at the request boundary. */
-export function projectGenerationInput(draft: { repo: { path: string }; manualWorkContent: string }) {
-  return { repoPaths: [draft.repo.path], manualWorkContent: draft.manualWorkContent.trim() || undefined };
-}
-
-/** Legacy combined reports have no per-project attribution; restore material only once. */
-export function restoredManualWorkContent(content: string | undefined, projectIndex: number) {
-  return projectIndex === 0 ? content ?? '' : '';
+/** Keep repository sources and manual material scoped to the draft at the request boundary. */
+export function projectGenerationInput(draft: { repo: { path: string }; sourceRepos?: { path: string }[]; manualWorkContent: string }) {
+  return { repoPaths: (draft.sourceRepos ?? [draft.repo]).map((repo) => repo.path), manualWorkContent: draft.manualWorkContent.trim() || undefined };
 }
 
 export async function runGenerationQueue<T, R>(items: T[], task: (item: T) => Promise<R>, signal: AbortSignal): Promise<(R | undefined)[]> {

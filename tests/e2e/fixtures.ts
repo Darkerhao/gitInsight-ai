@@ -100,7 +100,21 @@ export const test = base.extend({
         listFeishuFields: async (payload) => { structuredClone(payload); return metadata([]); },
         listFeishuProjects: async (payload) => { structuredClone(payload); return metadata([{ id: 'target', name: '测试项目' }]); },
         listDailyReports: async () => [], listSyncLogs: async () => [], listErrorLogs: async () => [],
-        getStorageInfo: async () => ({ appName: '码迹 AI 轻量版', appVersion: '3.8.8', appEdition: 'lite', appEditionLabel: '轻量版', reportsCount: 0, syncLogsCount: 0, errorLogsCount: 0 }),
+        getDailyReport: async () => null,
+        loadRoleMaterial: async () => null,
+        loadMaterialReport: async () => null,
+        queryHistoryLogs: async () => ({ records: [], total: 0, page: 1, pageSize: 10 }),
+        listHistoryProjects: async () => [],
+        listWeeklyReflectionProjects: async () => [],
+        listWeeklyReflectionSources: async () => [],
+        listWeeklyReflections: async () => [],
+        listWeeklySummarySources: async () => [],
+        listWeeklySummaries: async () => [],
+        getTimelineSnapshot: async () => ({ records: [], days: [], total: 0,
+          summary: { activeDays: 0, totalCommits: 0, totalFiles: 0, milestones: 0, projects: [] } }),
+        getStorageInfo: async () => ({ appName: '码迹 AI 轻量版', appVersion: '3.8.8', appEdition: 'lite', appEditionLabel: '轻量版',
+          userDataPath: 'C:\\tests\\profile', databasePath: 'C:\\tests\\profile\\gitinsight.db',
+          reportsCount: 0, syncLogsCount: 0, errorLogsCount: 0 }),
         exportDataBackup: async () => {
           state.backupCalls.push('export');
           if (state.backupOutcome === 'error') throw new Error('备份文件写入失败');

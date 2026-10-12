@@ -14,6 +14,7 @@ import type {
   CheckinResult,
   CheckinWalletImportPayload,
   CheckinWalletSnapshot,
+  DailyReportRecord,
   FeishuAuthSnapshot,
   FeishuFieldOption,
   FeishuLoginPayload,
@@ -23,6 +24,11 @@ import type {
   FeishuSubmitResult,
   FeishuTestSubmitPayload,
   GenerateReportParams,
+  GenerateFromMaterialParams,
+  MaterialRole,
+  MaterialReportResult,
+  RoleMaterialPayload,
+  RoleMaterialRecord,
   HistoryLogPage,
   HistoryLogQuery,
   RepoInfo,
@@ -66,6 +72,11 @@ declare global {
       getAutoSyncState: () => Promise<AutoSyncState>;
       validateAutoSync: (config: AppConfig, taskId?: string) => Promise<AutoSyncValidationResult>;
       runAutoSyncNow: (config: AppConfig, taskId?: string) => Promise<AutoSyncRunResult>;
+      generateReportFromMaterial: (params: GenerateFromMaterialParams) => Promise<MaterialReportResult>;
+      saveRoleMaterial: (payload: RoleMaterialPayload) => Promise<RoleMaterialRecord>;
+      loadRoleMaterial: (role: MaterialRole, date: string) => Promise<RoleMaterialRecord | null>;
+      loadMaterialReport: (role: MaterialRole, date: string) => Promise<DailyReportRecord | null>;
+      getDailyReport: (id: number) => Promise<DailyReportRecord | null>;
       listDailyReports: (limit?: number) => Promise<import('@shared/types').DailyReportRecord[]>;
       listSyncLogs: (limit?: number) => Promise<import('@shared/types').SyncLogRecord[]>;
       listErrorLogs: (limit?: number) => Promise<import('@shared/types').ErrorLogRecord[]>;

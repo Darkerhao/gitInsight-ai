@@ -14,6 +14,12 @@ import HistoryLogsView from '@/views/HistoryLogsView.vue';
 import JiaziTimelineView from '@/views/JiaziTimelineView.vue';
 import SystemSettingsView from '@/views/SystemSettingsView.vue';
 import AboutView from '@/views/AboutView.vue';
+import DashboardView from '@/views/DashboardView.vue';
+import RepositoryCenterView from '@/views/RepositoryCenterView.vue';
+import SyncTasksView from '@/views/SyncTasksView.vue';
+import MessageCenterView from '@/views/MessageCenterView.vue';
+import UsageHelpView from '@/views/UsageHelpView.vue';
+import MaterialReportsView from '@/views/MaterialReportsView.vue';
 import { useAppUpdates } from '@/composables/useAppUpdates';
 import { usePageZoom } from '@/composables/usePageZoom';
 import { navKeys } from '@/router';
@@ -39,17 +45,16 @@ const route = useRoute();
 const router = useRouter();
 const { zoomFactor, canZoomOut, canZoomIn, initializePageZoom, zoomIn, zoomOut, resetPageZoom } = usePageZoom();
 const legacyNavMap: Record<string, NavKey> = {
-  dashboard: 'generate',
-  repositories: 'config',
-  sync: 'config',
-  'sync:list': 'config',
-  'sync:calendar': 'config',
-  messages: 'history',
-  help: 'system',
   farm: 'timeline',
 };
 
 const viewMap = {
+  dashboard: DashboardView,
+  repositories: RepositoryCenterView,
+  sync: SyncTasksView,
+  messages: MessageCenterView,
+  help: UsageHelpView,
+  material: MaterialReportsView,
   config: ReportConfigView,
   generate: ReportGenerateView,
   weekly: WeeklyReportsView,
@@ -85,6 +90,10 @@ const welcomeMetrics = computed(() => ({
 }));
 
 function handleNavigate(value: string) {
+  if (value === 'sync:list' || value === 'sync:calendar') {
+    void router.push({ path: '/sync', query: { tab: value.split(':')[1] } });
+    return;
+  }
   const target = navKeys.includes(value as NavKey) ? (value as NavKey) : legacyNavMap[value];
   if (!target) return;
   void router.push({ path: `/${target}` });
@@ -270,6 +279,7 @@ onBeforeUnmount(() => {
         @zoom-out="zoomOut"
         @zoom-in="zoomIn"
         @reset-zoom="resetPageZoom"
+        @navigate="handleNavigate"
       />
 
       <div class="app-scroll atelier-scroll" :class="{ 'is-immersive': activeNav === 'timeline' }">

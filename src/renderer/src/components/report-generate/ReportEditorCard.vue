@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import type { ReportResult } from '@shared/types';
 import {
   CheckCircle2,
   CircleAlert,
@@ -58,6 +59,7 @@ const props = defineProps<{
   metrics: MetricItem[];
   activeHasReport: boolean;
   activeHasLastReportResult: boolean;
+  activeResult: ReportResult | null;
   canSaveAll: boolean;
 }>();
 
@@ -76,6 +78,7 @@ const emit = defineEmits<{
 }>();
 
 const activeDraft = computed(() => props.drafts.find((item) => item.key === props.activeDraftKey) ?? props.drafts[0]);
+const sourceFiles = computed(() => [...new Set(props.activeResult?.commits.flatMap((commit) => commit.files) ?? [])]);
 const generatingDrafts = computed(() => props.drafts.filter((item) => item.generateStatus === 'generating'));
 const generationDetail = computed(() => generatingDrafts.value.length
   ? `正在生成 ${generatingDrafts.value.map((item) => item.repoName).join('、')} 的日报`
@@ -123,7 +126,7 @@ function getTabStatusType(item: ProjectReportDraft) {
     </div>
 
     <div class="field manual-work-field">
-      <label>{{ activeDraft?.repoName ?? '请选择项目' }} · 补充工作内容（仅用于当前项目）</label>
+      <label>{{ activeDraft?.repoName ?? '请选择项目' }} · 补充工作内容（仅用于当前日报）</label>
       <el-input
         :model-value="manualWorkContent"
         :readonly="loading"
@@ -196,6 +199,31 @@ function getTabStatusType(item: ProjectReportDraft) {
       </div>
     </div>
 
+    <el-collapse v-if="activeResult" class="report-source-details">
+      <el-collapse-item title="查看生成来源" name="sources">
+        <el-tabs>
+          <el-tab-pane :label="`提交记录（${activeResult.commits.length}）`">
+            <el-table :data="activeResult.commits" max-height="320" empty-text="该范围没有 Git 提交">
+              <el-table-column label="提交" width="105"><template #default="{ row }">{{ row.hash.slice(0, 8) }}</template></el-table-column>
+              <el-table-column prop="message" label="提交说明" min-width="220" />
+              <el-table-column prop="author" label="作者" width="100" />
+              <el-table-column prop="date" label="时间" min-width="155" />
+            </el-table>
+          </el-tab-pane>
+          <el-tab-pane :label="`影响文件（${sourceFiles.length}）`">
+            <ul v-if="sourceFiles.length" class="report-source-files"><li v-for="file in sourceFiles" :key="file">{{ file }}</li></ul>
+            <el-empty v-else description="该范围没有文件变更" />
+          </el-tab-pane>
+          <el-tab-pane label="原始摘要">
+            <h4>Git 日志</h4><pre>{{ activeResult.rawInput.gitLogs || '暂无 Git 日志' }}</pre>
+            <h4>文件摘要</h4><pre>{{ activeResult.rawInput.files || '暂无文件摘要' }}</pre>
+            <h4>差异摘要</h4><pre>{{ activeResult.rawInput.diff || '暂无差异摘要' }}</pre>
+            <template v-if="activeResult.rawInput.manualWorkContent"><h4>补充工作内容</h4><pre>{{ activeResult.rawInput.manualWorkContent }}</pre></template>
+          </el-tab-pane>
+        </el-tabs>
+      </el-collapse-item>
+    </el-collapse>
+
     <article :key="activeDraft?.key" class="report-preview" :class="{ 'is-empty': !activeHasReport, 'is-ready': !loading, 'is-generated': !loading && activeDraft?.generateStatus === 'success' }">
       <div class="report-preview-head">
         <div>
@@ -250,3 +278,9 @@ function getTabStatusType(item: ProjectReportDraft) {
     <p v-if="status" class="muted-text">{{ status }}</p>
   </section>
 </template>
+
+<style scoped>
+.report-source-details pre, .report-source-files { max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.report-source-details pre { padding: 12px; border-radius: 8px; background: var(--c-surface-muted); color: var(--c-text-muted); }
+.report-source-files { padding-left: 24px; line-height: 1.8; }
+</style>

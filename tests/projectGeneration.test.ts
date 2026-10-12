@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { runGenerationQueue, projectGenerationInput, restoredManualWorkContent } from '../src/renderer/src/composables/assistant/projectGeneration.js';
+import { runGenerationQueue, projectGenerationInput } from '../src/renderer/src/composables/assistant/projectGeneration.js';
 
 test('project input only includes its own material', () => {
   assert.deepEqual(projectGenerationInput({ repo: { path: 'a' }, manualWorkContent: ' A review ' }), { repoPaths: ['a'], manualWorkContent: 'A review' });
   assert.deepEqual(projectGenerationInput({ repo: { path: 'b' }, manualWorkContent: '' }), { repoPaths: ['b'], manualWorkContent: undefined });
-  assert.equal(restoredManualWorkContent('legacy material', 0), 'legacy material');
-  assert.equal(restoredManualWorkContent('legacy material', 1), '');
+  assert.deepEqual(projectGenerationInput({ repo: { path: 'a' }, sourceRepos: [{ path: 'a' }, { path: 'b' }], manualWorkContent: 'combined review' }),
+    { repoPaths: ['a', 'b'], manualWorkContent: 'combined review' });
 });
 
 test('queue limits concurrency to three and retains ordered results', async () => {

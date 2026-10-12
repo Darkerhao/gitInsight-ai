@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { CalendarDays, Command, Moon, Save, Sun, ZoomIn, ZoomOut } from 'lucide-vue-next';
+import { Bell, CalendarDays, Command, Moon, Save, Sun, ZoomIn, ZoomOut } from 'lucide-vue-next';
 import { useAssistant } from '@/composables/useAssistant';
 import CheckinRewardCenter from '@/components/rewards/CheckinRewardCenter.vue';
+import { useMessages } from '@/composables/useMessages';
 
 const props = defineProps<{
   themeMode: 'light' | 'dark';
@@ -16,10 +17,12 @@ const emit = defineEmits<{
   (event: 'zoom-out'): void;
   (event: 'zoom-in'): void;
   (event: 'reset-zoom'): void;
+  (event: 'navigate', value: string): void;
 }>();
 
 const assistant = useAssistant();
 const { config, isConfigDirty, saveSettings } = assistant;
+const { unreadCount } = useMessages();
 
 const reporterName = computed(() => config.reporterName || '默认用户');
 const avatarText = computed(() => reporterName.value.trim().slice(0, 1) || '用');
@@ -63,6 +66,9 @@ const currentDateLabel = computed(() =>
 
     <div class="topbar-actions">
       <CheckinRewardCenter />
+      <el-badge is-dot :hidden="!unreadCount">
+        <el-button circle :icon="Bell" aria-label="打开消息中心" @click="emit('navigate', 'messages')" />
+      </el-badge>
 
       <div class="topbar-zoom" aria-label="页面缩放">
         <el-tooltip content="缩小（Ctrl/Cmd + -）" placement="bottom">

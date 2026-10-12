@@ -9,6 +9,9 @@ import type {
   DailyReportRecord,
   ErrorLogRecord,
   GenerateReportParams,
+  MaterialRole,
+  RoleMaterialPayload,
+  RoleMaterialRecord,
   HistoryLogPage,
   HistoryLogQuery,
   HistoryLogRecord,
@@ -30,6 +33,11 @@ import { backfillTimelineSnapshots, ensureTimelineSchema, upsertTimelineSnapshot
 export let sqlDatabase: import('sql.js').Database | null = null;
 let databaseInitialization: Promise<import('sql.js').Database> | null = null;
 let databaseWriteQueue: Promise<void> = Promise.resolve();
+
+const dailyReportSelection = `SELECT daily_reports.*, EXISTS (
+  SELECT 1 FROM sync_logs WHERE sync_logs.report_id = daily_reports.id
+    AND sync_logs.status = 'success' AND sync_logs.ran_at >= daily_reports.updated_at
+) AS published FROM daily_reports`;
 
 
 export function countRawInputFiles(rawInput?: ReportResult['rawInput']) {
@@ -105,6 +113,15 @@ async function initializeDatabase() {
       message TEXT NOT NULL,
       detail TEXT,
       created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS role_materials (
+      role TEXT NOT NULL,
+      date TEXT NOT NULL,
+      sections_json TEXT NOT NULL,
+      extra_notes TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (role, date)
     );
 
     CREATE TABLE IF NOT EXISTS checkin_wallet (
@@ -221,9 +238,49 @@ export function rowToDailyReportRecord(row: Record<string, unknown>): DailyRepor
     updatedAt: String(row.updated_at || ''),
     manualWorkContent: parseManualWorkContent(row.raw_input_json),
     structuredJson: parseStructuredReportMetadata(row.structured_json),
+    ...parseMaterialInput(row.raw_input_json),
+    published: row.published === undefined ? undefined : Number(row.published) === 1,
   };
 }
 
+
+function parseMaterialInput(value: unknown): Pick<DailyReportRecord, 'rawInput' | 'materialRole' | 'material'> {
+  if (typeof value !== 'string') return {};
+  try {
+    const input = JSON.parse(value) as ReportResult['rawInput'];
+    if (!input || typeof input !== 'object') return {};
+    if (input.materialRole !== 'projectManager' && input.materialRole !== 'productManager') return { rawInput: input };
+    return { rawInput: input, materialRole: input.materialRole, material: input.material };
+  } catch { return {}; }
+}
+
+export async function saveRoleMaterial(payload: RoleMaterialPayload): Promise<RoleMaterialRecord> {
+  const db = await getDatabase();
+  const updatedAt = new Date().toISOString();
+  db.run(`INSERT INTO role_materials (role, date, sections_json, extra_notes, updated_at) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(role, date) DO UPDATE SET sections_json = excluded.sections_json,
+    extra_notes = excluded.extra_notes, updated_at = excluded.updated_at`,
+  [payload.role, payload.date, JSON.stringify(payload.sections), payload.extraNotes, updatedAt]);
+  await persistDatabase();
+  return { ...payload, updatedAt };
+}
+
+export async function loadRoleMaterial(role: MaterialRole, date: string): Promise<RoleMaterialRecord | null> {
+  const db = await getDatabase();
+  const statement = db.prepare('SELECT * FROM role_materials WHERE role = ? AND date = ?');
+  try {
+    statement.bind([role, date]);
+    if (!statement.step()) return null;
+    const row = statement.getAsObject();
+    return { role, date, sections: JSON.parse(String(row.sections_json)), extraNotes: String(row.extra_notes), updatedAt: String(row.updated_at) };
+  } finally { statement.free(); }
+}
+
+export async function loadMaterialReport(role: MaterialRole, date: string): Promise<DailyReportRecord | null> {
+  const db = await getDatabase();
+  const records = selectRows(db, `${dailyReportSelection} WHERE date = ? ORDER BY updated_at DESC, id DESC`, [date]);
+  return records.map(rowToDailyReportRecord).find(record => record.materialRole === role) ?? null;
+}
 
 export function normalizeSyncTrigger(value: unknown): SyncLogRecord['triggerType'] {
   return value === 'scheduled' ? 'scheduled' : 'manual';
@@ -448,7 +505,7 @@ function rowToErrorHistoryLog(row: Record<string, unknown>): HistoryLogRecord {
 
 export async function getDailyReportById(id: number) {
   const db = await getDatabase();
-  const statement = db.prepare('SELECT * FROM daily_reports WHERE id = ? LIMIT 1');
+  const statement = db.prepare(`${dailyReportSelection} WHERE id = ? LIMIT 1`);
   try {
     statement.bind([id]);
     return statement.step() ? rowToDailyReportRecord(statement.getAsObject()) : null;
@@ -472,6 +529,13 @@ export async function saveDailyReport(payload: SaveDailyReportPayload): Promise<
   const timeRangeLabel = timeRange?.label ?? null;
 
   if (payload.id) {
+    const existing = await getDailyReportById(payload.id);
+    if (!existing) throw new Error('日报记录不存在');
+    const materialRole = payload.rawInput?.materialRole;
+    if ((existing.materialRole || materialRole)
+      && (existing.materialRole !== materialRole || existing.date !== payload.date)) {
+      throw new Error('日报角色或日期不匹配，不能覆盖其他日报');
+    }
     db.run(
       `UPDATE daily_reports
        SET date = ?, reporter_name = ?, repo_names_json = ?, repo_paths_json = ?, report = ?, status = ?,
@@ -540,7 +604,7 @@ export async function saveDailyReport(payload: SaveDailyReportPayload): Promise<
 
 export async function listDailyReports(limit = 10): Promise<DailyReportRecord[]> {
   const db = await getDatabase();
-  const statement = db.prepare('SELECT * FROM daily_reports ORDER BY updated_at DESC LIMIT ?');
+  const statement = db.prepare(`${dailyReportSelection} ORDER BY updated_at DESC LIMIT ?`);
   const records: DailyReportRecord[] = [];
   try {
     statement.bind([Math.max(1, Math.min(Number(limit) || 10, 100))]);
@@ -612,7 +676,7 @@ export async function queryHistoryLogs(query: HistoryLogQuery = {}): Promise<His
     records.push(
       ...selectRows(
         db,
-        `SELECT * FROM daily_reports ${filter.whereSql} ORDER BY updated_at DESC LIMIT ?`,
+        `${dailyReportSelection} ${filter.whereSql} ORDER BY updated_at DESC LIMIT ?`,
         [...filter.params, candidateLimit],
       ).map(rowToDailyReportHistoryLog),
     );
