@@ -15,7 +15,7 @@ const VERSION = 1;
 export const MAX_BACKUP_BYTES = 192 * 1024 * 1024;
 const MAX_DATABASE_BYTES = 128 * 1024 * 1024;
 const MAX_CONFIG_BYTES = 1024 * 1024;
-const filters = [{ name: '码迹 AI 数据备份', extensions: ['gitinsight-backup'] }];
+const filters = [{ name: '码迹AI 数据备份', extensions: ['gitinsight-backup'] }];
 let restoring = false;
 
 interface DataBackup {

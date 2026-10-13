@@ -47,7 +47,7 @@ async function electronMain() {
 
   // Present only this isolated process as an installed NSIS app.
   const getPath = app.getPath.bind(app);
-  const executable = path.join(directory, '码迹 AI.exe');
+  const executable = path.join(directory, '码迹AI.exe');
   fs.writeFileSync(path.join(directory, `Uninstall ${path.basename(executable)}`), 'fixture');
   app.getPath = name => name === 'exe' ? executable : getPath(name);
   app.getVersion = () => version;

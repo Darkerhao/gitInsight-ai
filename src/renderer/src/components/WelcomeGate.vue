@@ -21,7 +21,7 @@ function configure(nav: string) {
 <template>
   <section class="welcome-gate" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
     <div class="welcome-card">
-      <img src="../assets/logo.png" alt="码迹 AI" width="48" height="48" />
+      <img src="../assets/logo.png" alt="码迹AI" width="48" height="48" />
       <h1 id="welcome-title">开始今天的工作记录</h1>
       <p>选择仓库，补充工作内容，生成并发布日报。</p>
       <p role="status">{{ metrics.loaded ? `配置进度：${completed}/3 项已填写` : '正在读取本地配置…' }}</p>

@@ -20,7 +20,7 @@ if (!app.requestSingleInstanceLock()) {
     if (stopping) return;
     stopping = true;
     clearAutoSyncTimer();
-    dialog.showErrorBox('GitInsight AI 无法继续运行', error instanceof Error ? error.message : String(error));
+    dialog.showErrorBox('码迹AI 无法继续运行', error instanceof Error ? error.message : String(error));
     app.quit();
   }
 

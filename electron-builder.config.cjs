@@ -3,7 +3,7 @@ const windowsArtifactBase = artifactBase.replace('${os}', 'Windows');
 
 module.exports = {
   appId: 'com.shuzhi.gitinsight-ai',
-  productName: '码迹 AI',
+  productName: '码迹AI',
   directories: {
     output: 'release/${version}',
   },
@@ -34,6 +34,7 @@ module.exports = {
     },
   },
   nsis: {
+    include: 'build/installer.nsh',
     artifactName: `${windowsArtifactBase}.\${ext}`,
     oneClick: false,
     perMachine: false,

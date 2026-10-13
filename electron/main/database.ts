@@ -767,7 +767,7 @@ export async function getStorageInfo(): Promise<StorageInfo> {
   await getDatabase();
   return {
     appVersion: app.getVersion(),
-    appName: '码迹 AI',
+    appName: '码迹AI',
     userDataPath: app.getPath('userData'),
     configPath: getConfigPath(),
     secretsPath: getSecretsPath(),

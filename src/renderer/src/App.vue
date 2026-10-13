@@ -295,7 +295,7 @@ onBeforeUnmount(() => {
         </Transition>
 
         <footer v-if="activeNav !== 'timeline'" class="app-footer">
-          码迹 AI{{ appVersionText }} · 让每一次提交，都成为看得见的成果
+          码迹AI{{ appVersionText }} · 让每一次提交，都成为看得见的成果
         </footer>
       </div>
     </main>
