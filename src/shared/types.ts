@@ -3,7 +3,6 @@ export interface RepoInfo {
   path: string;
 }
 
-export type AppEdition = 'lite' | 'standard';
 
 export interface FeishuFormConfig {
   endpoint: string;
@@ -600,8 +599,6 @@ export interface HistoryLogPage {
 
 export interface StorageInfo {
   appVersion: string;
-  appEdition: AppEdition;
-  appEditionLabel: string;
   appName: string;
   userDataPath: string;
   configPath: string;

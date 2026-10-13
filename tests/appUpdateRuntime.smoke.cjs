@@ -15,7 +15,7 @@ const projectRoot = path.resolve(__dirname, '..');
 const nextVersion = require('semver').inc(version, 'patch');
 const prefix = 'UPDATE_SMOKE ';
 const payload = Buffer.alloc(256 * 1024, 'Local updater verification; not an executable.');
-const installerName = `MajiAI-Lite-${nextVersion}-Windows-x64.exe`;
+const installerName = `MajiAI-${nextVersion}-Windows-x64.exe`;
 
 function checkedRoot(value) {
   const root = path.resolve(value || '.');
@@ -47,7 +47,7 @@ async function electronMain() {
 
   // Present only this isolated process as an installed NSIS app.
   const getPath = app.getPath.bind(app);
-  const executable = path.join(directory, '码迹 AI 轻量版.exe');
+  const executable = path.join(directory, '码迹 AI.exe');
   fs.writeFileSync(path.join(directory, `Uninstall ${path.basename(executable)}`), 'fixture');
   app.getPath = name => name === 'exe' ? executable : getPath(name);
   app.getVersion = () => version;
@@ -69,7 +69,7 @@ async function electronMain() {
   assert.equal(path.resolve(cacheBase, cacheName), path.join(directory, 'cache'));
   const updateConfig = path.join(directory, 'app-update.yml');
   fs.writeFileSync(updateConfig, dump({
-    provider: 'generic', channel: 'lite',
+    provider: 'generic', channel: 'standard',
     url: `${process.env.MAJI_UPDATE_SMOKE_URL}/${phase}/`, updaterCacheDirName: cacheName,
   }));
   autoUpdater.updateConfigPath = updateConfig;
@@ -163,7 +163,7 @@ async function nodeMain() {
   const server = createServer((request, response) => {
     const pathname = new URL(request.url, 'http://localhost').pathname;
     requests.push(pathname);
-    if (pathname.endsWith('/lite.yml')) {
+    if (pathname.endsWith('/standard.yml')) {
       const sha512 = createHash('sha512').update(pathname.startsWith('/checksum/') ? Buffer.from('wrong digest') : payload).digest('base64');
       response.writeHead(200, { 'Content-Type': 'text/yaml' });
       response.end(dump({ version: nextVersion, files: [{ url: installerName, size: payload.length, sha512 }], releaseNotes: '本地更新验证' }));
@@ -195,7 +195,7 @@ async function nodeMain() {
       const installations = messages.filter(message => message.event === 'install-intercepted');
       assert.equal(installations.length, ['manual', 'automatic'].includes(phase) ? 1 : 0, output);
       if (installations.length) assert.equal(installations[0].forceRun, phase === 'manual');
-      assert.ok(requests.includes(`/${phase}/lite.yml`));
+      assert.ok(requests.includes(`/${phase}/standard.yml`));
       assert.ok(requests.includes(`/${phase}/${installerName}`));
       console.log(`Updater runtime ${phase}: PASS (real HTTP + SHA-512 + preload IPC; installer intercepted).`);
     }

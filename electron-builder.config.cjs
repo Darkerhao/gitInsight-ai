@@ -1,27 +1,11 @@
-const edition = process.env.APP_EDITION === 'standard' ? 'standard' : 'lite';
-
-const editionConfig = {
-  lite: {
-    appId: 'com.shuzhi.gitinsight-ai.lite',
-    productName: '码迹 AI 轻量版',
-    artifactLabel: '轻量版',
-  },
-  standard: {
-    appId: 'com.shuzhi.gitinsight-ai',
-    productName: '码迹 AI 标准版',
-    artifactLabel: '标准版',
-  },
-}[edition];
-
-const artifactEdition = edition === 'standard' ? 'Standard' : 'Lite';
-const artifactBase = `MajiAI-${artifactEdition}-\${version}-\${os}-\${arch}`;
+const artifactBase = `MajiAI-\${version}-\${os}-\${arch}`;
 const windowsArtifactBase = artifactBase.replace('${os}', 'Windows');
 
 module.exports = {
-  appId: editionConfig.appId,
-  productName: editionConfig.productName,
+  appId: 'com.shuzhi.gitinsight-ai',
+  productName: '码迹 AI',
   directories: {
-    output: `release/\${version}/${edition}`,
+    output: 'release/${version}',
   },
   files: ['out/**/*', 'build/**', 'package.json', 'node_modules/sql.js/**/*'],
   asar: true,
@@ -29,15 +13,12 @@ module.exports = {
   npmRebuild: false,
   compression: 'maximum',
   artifactName: `${artifactBase}.\${ext}`,
-  extraMetadata: {
-    appEdition: edition,
-    appEditionLabel: editionConfig.artifactLabel,
-  },
   publish: {
     provider: 'github',
     owner: 'Darkerhao',
     repo: 'gitInsight-ai',
-    channel: edition,
+    // Keep the existing Standard installer update channel after unifying the product.
+    channel: 'standard',
     releaseType: 'release',
   },
   win: {

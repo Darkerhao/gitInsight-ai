@@ -1,4 +1,4 @@
-# GitInsight AI · AI日报助手
+# 码迹 AI · AI日报助手
 
 一款跨平台桌面应用（Windows / macOS / Linux）：扫描你本地的 Git 仓库，把指定时间范围内的提交记录交给 AI，自动生成正式的中文研发日报，并可一键同步到飞书日报表单。
 
@@ -26,15 +26,15 @@
 | 系统设置 | 明暗主题、开屏动画、本地存储与加密状态查看、数据备份与恢复 |
 | 关于 | 查看当前版本与更新说明、应用内检查和下载更新、重启安装、自动更新开关 |
 
-应用分 **简洁版（Lite）** 和 **标准版（Standard）** 两个发行版，功能完全一致，仅产品名称与安装包不同，按团队习惯任选其一即可。
+应用统一为 **码迹 AI**，每个平台只提供一套完整功能的安装包。
 
 ---
 
 ## 下载安装
 
-前往 [GitHub Releases](https://github.com/Darkerhao/gitInsight-ai/releases) 下载对应平台、对应版本（Lite / Standard）的安装包，安装后启动即可。
+前往 [GitHub Releases](https://github.com/Darkerhao/gitInsight-ai/releases) 下载对应平台的安装包，安装后启动即可。
 
-安装带有更新功能的新版本后，可在 **设置 → 关于** 中直接更新。默认启动后自动检查并下载新版本，正常退出应用时安装；也可点击 **重启安装** 立即更新，或关闭自动更新、改为手动检查。Lite 与 Standard 分别更新，不会切换发行版。
+安装带有更新功能的新版本后，可在 **设置 → 关于** 中直接更新。默认启动后自动检查并下载新版本，正常退出应用时安装；也可点击 **重启安装** 立即更新，或关闭自动更新、改为手动检查。旧标准版沿用原更新渠道升级为码迹 AI。旧 Lite 用户请先备份、退出并卸载旧版（保留应用数据），再安装统一版，详见[旧版升级](docs/release-workflow.md#旧版升级)。
 
 自动安装支持 Windows 安装版（NSIS）和 Linux AppImage/deb/rpm；Windows 便携版、解压版及当前未签名的 macOS 发行版会显示不支持的原因。首次从没有更新功能的旧版本升级，仍需安装一次新安装包。
 
@@ -210,10 +210,10 @@ npm run test:e2e   # 浏览器回归（需先安装 Playwright Chromium）
 npm run test:desktop # 构建后使用隔离数据目录验证真实 Electron 启动
 npm run test:app-update:desktop # Windows 更新实跑：本地 HTTP、校验和 IPC，拦截实际安装
 
-# 打包发行版：dist:<win|mac|linux>:<lite|standard>，产物在 release/<版本>/<发行版>/
-npm run dist:win:standard
+# 打包：dist:<win|mac|linux>，产物在 release/<版本>/
+npm run dist:win
 ```
 
-推送到 `main` 后，GitHub Actions 会在检查通过后自动递增补丁版本（如 `3.8.6 → 3.8.7`），回写版本文件并创建标签，再构建三平台 Lite 与 Standard 安装包、发布 GitHub Release。下次开发前先 `git pull --rebase` 同步自动版本提交。详见 [发布与打包工作流](docs/release-workflow.md)。
+日常开发使用 `dev`：推送 `dev` 或向 `dev/main` 提 PR 时，GitHub Actions 执行测试、类型检查、构建与浏览器回归。验证通过后合入并推送 `main`，发布流程检查通过后自动递增补丁版本（如 `3.8.6 → 3.8.7`），回写版本文件并创建标签，再构建三平台统一安装包、发布 GitHub Release。生成版本提交后，CI 自动将该提交 cherry-pick 到 `dev`；开发前拉取 `dev` 即可。其他分支推送不触发检查或打包，手动打包仅允许 `main`。详见 [发布与打包工作流](docs/release-workflow.md)。
 
 架构说明、IPC 契约与代码约定见 [CLAUDE.md](CLAUDE.md)。

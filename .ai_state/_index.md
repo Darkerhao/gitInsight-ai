@@ -1,15 +1,24 @@
 ---
 path: Refactor
 stage: ship
-current_sprint_slug: unified-version
-current_roadmap_slug: unified-version
+current_sprint_slug: single-edition
+current_roadmap_slug: none
 route_confidence: 0.96
-next_action: "本地新分支整合交付完成，无待实施项；未推送或发布"
+next_action: "单一发行版与版本提交自动同步 dev 本地完成；未提交、推送或发布"
 pointers:
   latest_architecture_update: architecture/ARCHITECTURE.md
 ---
 
 # AI State Index
+
+## 本轮状态（2026-10-13）
+
+- 单一发行版完成：三个平台统一为码迹 AI；dev 检查、main 发布；main 版本提交由独立 sync-dev job 自动 cherry-pick 至 dev。
+- design: `.ai_state/sprints/single-edition/design.md`
+- evidence: `.ai_state/sprints/single-edition/runtime-verify.md`
+- review: `.ai_state/sprints/single-edition/reviews/pass2.md`；代码/规格/最终评估 PASS，polish PASS。
+- 验证：完整 npm test、check、发布增量 13/13、关于页 9/9、Electron 桌面和更新 5 场景通过；Windows NSIS 构建、元数据与 SHA-512 校验通过。
+- 隔离 worktree 改动同步回 dev，保留前序 CI 修改。未提交、推送或真实安装/发布。
 
 ## 本轮状态（2026-10-12）
 
@@ -84,6 +93,8 @@ pointers:
 - current_sprint_slug: weekly-summary
 
 ## route_history
+
+- 2026-10-13: Refactor / single-edition；单一安装身份、发布渠道与界面合同跨模块收敛；置信度 0.96。隔离 worktree 实施，保留已有 CI 调整。
 
 - 2026-10-12: Refactor / unified-version；以简洁版新数据链路恢复 main 独有页面与素材日报，仅新分支整合；置信度 0.96。
 
