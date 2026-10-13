@@ -128,7 +128,7 @@ export async function importCheckinWallet(payload: CheckinWalletImportPayload): 
       type: 'import',
       amount: importedWallet.coins,
       balanceAfter: importedWallet.coins,
-      reason: '迁移本地甲币钱包',
+      reason: '迁移本地码币钱包',
       refKey: 'localStorage',
       createdAt: now,
     });
@@ -178,11 +178,11 @@ export async function runDailyCheckin(): Promise<CheckinResult> {
 
 export async function spendCheckinCoins(payload: CheckinCoinSpendPayload): Promise<CheckinWalletSnapshot> {
   const amount = normalizeCoins(payload.amount);
-  if (amount <= 0) throw new Error('甲币消费金额必须大于 0');
+  if (amount <= 0) throw new Error('码币消费金额必须大于 0');
 
   const wallet = await getOrCreateCheckinWallet();
   if (wallet.coins < amount) {
-    throw new Error(`甲币不足，还差 ${amount - wallet.coins}`);
+    throw new Error(`码币不足，还差 ${amount - wallet.coins}`);
   }
 
   const now = new Date().toISOString();
@@ -202,7 +202,7 @@ export async function spendCheckinCoins(payload: CheckinCoinSpendPayload): Promi
     type: 'spend',
     amount: -amount,
     balanceAfter: nextWallet.coins,
-    reason: (typeof payload.reason === 'string' ? payload.reason.trim() : '') || '甲币消费',
+    reason: (typeof payload.reason === 'string' ? payload.reason.trim() : '') || '码币消费',
     refKey: payload.refKey,
     createdAt: now,
   });
@@ -218,7 +218,7 @@ export async function awardCheckinCoins(payload: {
   refKey?: string;
 }): Promise<CheckinWalletSnapshot> {
   const amount = normalizeCoins(payload.amount);
-  if (amount <= 0) throw new Error('甲币奖励金额必须大于 0');
+  if (amount <= 0) throw new Error('码币奖励金额必须大于 0');
 
   const wallet = await getOrCreateCheckinWallet();
   const now = new Date().toISOString();
@@ -238,7 +238,7 @@ export async function awardCheckinCoins(payload: {
     type: 'reward',
     amount,
     balanceAfter: nextWallet.coins,
-    reason: (typeof payload.reason === 'string' ? payload.reason.trim() : '') || '甲币奖励',
+    reason: (typeof payload.reason === 'string' ? payload.reason.trim() : '') || '码币奖励',
     refKey: payload.refKey,
     createdAt: now,
   });

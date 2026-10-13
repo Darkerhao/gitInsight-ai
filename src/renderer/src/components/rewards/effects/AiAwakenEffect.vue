@@ -7,7 +7,7 @@ import type { SceneFn } from '@/components/rewards/engine/particleEngine';
 const props = defineProps<{ seed?: number }>();
 
 const CODE_CHARS = '01<>/{}[]=+*#$&λΣΨ'.split('');
-const DATA_GLYPHS = ['READY', 'DAY+1', '+甲币', 'SYNC 100%', 'AUTH OK', 'FOCUS'];
+const DATA_GLYPHS = ['READY', 'DAY+1', '+码币', 'SYNC 100%', 'AUTH OK', 'FOCUS'];
 const IRIS_AT = 1600;
 
 const scene: SceneFn = (api) => {

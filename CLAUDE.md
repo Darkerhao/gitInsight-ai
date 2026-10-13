@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-GitInsight AI (中文界面 "AI日报助手") is an Electron desktop app that scans local Git repositories, summarizes a time range of commits into a Chinese work report via an OpenAI-compatible chat API, and syncs it to a Feishu daily report form — manually or on a daily auto-sync schedule. Report/sync/error history is persisted locally in SQLite. Around that core it also ships a "时间长河" annual engineering-timeline view and a 甲币 check-in/reward-effect system. Stack: Electron + Vue 3 (`<script setup>`) + Vue Router + Element Plus + TypeScript, bundled with electron-vite.
+GitInsight AI (中文界面 "AI日报助手") is an Electron desktop app that scans local Git repositories, summarizes a time range of commits into a Chinese work report via an OpenAI-compatible chat API, and syncs it to a Feishu daily report form — manually or on a daily auto-sync schedule. Report/sync/error history is persisted locally in SQLite. Around that core it also ships a "时间长河" annual engineering-timeline view and a 码币 check-in/reward-effect system. Stack: Electron + Vue 3 (`<script setup>`) + Vue Router + Element Plus + TypeScript, bundled with electron-vite.
 
 The app ships as one product, **码迹 AI**, with one package per platform. `electron-builder.config.cjs` owns the display name and installer identity. Preserve `package.name = gitinsight-ai` (no productName in package metadata), appId `com.shuzhi.gitinsight-ai`, and the existing `standard` updater channel. The channel is a stable machine identifier, not an edition selector. Old Lite installations require backup, uninstall while retaining data, then manual installation; see [release workflow](docs/release-workflow.md).
 
