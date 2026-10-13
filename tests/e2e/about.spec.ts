@@ -5,7 +5,7 @@ test('关于入口显示运行版本，并可手动检查和打开固定链接',
   await page.getByRole('menuitem', { name: '关于', exact: true }).click();
   await expect(page.getByRole('heading', { name: '关于', exact: true })).toBeVisible();
   await expect(page.getByText('版本 v3.8.8', { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '码迹 AI', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '码迹AI', exact: true })).toBeVisible();
   await expect(page.locator('.app-about-card')).not.toContainText(/轻量版|标准版/);
   await page.getByRole('button', { name: '检查更新', exact: true }).click();
   await expect(page.getByRole('heading', { name: '当前已是最新版本' })).toBeVisible();

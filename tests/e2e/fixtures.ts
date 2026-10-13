@@ -112,7 +112,7 @@ export const test = base.extend({
         listWeeklySummaries: async () => [],
         getTimelineSnapshot: async () => ({ records: [], days: [], total: 0,
           summary: { activeDays: 0, totalCommits: 0, totalFiles: 0, milestones: 0, projects: [] } }),
-        getStorageInfo: async () => ({ appName: '码迹 AI', appVersion: '3.8.8',
+        getStorageInfo: async () => ({ appName: '码迹AI', appVersion: '3.8.8',
           userDataPath: 'C:\\tests\\profile', databasePath: 'C:\\tests\\profile\\gitinsight.db',
           reportsCount: 0, syncLogsCount: 0, errorLogsCount: 0 }),
         exportDataBackup: async () => {

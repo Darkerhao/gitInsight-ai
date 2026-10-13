@@ -1,6 +1,6 @@
 # 发布与打包工作流
 
-项目使用 `electron-vite` 构建应用代码，所有打包命令统一通过 `scripts/dist.mjs` 加载唯一的 `electron-builder.config.cjs`，生成统一的码迹 AI 桌面安装包。
+项目使用 `electron-vite` 构建应用代码，所有打包命令统一通过 `scripts/dist.mjs` 加载唯一的 `electron-builder.config.cjs`，生成统一的码迹AI 桌面安装包。
 
 ## 分支分工
 
@@ -100,7 +100,7 @@ macOS 的同一清单由 builder 合并 x64/arm64 文件；所有清单均包含
 
 ## 旧版升级
 
-- 旧标准版：保留安装身份 `com.shuzhi.gitinsight-ai` 和 `standard` 更新渠道；支持自动更新的安装方式沿用原流程。Windows 产品名改为“码迹 AI”，安装程序通过原 GUID 识别并替换旧安装。
+- 旧标准版：保留安装身份 `com.shuzhi.gitinsight-ai` 和 `standard` 更新渠道；支持自动更新的安装方式沿用原流程。Windows 产品名改为“码迹AI”，安装程序通过原 GUID 识别并替换旧安装。
 - 旧 Lite：Windows 安装身份是 `com.shuzhi.gitinsight-ai.lite`，与统一版不同，但两者默认安装目录可能相同。因此先在系统设置导出备份，完全退出应用，卸载旧 Lite 并保留应用数据，再安装统一版；不要先覆盖安装再卸载 Lite。必要时导入备份，重新配置密钥并登录飞书（备份不包含凭据，恢复后自动同步默认关闭）。其他平台使用系统正常卸载/替换应用流程，并保留数据。
 - 包名始终为 `gitinsight-ai`，打包后的 package.json 不注入 productName；Electron 默认 userData 路径仍基于该包名。应用不搬迁或删除旧数据库、配置、密钥或会话。卸载时不要勾选清除数据，也不要使用清理工具删除应用数据目录。
 - 本次仅保留一套安装包。旧 Lite 渠道不再发布新清单，需要上述一次手动迁移；迁移后使用统一更新流程。Windows 便携/解压版和未签名 macOS 仍需手动安装更新。
@@ -115,3 +115,5 @@ macOS 的同一清单由 builder 合并 x64/arm64 文件；所有清单均包含
 - `WIN_CSC_KEY_PASSWORD`：证书密码。
 
 配置后，Windows 打包 job 会自动把签名信息传给 `electron-builder`。没有配置这两个 secrets 时，Windows 包仍会生成，但不会签名。
+
+Windows 全新安装的默认目录名为英文 `MajiAI`，由 `build/installer.nsh` 设置；应用和快捷方式显示名为“码迹AI”；覆盖升级沿用注册表中的已有安装目录，用户仍可手动选择目录。安装包下载文件名继续使用 `MajiAI`，以保持跨平台发布文件名和更新链接稳定。

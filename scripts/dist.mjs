@@ -12,6 +12,6 @@ function run(command, args) {
   }
 }
 
-console.log('正在构建码迹 AI 安装包...');
+console.log('正在构建码迹AI 安装包...');
 run('npm', ['run', 'build']);
 run('npx', ['electron-builder', '--config', 'electron-builder.config.cjs', ...process.argv.slice(2)]);

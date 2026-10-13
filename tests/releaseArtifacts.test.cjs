@@ -29,7 +29,7 @@ test('release assets have unique ASCII names and exclude unpacked executables', 
     const config = require('../electron-builder.config.cjs');
     const platform = { Windows: 'win', macOS: 'mac', Linux: 'linux' }[job.name];
     const info = { version, productName: config.productName, sanitizedProductName: config.productName };
-    assert.equal(config.productName, '码迹 AI');
+    assert.equal(config.productName, '码迹AI');
     assert.equal(config.appId, 'com.shuzhi.gitinsight-ai');
     assert.equal(config.extraMetadata, undefined);
     assert.equal(config.directories.output, 'release/${version}');
@@ -52,7 +52,7 @@ test('release assets have unique ASCII names and exclude unpacked executables', 
       }
     }
     assert.ok(!matches(`${base}/win-unpacked/elevate.exe`));
-    assert.ok(!matches(`${base}/win-unpacked/码迹 AI.exe`));
+    assert.ok(!matches(`${base}/win-unpacked/码迹AI.exe`));
     assert.ok(!matches(`${base}/elevate.exe`));
     assert.ok(matches(`${base}/MajiAI-${version}-Windows-x64.exe.blockmap`));
     assert.equal(config.publish.channel, 'standard', 'Keep the existing Standard installation update channel');
