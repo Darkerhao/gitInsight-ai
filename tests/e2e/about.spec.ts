@@ -5,6 +5,8 @@ test('关于入口显示运行版本，并可手动检查和打开固定链接',
   await page.getByRole('menuitem', { name: '关于', exact: true }).click();
   await expect(page.getByRole('heading', { name: '关于', exact: true })).toBeVisible();
   await expect(page.getByText('版本 v3.8.8', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '码迹 AI', exact: true })).toBeVisible();
+  await expect(page.locator('.app-about-card')).not.toContainText(/轻量版|标准版/);
   await page.getByRole('button', { name: '检查更新', exact: true }).click();
   await expect(page.getByRole('heading', { name: '当前已是最新版本' })).toBeVisible();
   await page.getByRole('button', { name: '项目主页', exact: true }).click();
@@ -95,7 +97,7 @@ for (const theme of ['light', 'dark']) {
       await expect(page.getByText('版本 v3.8.8')).toBeVisible();
       await page.evaluate(() => window.reportTest.emitUpdate({
         status: 'downloaded', latestVersion: '3.8.9', autoUpdate: true,
-        releaseNotes: '<p>新增应用内更新</p><ul><li>支持后台下载与退出安装</li><li>轻量版和标准版分别更新</li></ul>',
+        releaseNotes: '<p>新增应用内更新</p><ul><li>支持后台下载与退出安装</li><li>统一安装包与更新渠道</li></ul>',
       }));
       await expect(page.getByRole('button', { name: '重启安装', exact: true })).toBeVisible();
       const layout = await page.locator('.app-about-view').evaluate(element => ({

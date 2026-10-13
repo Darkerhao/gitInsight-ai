@@ -3,7 +3,6 @@ import { existsSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import initSqlJs from 'sql.js';
-import { APP_EDITION, APP_EDITION_LABEL, APP_PRODUCT_NAME } from '../../src/shared/edition.js';
 import type {
   AutoSyncStatus,
   DailyReportRecord,
@@ -768,9 +767,7 @@ export async function getStorageInfo(): Promise<StorageInfo> {
   await getDatabase();
   return {
     appVersion: app.getVersion(),
-    appEdition: APP_EDITION,
-    appEditionLabel: APP_EDITION_LABEL,
-    appName: APP_PRODUCT_NAME,
+    appName: '码迹 AI',
     userDataPath: app.getPath('userData'),
     configPath: getConfigPath(),
     secretsPath: getSecretsPath(),

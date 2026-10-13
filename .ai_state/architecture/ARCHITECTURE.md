@@ -1,5 +1,13 @@
 # 当前架构要点
 
+## 单一发行版（2026-10-13）
+
+- 产品统一“码迹 AI”；移除 edition 构建注入、类型、元数据、界面标签和命令，scripts/dist.mjs 为唯一打包入口，产物为 release/<version>/MajiAI-*。
+- package.name=gitinsight-ai、标准版 appId=com.shuzhi.gitinsight-ai 与 standard 更新渠道保持稳定，避免改变现有数据与安装身份。standard 仅为机器渠道标识，无产品选择分支。
+- Windows/macOS/Linux 各一个打包任务。dev push 与面向 dev/main 的 PR 检查；main 检查后升版发布；手动构建仅 main。
+- Lite 安装身份不同且 Windows 默认目录可重合，迁移采用备份→退出→卸载并保留数据→安装统一版；不跨 appId 自动安装、不新增运行时迁移或渠道别名。
+- [设计](../sprints/single-edition/design.md) · [发布与升级](../../docs/release-workflow.md)
+
 ## 版本整合（2026-10-12）
 
 - `feature/unified-version` 以简洁版 3.8.9 为基础恢复 main 的工作台、仓库、消息、帮助和任务日历；使用同一导航、useAssistant 和现有组件。日历读取多任务配置与执行日志，不恢复旧单任务实现。
@@ -16,7 +24,7 @@
 - 关于页通过单一 `appUpdate` 主进程模块访问 electron-updater；preload 仅提供固定的检查、下载、偏好、安装、链接和订阅操作，更新控制只接受主窗口调用。
 - 主进程保存更新状态并通过事件推送；renderer 复用单一快照，避免较早的 IPC 响应覆盖较新的下载事件。旧 about→system 映射和无消费者的 about-* 全局样式已移除。
 - 自动更新偏好独立保存在 `updater-settings.json`，复用原子写入。启动稍后及每 6 小时检查，下载后正常退出安装；主入口早期 quit 监听先应用最新偏好，覆盖普通退出与备份恢复直接退出，不打断编辑。
-- GitHub 稳定 Release 使用 lite/standard 独立清单，随包生成更新源配置；CI 先上传完整草稿再公开 Release。下载和安装使用官方校验与平台 updater。
+- GitHub 稳定 Release 使用单一 standard 渠道及各平台清单，随包生成更新源配置；CI 先上传完整草稿再公开 Release。下载和安装使用官方校验与平台 updater。
 - 当前支持 Windows NSIS、Linux AppImage/deb/rpm；开发环境、免安装包和未签名 macOS 包明确显示限制。
 - [运行证据](../sprints/about-updates/runtime-verify.md) · [发布说明](../../docs/release-workflow.md)。
 
@@ -33,11 +41,11 @@
 
 ## 自动版本与桌面发布（2026-09-29）
 
-- `release.yml` 是唯一发布入口：main push → 复用 checks → patch 升版并原子回写 main/tag → 六矩阵固定 SHA 打包 → 汇总发布 Release。
-- checks.yml 保留 PR/master 独立触发；main 只通过发布流程调用检查，避免重复运行。
+- `release.yml` 是唯一发布入口：main push → 复用 checks → patch 升版并原子回写 main/tag → 三平台固定 SHA 打包 → 汇总发布 Release。
+- checks.yml 在 dev 推送、目标为 dev/main 的 PR 上独立触发；main 只通过发布流程调用检查，避免重复运行。其他分支推送不触发检查或打包。
 - main 发布串行执行；升版前过滤过期源提交，竞争写入由 Git 非强制原子推送拒绝。GITHUB_TOKEN 回写不会再触发 push 工作流。
-- 手动 workflow_dispatch 只构建指定源提交，不升版或发布。打包失败重跑 failed jobs 复用原版本。
-- Artifacts 保留版本/发行版子目录；Release 用递归 glob 收集安装包。旧 release-tag 脚本已删除。
+- 手动 workflow_dispatch 仅允许 main，只构建当前源提交，不升版或发布；其他分支或标签跳过全部任务。打包失败重跑 failed jobs 复用原版本。prepare 生成版本提交后，独立 sync-dev job 将准确 SHA cherry-pick -x 到最新 dev；普通 push 拒绝并发覆盖，空提交重跑跳过，冲突中止。同步失败单独重跑，不阻断三平台打包发布。
+- Artifacts 保留版本子目录；Release 用递归 glob 收集安装包。旧 release-tag 脚本已删除。
 - [操作说明](../../docs/release-workflow.md) · [验证证据](../sprints/main-auto-release/runtime-verify.md)。
 
 ## 日报可靠性（2026-09-29）

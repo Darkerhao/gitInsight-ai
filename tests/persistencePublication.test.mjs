@@ -35,7 +35,6 @@ async function database(t, overrides = {}) {
     electron: {}, 'node:fs': fs, 'node:fs/promises': { ...files, ...overrides }, 'node:path': path,
     'sql.js': async () => { initializations++; return SQL; },
     './atomicFile.js': atomicFile,
-    '../../src/shared/edition.js': {},
     './paths.js': { ensureConfigDir: async () => {}, getDatabasePath: () => filename },
     './reflectionStore.js': { ensureReflectionSchema() {} },
     './weeklySummaryStore.js': { ensureWeeklySummarySchema() {} },

@@ -4,7 +4,6 @@ import { ArrowDownToLine, CheckCircle2, CircleAlert, ExternalLink, Github, Info,
 import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import { useAppUpdates } from '@/composables/useAppUpdates';
-import { APP_EDITION_LABEL, APP_PRODUCT_NAME } from '@shared/edition';
 import type { AppLink, AppUpdateStatus } from '@shared/appUpdate';
 
 const updates = useAppUpdates();
@@ -43,7 +42,7 @@ const statusDescription = computed(() => {
     : '本次下载会继续，完成后由你手动安装。';
   if (status.value === 'available') return '下载并安装新版本，现有配置和本地数据会保留。';
   if (status.value === 'checking') return '正在获取最新的正式版本信息。';
-  if (status.value === 'not-available') return '已安装当前发行版的最新正式版本。';
+  if (status.value === 'not-available') return '已安装码迹 AI 的最新正式版本。';
   return '在这里完成版本检查、下载和安装。';
 });
 const lastChecked = computed(() => state.value?.lastCheckedAt
@@ -107,10 +106,9 @@ async function openLink(link: AppLink) {
         <div class="app-about-brand">
           <img src="../assets/logo.png" alt="码迹 AI" width="64" height="64" />
           <div>
-            <h2>{{ APP_PRODUCT_NAME }}</h2>
+            <h2>码迹 AI</h2>
             <div class="app-about-version">
               <span>{{ state ? `版本 v${state.currentVersion}` : '正在读取版本…' }}</span>
-              <el-tag size="small" effect="plain">{{ APP_EDITION_LABEL }}</el-tag>
             </div>
           </div>
         </div>

@@ -79,7 +79,7 @@ const activeView = computed(() => viewMap[activeNav.value as keyof typeof viewMa
 const appVersionText = computed(() => {
   const info = assistant.storageInfo.value;
   if (!info?.appVersion) return '';
-  return ` ${info.appEditionLabel} v${info.appVersion}`;
+  return ` v${info.appVersion}`;
 });
 const welcomeMetrics = computed(() => ({
   loaded: assistantReady.value,

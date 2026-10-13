@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   verify:
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/checks.yml
 
   prepare:
@@ -63,88 +64,76 @@ jobs:
           echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
+  sync-dev:
+    name: Sync version commit to dev
+    needs: prepare
+    if: needs.prepare.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          fetch-depth: 0
+      - name: Cherry-pick version commit
+        id: sync
+        env:
+          VERSION_COMMIT: ${{ needs.prepare.outputs.ref }}
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin dev
+          git checkout --detach origin/dev
+          if ! git cherry-pick -x --empty=drop "$VERSION_COMMIT"; then
+            git cherry-pick --abort
+            echo "::error::Version sync conflicted. Resolve the version commit on dev, then re-run failed jobs."
+            exit 1
+          fi
+          # Reject concurrent dev changes instead of overwriting them.
+          git push origin HEAD:refs/heads/dev
+
   package:
     needs: prepare
     if: needs.prepare.outputs.ready == 'true'
-    name: Package ${{ matrix.name }} ${{ matrix.editionLabel }}
+    name: Package ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: Windows
-            edition: lite
-            editionLabel: Lite
             os: windows-latest
             script: npm run dist:win -- --publish never
-            artifact: MajiAI-Lite-Windows
+            artifact: MajiAI-Windows
             paths: |
-              release/*/lite/MajiAI-*.exe
-              release/*/lite/MajiAI-*.zip
-              release/*/lite/MajiAI-*.blockmap
-              release/*/lite/lite.yml
-          - name: Windows
-            edition: standard
-            editionLabel: Standard
-            os: windows-latest
-            script: npm run dist:win -- --publish never
-            artifact: MajiAI-Standard-Windows
-            paths: |
-              release/*/standard/MajiAI-*.exe
-              release/*/standard/MajiAI-*.zip
-              release/*/standard/MajiAI-*.blockmap
-              release/*/standard/standard.yml
+              release/*/MajiAI-*.exe
+              release/*/MajiAI-*.zip
+              release/*/MajiAI-*.blockmap
+              release/*/standard.yml
           - name: macOS
-            edition: lite
-            editionLabel: Lite
             os: macos-latest
             script: npm run dist:mac -- --publish never
-            artifact: MajiAI-Lite-macOS
+            artifact: MajiAI-macOS
             paths: |
-              release/*/lite/MajiAI-*.dmg
-              release/*/lite/MajiAI-*.zip
-              release/*/lite/MajiAI-*.blockmap
-              release/*/lite/lite-mac.yml
-          - name: macOS
-            edition: standard
-            editionLabel: Standard
-            os: macos-latest
-            script: npm run dist:mac -- --publish never
-            artifact: MajiAI-Standard-macOS
-            paths: |
-              release/*/standard/MajiAI-*.dmg
-              release/*/standard/MajiAI-*.zip
-              release/*/standard/MajiAI-*.blockmap
-              release/*/standard/standard-mac.yml
+              release/*/MajiAI-*.dmg
+              release/*/MajiAI-*.zip
+              release/*/MajiAI-*.blockmap
+              release/*/standard-mac.yml
           - name: Linux
-            edition: lite
-            editionLabel: Lite
             os: ubuntu-latest
             script: npm run dist:linux -- --publish never
-            artifact: MajiAI-Lite-Linux
+            artifact: MajiAI-Linux
             paths: |
-              release/*/lite/MajiAI-*.AppImage
-              release/*/lite/MajiAI-*.deb
-              release/*/lite/MajiAI-*.rpm
-              release/*/lite/MajiAI-*.tar.gz
-              release/*/lite/MajiAI-*.blockmap
-              release/*/lite/lite-linux.yml
-          - name: Linux
-            edition: standard
-            editionLabel: Standard
-            os: ubuntu-latest
-            script: npm run dist:linux -- --publish never
-            artifact: MajiAI-Standard-Linux
-            paths: |
-              release/*/standard/MajiAI-*.AppImage
-              release/*/standard/MajiAI-*.deb
-              release/*/standard/MajiAI-*.rpm
-              release/*/standard/MajiAI-*.tar.gz
-              release/*/standard/MajiAI-*.blockmap
-              release/*/standard/standard-linux.yml
+              release/*/MajiAI-*.AppImage
+              release/*/MajiAI-*.deb
+              release/*/MajiAI-*.rpm
+              release/*/MajiAI-*.tar.gz
+              release/*/MajiAI-*.blockmap
+              release/*/standard-linux.yml
 
     env:
-      APP_EDITION: ${{ matrix.edition }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
       WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
@@ -198,7 +187,6 @@ jobs:
           tag_name: ${{ needs.prepare.outputs.tag }}
           files: |
             release-assets/**/MajiAI-*
-            release-assets/**/lite*.yml
             release-assets/**/standard*.yml
           fail_on_unmatched_files: true
           generate_release_notes: true
