@@ -40,7 +40,7 @@ const checkinButtonText = computed(() =>
   checkedInToday.value ? '今日已签' : `签到随机 +${DAILY_CHECKIN_REWARD_MIN}-${DAILY_CHECKIN_REWARD_MAX}`
 );
 const walletStatusText = computed(() => {
-  if (walletLoading.value) return '甲币状态读取中';
+  if (walletLoading.value) return '码币状态读取中';
   return checkedInToday.value ? '今日已签到' : '今日待签到';
 });
 const tierFilters = computed(() => [
@@ -151,7 +151,7 @@ async function loadWalletSnapshot() {
       applyWalletSnapshot(await window.api.getCheckinWalletSnapshot());
     }
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '读取甲币钱包失败');
+    ElMessage.error(error instanceof Error ? error.message : '读取码币钱包失败');
   } finally {
     walletLoading.value = false;
   }
@@ -193,7 +193,7 @@ async function runDailyCheckin() {
     const result = await window.api.runDailyCheckin();
     applyWalletSnapshot(result);
     if (result.rewardCoins > 0) {
-      ElMessage.success(`签到成功，获得 ${result.rewardCoins} 甲币`);
+      ElMessage.success(`签到成功，获得 ${result.rewardCoins} 码币`);
     } else {
       ElMessage.info('今天已经签到过了');
     }
@@ -210,7 +210,7 @@ async function playEffect(effect: RewardEffectKey) {
   if (!option) return;
 
   if (wallet.value.coins < option.cost) {
-    ElMessage.warning(`甲币不足，还差 ${option.cost - wallet.value.coins}`);
+    ElMessage.warning(`码币不足，还差 ${option.cost - wallet.value.coins}`);
     return;
   }
 
@@ -227,7 +227,7 @@ async function playEffect(effect: RewardEffectKey) {
     }));
     if (effectSeed.value === requestSeed) startEffect(effect);
   } catch (error) {
-    const message = error instanceof Error ? error.message : '甲币消费失败';
+    const message = error instanceof Error ? error.message : '码币消费失败';
     if (activeEffect.value) playbackError.value = message;
     else ElMessage.error(message);
   } finally {
@@ -259,16 +259,16 @@ onBeforeUnmount(() => {
     popper-class="coin-popover"
   >
     <template #reference>
-      <el-button class="topbar-coin-btn" :icon="Coins" :loading="walletLoading" aria-label="甲币签到">
+      <el-button class="topbar-coin-btn" :icon="Coins" :loading="walletLoading" aria-label="码币签到">
         <span :key="wallet.coins" class="coin-amount">{{ wallet.coins }}</span>
-        <small>甲币</small>
+        <small>码币</small>
       </el-button>
     </template>
 
     <div class="coin-panel">
       <div class="coin-panel-head">
         <div>
-          <strong :key="wallet.coins" class="coin-amount">{{ wallet.coins }} 甲币</strong>
+          <strong :key="wallet.coins" class="coin-amount">{{ wallet.coins }} 码币</strong>
           <span>{{ walletStatusText }} · NEXUS 视觉协议库</span>
         </div>
         <el-tag class="coin-streak-tag" type="warning" effect="light" round>
@@ -307,7 +307,7 @@ onBeforeUnmount(() => {
           <p>{{ inspectedEffect.narrative }}</p>
         </div>
         <div class="effect-inspector-stats">
-          <span><b>{{ inspectedEffect.cost }}</b> 甲币</span>
+          <span><b>{{ inspectedEffect.cost }}</b> 码币</span>
           <span><b>{{ inspectedDuration }}</b> 秒</span>
           <span><b>{{ inspectedTierMeta.grade }}</b> 级压制</span>
         </div>
@@ -319,7 +319,7 @@ onBeforeUnmount(() => {
           :disabled="!canRunInspectedEffect"
           @click="runInspectedEffect"
         >
-          {{ wallet.coins < inspectedEffect.cost ? `还差 ${inspectedEffect.cost - wallet.coins} 甲币` : '启动视觉协议' }}
+          {{ wallet.coins < inspectedEffect.cost ? `还差 ${inspectedEffect.cost - wallet.coins} 码币` : '启动视觉协议' }}
         </el-button>
       </section>
 
@@ -354,7 +354,7 @@ onBeforeUnmount(() => {
               <strong>{{ group.meta.label }}</strong>
               <span>{{ group.meta.codename }}</span>
             </div>
-            <small>{{ group.meta.costRange[0] }}-{{ group.meta.costRange[1] }} 甲币 · {{ group.options.length }} 项</small>
+            <small>{{ group.meta.costRange[0] }}-{{ group.meta.costRange[1] }} 码币 · {{ group.options.length }} 项</small>
           </div>
           <button
             v-for="effect in group.options"
@@ -385,7 +385,7 @@ onBeforeUnmount(() => {
               </strong>
               <code>{{ effect.codename }}</code>
               <small>
-                <span>{{ effect.cost }} 甲币</span>
+                <span>{{ effect.cost }} 码币</span>
                 <span v-if="wallet.coins < effect.cost">余额不足</span>
               </small>
             </span>
@@ -1069,7 +1069,7 @@ onBeforeUnmount(() => {
   font-size: 8px;
 }
 
-/* ── 创世级 GENESIS：666 甲币禁忌协议的商店视觉 ── */
+/* ── 创世级 GENESIS：666 码币禁忌协议的商店视觉 ── */
 .effect-tier-head.tier-genesis {
   background:
     linear-gradient(90deg, rgba(250, 204, 21, 0.12), rgba(244, 63, 94, 0.05) 52%, transparent),

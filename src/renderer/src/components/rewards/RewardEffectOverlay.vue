@@ -326,11 +326,11 @@ onBeforeUnmount(releasePlayer);
         <div class="cinema-finale-actions">
           <button type="button" class="cinema-return" @click="emit('close')"><ArrowLeft :size="17" />返回特效库</button>
           <button type="button" class="cinema-replay" :disabled="!props.canReplay || props.replaying" @click="emit('replay')">
-            <RotateCcw :size="16" />{{ props.replaying ? '正在启动…' : '再看一次' }}<span>{{ option.cost }} 甲币</span>
+            <RotateCcw :size="16" />{{ props.replaying ? '正在启动…' : '再看一次' }}<span>{{ option.cost }} 码币</span>
           </button>
         </div>
         <span v-if="props.replayError" class="cinema-error" role="alert">{{ props.replayError }}</span>
-        <small v-else-if="!props.canReplay && !props.replaying" class="cinema-replay-hint">甲币不足，签到后再来观看</small>
+        <small v-else-if="!props.canReplay && !props.replaying" class="cinema-replay-hint">码币不足，签到后再来观看</small>
       </div>
 
       <footer v-else class="cinema-footer">

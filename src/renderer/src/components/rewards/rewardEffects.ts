@@ -63,7 +63,7 @@ import {
  * NEXUS 深空中枢 · 统一视觉协议系统（三期重构 · 五期新增创世级）
  *
  * 所有签到特效同属一个世界观：GitInsight 的 AI 中枢是一座深空指挥舰桥，
- * 每个特效都是一次由甲币能量授权执行的「视觉协议」（Visual Protocol）。
+ * 每个特效都是一次由码币能量授权执行的「视觉协议」（Visual Protocol）。
  * 本文件是特效体系的唯一契约 —— 命名、分级、四段动效、镜头语言、
  * 配色与舞台背景全部在此声明；RewardEffectOverlay 读取这些数据驱动
  * 统一的电影舞台，CheckinRewardCenter 读取它们渲染分级商店。
@@ -134,7 +134,7 @@ export type RewardEffectKey =
   | 'entropyReversal'
   | 'celestialThrone';
 
-/** 视觉压制分级：信标(4-6) → 战术(7-10) → 奇点(11-14) → 创世(666)，随甲币定价单调升级 */
+/** 视觉压制分级：信标(4-6) → 战术(7-10) → 奇点(11-14) → 创世(666)，随码币定价单调升级 */
 export type EffectTierKey = 'signal' | 'tactical' | 'singularity' | 'genesis';
 
 /**
@@ -250,7 +250,7 @@ export const EFFECT_TIERS: Record<EffectTierKey, EffectTierMeta> = {
 };
 
 export const EFFECT_OPTIONS: readonly RewardEffectOption[] = [
-  // ── 信标级 SIGNAL（4-6 甲币）────────────────────────────────
+  // ── 信标级 SIGNAL（4-6 码币）────────────────────────────────
   {
     key: 'fireworks',
     label: '轨道礼焰',
@@ -367,7 +367,7 @@ export const EFFECT_OPTIONS: readonly RewardEffectOption[] = [
     },
   },
 
-  // ── 战术级 TACTICAL（7-10 甲币）──────────────────────────────
+  // ── 战术级 TACTICAL（7-10 码币）──────────────────────────────
   {
     key: 'warp',
     label: '星际跃迁',
@@ -760,7 +760,7 @@ export const EFFECT_OPTIONS: readonly RewardEffectOption[] = [
     },
   },
 
-  // ── 奇点级 SINGULARITY（11-14 甲币）──────────────────────────
+  // ── 奇点级 SINGULARITY（11-14 码币）──────────────────────────
   {
     key: 'holoCore',
     label: '全息中枢',
@@ -1367,7 +1367,7 @@ export const EFFECT_OPTIONS: readonly RewardEffectOption[] = [
     },
   },
 
-  // ── 创世级 GENESIS（666 甲币 · 禁忌演出）─────────────────────
+  // ── 创世级 GENESIS（666 码币 · 禁忌演出）─────────────────────
   {
     key: 'genesisBang',
     label: '创世纪元',
@@ -1742,7 +1742,7 @@ export const EFFECT_DURATIONS: Record<RewardEffectKey, number> = Object.fromEntr
   ])
 ) as Record<RewardEffectKey, number>;
 
-/** 按分级（创世 → 奇点 → 战术 → 信标）分组，组内按甲币降序，供商店渲染 */
+/** 按分级（创世 → 奇点 → 战术 → 信标）分组，组内按码币降序，供商店渲染 */
 export function groupEffectsByTier(): Array<{ meta: EffectTierMeta; options: RewardEffectOption[] }> {
   const order: EffectTierKey[] = ['genesis', 'singularity', 'tactical', 'signal'];
   return order.map((tierKey) => ({
