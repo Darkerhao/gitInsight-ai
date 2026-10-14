@@ -52,6 +52,57 @@ test('新旧导航均可访问，工作台生成入口复用当前编辑流程',
   expect(await page.evaluate(() => window.reportTest.generations)).toHaveLength(0);
 });
 
+test('侧边栏菜单超出可视高度时可滚动查看全部条目', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 700 });
+  await page.goto('/#/dashboard');
+  await expect(page.getByRole('heading', { name: '工作台', exact: true })).toBeVisible();
+  const nav = page.locator('.sidebar-nav');
+  const overflow = await nav.evaluate(element => {
+    const navElement = element as HTMLElement;
+    return { scroll: navElement.scrollHeight, client: navElement.clientHeight, overflowY: getComputedStyle(navElement).overflowY };
+  });
+  expect(overflow.scroll, '展开的菜单会超出侧边栏可视高度').toBeGreaterThan(overflow.client);
+  expect(overflow.overflowY, '菜单超出可视高度时侧边栏必须可滚动，而不是被裁掉').toBe('auto');
+  const unreachable = await nav.evaluate(element => {
+    const navElement = element as HTMLElement;
+    const navRect = navElement.getBoundingClientRect();
+    return Array.from(navElement.querySelectorAll<HTMLElement>('.el-menu-item'))
+      .filter(item => item.getBoundingClientRect().height > 0)
+      .filter(item => {
+        item.scrollIntoView({ block: 'nearest' });
+        const rect = item.getBoundingClientRect();
+        return rect.top < navRect.top - 1 || rect.bottom > navRect.bottom + 1;
+      })
+      .map(item => item.textContent?.trim() ?? '');
+  });
+  expect(unreachable, '每个菜单条目都应能滚动到可视区域内').toEqual([]);
+});
+
+test('工作台快捷操作与规则建议的按钮沿用卡片布局，不被组件默认样式挤坏', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 800 });
+  await page.goto('/#/dashboard');
+  await expect(page.getByRole('heading', { name: '工作台', exact: true })).toBeVisible();
+  const layout = await page.evaluate(() => {
+    const grid = document.querySelector('.quick-action-grid') as HTMLElement;
+    const cards = Array.from(grid.querySelectorAll<HTMLElement>('.el-button')).map(button => {
+      const rect = button.getBoundingClientRect();
+      const icon = button.querySelector('svg')!.getBoundingClientRect();
+      const label = button.querySelector<HTMLElement>('.quick-action-label')!.getBoundingClientRect();
+      return { width: Math.round(rect.width), gap: Math.round(label.top - icon.bottom), labelHeight: label.height };
+    });
+    const questions = Array.from(document.querySelectorAll<HTMLElement>('.assistant-questions .el-button')).map(button => ({
+      width: Math.round(button.getBoundingClientRect().width),
+      height: button.getBoundingClientRect().height,
+      clipped: button.scrollWidth - button.clientWidth,
+    }));
+    return { cards, questions };
+  });
+  expect(new Set(layout.cards.map(card => card.width)).size, '快捷操作按钮宽度必须一致，不能被组件默认外边距挤窄').toBe(1);
+  expect(layout.cards.filter(card => card.gap < 8), '快捷操作按钮的图标与文字之间必须保留间距').toEqual([]);
+  expect(layout.cards.filter(card => card.labelHeight > 20), '快捷操作标题应完整显示在一行').toEqual([]);
+  expect(layout.questions.filter(question => question.width < 240 || question.height < 40 || question.clipped > 0), '规则建议的追问按钮必须铺满卡片，保留点击高度且不裁切文字').toEqual([]);
+});
+
 test('仓库选择、置顶和显示名沿用现有仓库状态', async ({ page }) => {
   await page.goto('/#/repositories');
   await expect(page.getByRole('heading', { name: '仓库中心', exact: true })).toBeVisible();

@@ -1,10 +1,10 @@
 ---
 path: Refactor
-stage: ship
-current_sprint_slug: single-edition
+stage: impl
+current_sprint_slug: repository-feishu
 current_roadmap_slug: none
 route_confidence: 0.96
-next_action: "单一发行版与版本提交自动同步 dev 本地完成；未提交、推送或发布"
+next_action: "实现仓库关联飞书项目与仓库中心样式优化"
 pointers:
   latest_architecture_update: architecture/ARCHITECTURE.md
 ---
@@ -93,6 +93,8 @@ pointers:
 - current_sprint_slug: weekly-summary
 
 ## route_history
+
+- 2026-10-14: Refactor / repository-feishu；配置、仓库和日报目标统一关联，单一业务闭环；置信度 0.97。隔离 worktree 实施，保留在途 UI 改动。
 
 - 2026-10-13: Refactor / single-edition；单一安装身份、发布渠道与界面合同跨模块收敛；置信度 0.96。隔离 worktree 实施，保留已有 CI 调整。
 
