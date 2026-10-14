@@ -2,11 +2,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   CheckCircle2,
+  ChevronRight,
   CircleAlert,
   CircleX,
   Clock3,
   FilePlus2,
   History,
+  NotebookPen,
   Play,
   Send,
 } from 'lucide-vue-next';
@@ -125,10 +127,11 @@ const taskDistribution = computed(() => {
 });
 const quickActions = [
   { title: '生成日报', icon: FilePlus2, action: () => emit('navigate', 'generate') },
-  { title: '素材日报', icon: FilePlus2, action: () => emit('navigate', 'material') },
+  { title: '素材日报', icon: NotebookPen, action: () => emit('navigate', 'material') },
   { title: '管理同步任务', icon: Send, action: () => emit('navigate', 'sync') },
   { title: '查看历史日志', icon: History, action: () => emit('navigate', 'history') },
 ];
+const ruleQuestions = ['如何配置日报生成规则？', '如何同步到飞书？', '日报生成失败怎么办？'];
 const guideSteps = [
   { title: '选择工作来源', desc: '研发选择 Git 仓库；项目和产品经理填写工作素材' },
   { title: '配置 AI 与汇报人', desc: '设置当前 AI 方案和汇报人信息' },
@@ -441,9 +444,11 @@ onBeforeUnmount(() => {
               <h3>快捷操作</h3>
             </div>
             <div class="quick-action-grid">
-              <el-button v-for="item in quickActions" :key="item.title" @click="item.action">
-                <component :is="item.icon" :size="24" />
-                <span>{{ item.title }}</span>
+              <el-button v-for="item in quickActions" :key="item.title" text @click="item.action">
+                <span class="quick-action-icon" aria-hidden="true">
+                  <component :is="item.icon" :size="20" />
+                </span>
+                <span class="quick-action-label">{{ item.title }}</span>
               </el-button>
             </div>
           </section>
@@ -479,21 +484,23 @@ onBeforeUnmount(() => {
           <el-button class="full-width" plain type="primary" @click="emit('navigate', 'sync')">配置同步计划</el-button>
         </section>
 
-        <section class="dashboard-assistant-card">
+        <section class="surface-card dashboard-assistant-card">
           <div class="dashboard-assistant-head">
-            <CircleAlert :size="24" />
+            <CircleAlert :size="22" aria-hidden="true" />
             <div>
               <h3>规则建议</h3>
               <p>按关键词给出工作流排查方向</p>
             </div>
           </div>
-          <el-input v-model="ruleQuestion" placeholder="输入配置、同步、失败等关键词" @keyup.enter="askRuleAdvice()" />
-          <el-button type="primary" :icon="Send" @click="askRuleAdvice()" />
-          <p>{{ ruleAdvice }}</p>
+          <el-input v-model="ruleQuestion" aria-label="排查关键词" placeholder="输入配置、同步、失败等关键词" @keyup.enter="askRuleAdvice()" />
+          <el-button type="primary" :icon="Send" aria-label="获取规则建议" @click="askRuleAdvice()" />
+          <p aria-live="polite">{{ ruleAdvice }}</p>
           <div class="assistant-questions">
-            <el-button @click="askRuleAdvice('如何配置日报生成规则？')">如何配置日报生成规则？</el-button>
-            <el-button @click="askRuleAdvice('如何同步到飞书？')">如何同步到飞书？</el-button>
-            <el-button @click="askRuleAdvice('日报生成失败怎么办？')">日报生成失败怎么办？</el-button>
+            <span class="assistant-questions-label">常见问题</span>
+            <el-button v-for="question in ruleQuestions" :key="question" text @click="askRuleAdvice(question)">
+              <span>{{ question }}</span>
+              <ChevronRight :size="16" aria-hidden="true" />
+            </el-button>
           </div>
         </section>
       </aside>
