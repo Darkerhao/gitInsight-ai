@@ -778,6 +778,7 @@ function handleUpdateDraftProject(key: string, optionId: string) {
   const draft = projectDrafts.value.find((item) => item.key === key);
   if (!draft) return;
   draft.projectOptionId = optionId;
+  draft.projectManuallySelected = true;
   if (draft.workHoursSource === 'default') {
     draft.workHours = getProjectWorkHours(optionId);
   }

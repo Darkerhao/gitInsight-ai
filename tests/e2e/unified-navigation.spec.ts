@@ -113,9 +113,9 @@ test('仓库选择、置顶和显示名沿用现有仓库状态', async ({ page 
   await page.getByRole('button', { name: '置顶 Project A', exact: true }).click();
   await expect(page.getByRole('button', { name: '取消置顶 Project A', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: '重命名 Project A', exact: true }).click();
-  await page.getByRole('dialog').getByRole('textbox').fill('整合项目');
+  await page.getByRole('dialog').getByRole('textbox', { name: '仓库显示名称' }).fill('整合项目');
   await page.getByRole('button', { name: '保存', exact: true }).click();
-  await page.getByPlaceholder('搜索仓库名称或路径').fill('整合项目');
+  await page.getByRole('textbox', { name: '搜索仓库' }).fill('整合项目');
   await expect(page.getByRole('button', { name: '选择仓库 整合项目', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '选择仓库 Project B', exact: true })).not.toBeVisible();
   expect(await page.evaluate(() => window.reportTest.configSaves)).toBeGreaterThanOrEqual(3);

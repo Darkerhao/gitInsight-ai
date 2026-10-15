@@ -1,4 +1,4 @@
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import {
   DEFAULT_AI_BASE_URL_OPTIONS,
@@ -34,8 +34,9 @@ import {
 import { createRepoState } from './assistant/repoState';
 import { createReportState } from './assistant/reportState';
 import { normalizeRepoDisplayNames } from '@shared/repositoryName';
+import { normalizeRepoFeishuProjects, resolveRepoFeishuProject, withRepoFeishuOptions } from '@shared/repositoryFeishu';
 
-import type { ProjectReportDraft } from './projectReportActions';
+import { syncDraftRepoProject, type ProjectReportDraft } from './projectReportActions';
 
 function createAssistant() {
   const today = formatLocalDate(new Date());
@@ -73,6 +74,7 @@ function createAssistant() {
     ignoredRepoPaths: [],
     pinnedRepoPaths: [],
     repoDisplayNames: {},
+    repoFeishuProjects: {},
     reporterName: '',
     gitAuthorEmail: '',
     aiBaseUrl: 'https://api.openai.com/v1',
@@ -98,7 +100,7 @@ function createAssistant() {
   }
 
   function createProjectReportDraft(repo: RepoInfo, initial: Partial<ProjectReportDraft> = {}): ProjectReportDraft {
-    const projectOptionId = initial.projectOptionId ?? config.feishuForm.projectOptionId ?? '';
+    const projectOptionId = initial.projectOptionId ?? resolveRepoFeishuProject(config, initial.sourceRepos ?? [repo]);
     return {
       key: initial.sourceRepos ? `combined:${JSON.stringify(initial.sourceRepos.map((item) => item.path).sort())}` : repo.path,
       repo,
@@ -107,6 +109,7 @@ function createAssistant() {
       reportId: null,
       lastReportResult: null,
       projectOptionId,
+      projectManuallySelected: initial.projectOptionId !== undefined,
       workHours: getProjectWorkHours(projectOptionId),
       workHoursSource: 'default',
       generateStatus: 'idle',
@@ -135,7 +138,7 @@ function createAssistant() {
 
     const combined = recordRepos.length > 1;
     const previous = projectDrafts.value.find((draft) => draft.reportId === record.id || (!combined && draft.key === recordRepos[0].path));
-    const projectOptionId = previous?.projectOptionId || config.feishuForm.projectOptionId || '';
+    const projectOptionId = previous?.projectOptionId ?? resolveRepoFeishuProject(config, recordRepos);
     const draft = createProjectReportDraft(recordRepos[0], {
       sourceRepos: combined ? recordRepos : undefined,
       restoredRecord: record,
@@ -144,6 +147,7 @@ function createAssistant() {
       reportId: record.id,
       lastReportResult: null,
       projectOptionId,
+      projectManuallySelected: previous?.projectManuallySelected ?? false,
       workHours: previous?.workHours ?? getProjectWorkHours(projectOptionId),
       workHoursSource: previous?.workHoursSource ?? 'default',
       generateStatus: record.status === 'failed' ? 'failed' : 'success',
@@ -177,7 +181,7 @@ function createAssistant() {
     selectedRepoPaths,
     loading,
     status,
-    persistConfig: () => configState.persistConfig(),
+    persistConfig: (settings) => configState.persistConfig(settings),
   });
 
   const localDataState = createLocalDataState({
@@ -231,6 +235,7 @@ function createAssistant() {
     config.ignoredRepoPaths = normalizeRepoSelections(config.ignoredRepoPaths ?? []);
     config.pinnedRepoPaths = normalizeRepoSelections(config.pinnedRepoPaths ?? []);
     config.repoDisplayNames = normalizeRepoDisplayNames(config.repoDisplayNames);
+    config.repoFeishuProjects = normalizeRepoFeishuProjects(config.repoFeishuProjects);
     config.aiBaseUrlOptions = normalizeOptions(config.aiBaseUrlOptions.length ? config.aiBaseUrlOptions : [...DEFAULT_AI_BASE_URL_OPTIONS]);
     config.aiModelOptions = normalizeOptions(config.aiModelOptions.length ? config.aiModelOptions : [...DEFAULT_AI_MODEL_OPTIONS]);
     if (!config.aiProfiles.length) {
@@ -301,6 +306,27 @@ function createAssistant() {
     removeFeishuAuthListener = null;
   }
 
+  watch(
+    () => [config.feishuForm.shareToken, config.feishuForm.projectFieldId],
+    ([token, field], [previousToken, previousField]) => {
+      if ((!previousToken && !previousField) || (token === previousToken && field === previousField)) return;
+      projectOptions.value = [];
+      config.feishuForm.projectOptionId = '';
+      config.feishuForm.projectName = '';
+      for (const draft of projectDrafts.value) {
+        draft.projectOptionId = '';
+        draft.projectManuallySelected = true;
+        draft.publishStatus = 'idle';
+        draft.publishMessage = '飞书表单已切换，请重新选择所属项目';
+      }
+    },
+    { flush: 'sync' },
+  );
+
+  watch(() => config.repoFeishuProjects, () => {
+    for (const draft of projectDrafts.value) syncDraftRepoProject(draft, config);
+  }, { deep: true, flush: 'sync' });
+
   return {
     today,
     loading,
@@ -310,7 +336,7 @@ function createAssistant() {
     fieldLoading,
     autoSyncLoading,
     repos,
-    projectOptions,
+    projectOptions: computed(() => withRepoFeishuOptions(config, projectOptions.value)),
     feishuFieldOptions,
     selectedRepoPaths,
     activeDraftKey,
@@ -367,6 +393,8 @@ function createAssistant() {
     isRepoPinned: repoState.isRepoPinned,
     getRepoDisplayName: repoState.getRepoDisplayName,
     renameRepo: repoState.renameRepo,
+    getRepoFeishuProject: repoState.getRepoFeishuProject,
+    saveRepoSettings: repoState.saveRepoSettings,
     toggleRepoPin: repoState.toggleRepoPin,
     removeRepo: repoState.removeRepo,
     init,

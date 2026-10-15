@@ -1,15 +1,22 @@
 ---
 path: Refactor
-stage: impl
+stage: ship
 current_sprint_slug: repository-feishu
 current_roadmap_slug: none
-route_confidence: 0.96
-next_action: "实现仓库关联飞书项目与仓库中心样式优化"
+route_confidence: 0.97
+next_action: "仓库关联飞书项目与样式优化本地完成；功能代码未提交或推送"
 pointers:
   latest_architecture_update: architecture/ARCHITECTURE.md
 ---
 
 # AI State Index
+
+## 本轮状态（2026-10-14）
+
+- 仓库中心支持添加后逐仓库关联、编辑名称/项目和清除关联；日报与批量补日报自动选择仓库目标，手选保留，合篇不混用不同项目。
+- 仓库设置先持久化后应用；失败不改变草稿发布状态。旧配置/备份可加载，表单切换清除旧草稿目标。
+- 验证：当前工作区 npm test 192/192、类型检查和构建通过；Chrome E2E 41/41，深浅主题截图已查看；独立只读审查与收敛检查 PASS。
+- 设计/验证/审查：sprints/repository-feishu/；功能代码已同步当前工作区，保留期间提交的工作台变更。未真实发布飞书或提交本轮功能代码。
 
 ## 本轮状态（2026-10-13）
 

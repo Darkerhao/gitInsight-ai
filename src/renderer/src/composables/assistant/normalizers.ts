@@ -1,7 +1,7 @@
 import {
   DEFAULT_AUTO_SYNC_TASK_CONFIG,
   DEFAULT_FEISHU_FORM_CONFIG,
-} from '@shared/types';
+} from '../../../../shared/types.js';
 
 export function toPlainString(value: unknown) {
   return typeof value === 'string' ? value : value == null ? '' : String(value);

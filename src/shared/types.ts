@@ -141,6 +141,7 @@ export interface AppConfig {
   ignoredRepoPaths: string[];
   pinnedRepoPaths: string[];
   repoDisplayNames: Record<string, string>;
+  repoFeishuProjects?: Record<string, RepoFeishuProject>;
   reporterName: string;
   /** Git author email used as an additional commit matching condition. */
   gitAuthorEmail: string;
@@ -153,6 +154,11 @@ export interface AppConfig {
   activeAiProfileId: string;
   feishuForm: FeishuFormConfig;
   autoSync: AutoSyncConfig;
+}
+
+export interface RepoFeishuProject extends FeishuProjectOption {
+  shareToken: string;
+  projectFieldId: string;
 }
 
 export type ReportPromptStyle = 'concise' | 'standard' | 'detailed';
