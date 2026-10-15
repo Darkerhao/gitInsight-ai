@@ -52,6 +52,20 @@ async function configContext(t, overrides = {}) {
   };
 }
 
+test('repository projects round-trip with normalized paths and old configs default to empty mappings', async t => {
+  const context = await configContext(t);
+  assert.deepEqual((await context.api.loadConfig()).repoFeishuProjects, {});
+  const config = context.api.normalizeConfig({ repoFeishuProjects: {
+    ' /WORKSPACE/A ': { id: ' linked ', name: ' 项目 A ', shareToken: ' form-a ', projectFieldId: ' project ' },
+    '/invalid': { id: 'incomplete' },
+  } });
+  await context.api.saveConfig(config);
+  const loaded = await (await context.reload()).loadConfig();
+  assert.deepEqual(loaded.repoFeishuProjects, {
+    '/workspace/a': { id: 'linked', name: '项目 A', shareToken: 'form-a', projectFieldId: 'project' },
+  });
+});
+
 test('first launch returns defaults, but invalid JSON and IO failures remain visible', async t => {
   const context = await configContext(t);
   assert.equal((await context.api.loadConfig()).reporterName, '');

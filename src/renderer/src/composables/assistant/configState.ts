@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { DEFAULT_AI_PROFILE, DEFAULT_AUTO_SYNC_TASK_CONFIG } from '@shared/types';
 import type { AiProfile, AppConfig, AutoSyncTaskConfig } from '@shared/types';
 import { normalizeRepoDisplayNames } from '@shared/repositoryName';
+import { normalizeRepoFeishuProjects } from '@shared/repositoryFeishu';
 import {
   mergeCurrentOption,
   normalizeAutoSyncTimeWindowMode,
@@ -156,6 +157,7 @@ export function createConfigState(ctx: ConfigStateContext) {
       ignoredRepoPaths: normalizedIgnoredRepoPaths,
       pinnedRepoPaths: normalizedPinnedRepoPaths,
       repoDisplayNames: normalizedRepoDisplayNames,
+      repoFeishuProjects: normalizeRepoFeishuProjects(config.repoFeishuProjects),
       reporterName: toPlainString(config.reporterName),
       gitAuthorEmail: toPlainString(config.gitAuthorEmail),
       aiBaseUrl: toPlainString(activeProfile.baseUrl),
@@ -192,7 +194,7 @@ export function createConfigState(ctx: ConfigStateContext) {
   }
 
 
-  function getEditableConfigSignature() {
+  function getEditableConfigSignature(overrides?: Partial<AppConfig>) {
     const aiProfiles = getAiProfilePayloads();
     const activeProfile = aiProfiles.find((profile) => profile.id === config.activeAiProfileId) ?? aiProfiles[0] ?? DEFAULT_AI_PROFILE;
 
@@ -202,7 +204,8 @@ export function createConfigState(ctx: ConfigStateContext) {
       selectedRepoPaths: normalizeRepoSelections(selectedRepoPaths.value),
       ignoredRepoPaths: normalizeRepoSelections(config.ignoredRepoPaths ?? []),
       pinnedRepoPaths: normalizeRepoSelections(config.pinnedRepoPaths ?? []),
-      repoDisplayNames: normalizeRepoDisplayNames(config.repoDisplayNames ?? {}),
+      repoDisplayNames: normalizeRepoDisplayNames(overrides?.repoDisplayNames ?? config.repoDisplayNames),
+      repoFeishuProjects: normalizeRepoFeishuProjects(overrides?.repoFeishuProjects ?? config.repoFeishuProjects),
       reporterName: toPlainString(config.reporterName),
       gitAuthorEmail: toPlainString(config.gitAuthorEmail),
       aiBaseUrl: toPlainString(activeProfile.baseUrl),
@@ -247,10 +250,11 @@ export function createConfigState(ctx: ConfigStateContext) {
   const isConfigDirty = computed(() => Boolean(savedConfigSignature.value) && savedConfigSignature.value !== getEditableConfigSignature());
 
 
-  async function persistConfig() {
-    const payload = getConfigPayload();
-    const signature = getEditableConfigSignature();
+  async function persistConfig(repoSettings?: Pick<AppConfig, 'repoDisplayNames' | 'repoFeishuProjects'>) {
+    const payload = { ...getConfigPayload(), ...repoSettings };
+    const signature = getEditableConfigSignature(repoSettings);
     const saved = await window.api.saveConfig(payload);
+    if (repoSettings) Object.assign(config, repoSettings);
     savedConfigSignature.value = signature;
     return saved;
   }

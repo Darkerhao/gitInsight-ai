@@ -7,6 +7,8 @@ import { countWeeklyReportFiles } from '../../../shared/weeklyReport.js';
 import { shiftLocalDate } from './assistant/dateUtils.js';
 import { projectGenerationInput } from './assistant/projectGeneration.js';
 import { toPlainRawInput, toPlainReportTimeRange, toPlainStructuredJson } from './assistant/reportIpcPayload.js';
+import { resolveRepoFeishuProject } from '../../../shared/repositoryFeishu.js';
+import { normalizeWorkHours } from './assistant/normalizers.js';
 
 export interface ProjectReportDraft {
   key: string;
@@ -18,6 +20,7 @@ export interface ProjectReportDraft {
   reportId: number | null;
   lastReportResult: ReportResult | null;
   projectOptionId: string;
+  projectManuallySelected?: boolean;
   workHours: number;
   workHoursSource: 'default' | 'estimated' | 'manual' | 'unresolved';
   generateStatus: 'idle' | 'generating' | 'success' | 'failed' | 'cancelled';
@@ -28,6 +31,18 @@ export interface ProjectReportDraft {
 }
 
 export interface WeeklyReportDraft extends ProjectReportDraft { date: string }
+
+export function syncDraftRepoProject(draft: ProjectReportDraft, config: AppConfig) {
+  if (draft.projectManuallySelected) return;
+  const projectId = resolveRepoFeishuProject(config, draft.sourceRepos ?? [draft.repo]);
+  if (projectId === draft.projectOptionId) return;
+  draft.projectOptionId = projectId;
+  if (draft.workHoursSource === 'default') {
+    draft.workHours = normalizeWorkHours(config.feishuForm.projectWorkHours?.[projectId], config.feishuForm.defaultWorkHours);
+  }
+  draft.publishStatus = 'idle';
+  draft.publishMessage = '';
+}
 
 export interface ProjectReportApi {
   generateReport(params: GenerateReportParams): Promise<ReportResult>;

@@ -1,12 +1,14 @@
 import { computed } from 'vue';
 import type { Ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import type { AppConfig, RepoInfo } from '@shared/types';
+import type { AppConfig, FeishuProjectOption, RepoInfo } from '@shared/types';
 import {
   getRepoDisplayName as resolveRepoDisplayName,
+  getRepoPathKey,
   normalizeRepoDisplayNames,
   setRepoDisplayName,
 } from '@shared/repositoryName';
+import { getRepoFeishuProject as resolveRepoFeishuProject, normalizeRepoFeishuProjects } from '@shared/repositoryFeishu';
 import { normalizeRepoSelections, normalizeWorkspaceDirs } from './normalizers';
 
 type RepoStateContext = {
@@ -15,15 +17,13 @@ type RepoStateContext = {
   selectedRepoPaths: Ref<string[]>;
   loading: Ref<boolean>;
   status: Ref<string>;
-  persistConfig: () => Promise<AppConfig>;
+  persistConfig: (repoSettings?: Pick<AppConfig, 'repoDisplayNames' | 'repoFeishuProjects'>) => Promise<AppConfig>;
 };
 
 export function createRepoState(ctx: RepoStateContext) {
   const { config, repos, selectedRepoPaths, loading, status, persistConfig } = ctx;
 
-  function getRepoKey(path: string) {
-    return path.trim().toLocaleLowerCase();
-  }
+  const getRepoKey = getRepoPathKey;
 
   function getRepoDisplayName(repo: RepoInfo) {
     return resolveRepoDisplayName(repo, config.repoDisplayNames ?? {});
@@ -93,15 +93,19 @@ export function createRepoState(ctx: RepoStateContext) {
 
   async function chooseWorkspace() {
     const dir = await window.api.selectDirectory();
-    if (!dir) return;
+    if (!dir) return [];
 
     loading.value = true;
+    const previous = {
+      workspaceDir: config.workspaceDir, workspaceDirs: config.workspaceDirs,
+      ignoredRepoPaths: config.ignoredRepoPaths, selectedRepoPaths: selectedRepoPaths.value, repos: repos.value,
+    };
     try {
       const scannedRepos = await scanWorkspaceDirs([dir], { includeIgnored: true });
       if (!scannedRepos.length) {
         status.value = '所选目录下未识别到 Git 仓库';
         ElMessage.warning('未在所选目录下识别到 Git 仓库，请选择包含 .git 的项目目录或工作区');
-        return;
+        return [];
       }
 
       config.workspaceDir = dir;
@@ -112,8 +116,16 @@ export function createRepoState(ctx: RepoStateContext) {
       selectedRepoPaths.value = normalizeRepoSelections([...selectedRepoPaths.value, ...scannedRepos.map((repo) => repo.path)]);
       await persistConfig();
       status.value = `已添加 ${scannedRepos.length} 个仓库，当前共 ${repos.value.length} 个仓库`;
+      return scannedRepos;
     } catch (error) {
+      config.workspaceDir = previous.workspaceDir;
+      config.workspaceDirs = previous.workspaceDirs;
+      config.ignoredRepoPaths = previous.ignoredRepoPaths;
+      selectedRepoPaths.value = previous.selectedRepoPaths;
+      config.selectedRepoPaths = previous.selectedRepoPaths;
+      repos.value = previous.repos;
       ElMessage.error(error instanceof Error ? error.message : '扫描失败');
+      return [];
     } finally {
       loading.value = false;
     }
@@ -195,9 +207,30 @@ export function createRepoState(ctx: RepoStateContext) {
   async function renameRepo(path: string, displayName: string) {
     const repo = repos.value.find((item) => getRepoKey(item.path) === getRepoKey(path));
     const repoPath = repo?.path ?? path;
-    config.repoDisplayNames = setRepoDisplayName(config.repoDisplayNames ?? {}, repoPath, displayName);
-    await persistConfig();
+    await saveRepoSettings([{ path: repoPath, displayName }]);
     ElMessage.success(displayName.trim() ? '仓库显示名称已更新' : '已恢复仓库原名');
+  }
+
+  function getRepoFeishuProject(path: string) {
+    return resolveRepoFeishuProject(config, path);
+  }
+
+  async function saveRepoSettings(changes: { path: string; displayName?: string; project?: FeishuProjectOption | null }[]) {
+    let names = normalizeRepoDisplayNames(config.repoDisplayNames);
+    const projects = normalizeRepoFeishuProjects(config.repoFeishuProjects);
+    for (const change of changes) {
+      if (change.displayName !== undefined) names = setRepoDisplayName(names, change.path, change.displayName);
+      if (change.project === undefined) continue;
+      const key = getRepoKey(change.path);
+      if (change.project) {
+        if (!config.feishuForm.shareToken.trim() || !config.feishuForm.projectFieldId.trim()) throw new Error('请先连接飞书并配置所属项目字段');
+        projects[key] = {
+          id: change.project.id, name: change.project.name,
+          shareToken: config.feishuForm.shareToken.trim(), projectFieldId: config.feishuForm.projectFieldId.trim(),
+        };
+      } else delete projects[key];
+    }
+    await persistConfig({ repoDisplayNames: names, repoFeishuProjects: projects });
   }
 
 
@@ -212,6 +245,8 @@ export function createRepoState(ctx: RepoStateContext) {
     config.pinnedRepoPaths = normalizeRepoSelections(config.pinnedRepoPaths ?? []).filter((item) => getRepoKey(item) !== repoKey);
     config.repoDisplayNames = normalizeRepoDisplayNames(config.repoDisplayNames ?? {});
     delete config.repoDisplayNames[repoKey];
+    config.repoFeishuProjects = normalizeRepoFeishuProjects(config.repoFeishuProjects);
+    delete config.repoFeishuProjects[repoKey];
     config.workspaceDirs = normalizeWorkspaceDirs((config.workspaceDirs ?? []).filter((item) => getRepoKey(item) !== repoKey));
     if (getRepoKey(config.workspaceDir) === repoKey) {
       config.workspaceDir = config.workspaceDirs[0] ?? '';
@@ -241,6 +276,8 @@ export function createRepoState(ctx: RepoStateContext) {
     isRepoPinned,
     toggleRepoPin,
     renameRepo,
+    getRepoFeishuProject,
+    saveRepoSettings,
     removeRepo,
   };
 }

@@ -70,6 +70,29 @@ async function seed(context) {
   await context.config.saveConfig(config);
 }
 
+test('old version 1 backups without repository projects still restore', async t => {
+  const context = await setup(t);
+  await seed(context);
+  await context.backup.exportDataBackup();
+  const oldBackup = JSON.parse(await files.readFile(context.state.filename, 'utf8'));
+  delete oldBackup.config.repoFeishuProjects;
+  await files.writeFile(context.state.filename, JSON.stringify(oldBackup));
+  await context.backup.restoreDataBackup();
+  assert.equal(context.state.relaunches, 1);
+});
+
+test('portable backup omits form-scoped repository tokens', async t => {
+  const context = await setup(t);
+  await seed(context);
+  const config = await context.config.loadConfig();
+  config.repoFeishuProjects = { '/workspace/a': { id: 'linked', name: 'Project A', shareToken: 'private-repo-share', projectFieldId: 'project' } };
+  await context.config.saveConfig(config);
+  await context.backup.exportDataBackup();
+  const raw = await files.readFile(context.state.filename, 'utf8');
+  assert.equal(raw.includes('private-repo-share'), false);
+  assert.deepEqual(JSON.parse(raw).config.repoFeishuProjects, {});
+});
+
 test('portable backup preserves the full SQLite file, strips credentials, and restores with sync disabled', async t => {
   const context = await setup(t);
   await seed(context);

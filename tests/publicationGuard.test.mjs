@@ -104,6 +104,7 @@ test('single and batch report actions share main-process confirmation and cancel
   const renderer = await loadModule('../../src/renderer/src/composables/projectReportActions', {
     '../../../shared/weeklyReport.js': {}, './assistant/dateUtils.js': {},
     './assistant/projectGeneration.js': {}, './assistant/reportIpcPayload.js': {},
+    '../../../shared/repositoryFeishu.js': {}, './assistant/normalizers.js': {},
   });
   for (const result of [{ available: true, matches: 0 }, { available: true, matches: 1 }, { available: false, matches: 0 }]) {
     for (const response of [0, 1]) {

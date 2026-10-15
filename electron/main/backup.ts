@@ -63,7 +63,7 @@ function validateConfigFields(value: unknown, defaults: object) {
 function portableConfig(value: unknown): AppConfig {
   if (!isObject(value) || !isObject(value.feishuForm) || !isObject(value.autoSync)
     || !Array.isArray(value.autoSync.tasks) || !Array.isArray(value.aiProfiles)) throw new Error('备份配置结构无效。');
-  validateConfigFields(value, DEFAULT_CONFIG);
+  validateConfigFields({ repoFeishuProjects: {}, ...value }, DEFAULT_CONFIG);
   validateConfigFields(value.feishuForm, DEFAULT_FEISHU_FORM_CONFIG);
   value.aiProfiles.forEach(profile => validateConfigFields(profile, DEFAULT_AI_PROFILE));
   value.autoSync.tasks.forEach(task => validateConfigFields(task, DEFAULT_AUTO_SYNC_TASK_CONFIG));
@@ -77,6 +77,8 @@ function portableConfig(value: unknown): AppConfig {
   const normalized = stripSensitiveConfig(normalizeConfig(value as unknown as AppConfig));
   // Use current public keys only: old or unknown fields must not carry credentials into a portable file.
   const config = Object.fromEntries(Object.keys(DEFAULT_CONFIG).map(key => [key, normalized[key as keyof AppConfig]])) as unknown as AppConfig;
+  // Form-scoped associations contain share tokens, which portable backups omit.
+  config.repoFeishuProjects = {};
   config.feishuForm = Object.fromEntries(Object.keys(DEFAULT_FEISHU_FORM_CONFIG)
     .map(key => [key, normalized.feishuForm[key as keyof AppConfig['feishuForm']]])) as unknown as AppConfig['feishuForm'];
   config.feishuForm.shareToken = '';

@@ -10,6 +10,7 @@ import {
 } from '../../src/shared/types.js';
 import type { AiProfile, AppConfig } from '../../src/shared/types.js';
 import { normalizeRepoDisplayNames } from '../../src/shared/repositoryName.js';
+import { normalizeRepoFeishuProjects } from '../../src/shared/repositoryFeishu.js';
 import {
   normalizeAutoSyncConfig,
   normalizeProjectWorkHours,
@@ -37,6 +38,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   ignoredRepoPaths: [],
   pinnedRepoPaths: [],
   repoDisplayNames: {},
+  repoFeishuProjects: {},
   reporterName: '',
   gitAuthorEmail: '',
   aiBaseUrl: 'https://api.openai.com/v1',
@@ -206,6 +208,7 @@ export function normalizeConfig(config?: Partial<AppConfig>): AppConfig {
     ignoredRepoPaths,
     pinnedRepoPaths: normalizeRepoPaths(config?.pinnedRepoPaths).filter((item) => !ignoredRepoPathSet.has(item.toLocaleLowerCase())),
     repoDisplayNames: normalizeRepoDisplayNames(config?.repoDisplayNames),
+    repoFeishuProjects: normalizeRepoFeishuProjects(config?.repoFeishuProjects),
     aiBaseUrl: activeAiProfile.baseUrl,
     aiApiKey: activeAiProfile.apiKey,
     aiModel: activeAiProfile.model,

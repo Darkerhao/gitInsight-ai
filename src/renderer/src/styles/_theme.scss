@@ -237,8 +237,7 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
-:root[data-theme='dark'] .operation-card.el-button.is-warning:hover,
-:root[data-theme='dark'] .repo-center-item.pinned:not(.active) {
+:root[data-theme='dark'] .operation-card.el-button.is-warning:hover {
   background: var(--tone-amber-bg);
 }
 

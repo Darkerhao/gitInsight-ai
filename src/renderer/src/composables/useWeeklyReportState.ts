@@ -2,12 +2,13 @@ import { computed, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { listWeeklyDates } from '@shared/weeklyReport';
 import { getRepoDisplayName } from '@shared/repositoryName';
+import { resolveRepoFeishuProject } from '@shared/repositoryFeishu';
 import type { RepoInfo } from '@shared/types';
 import type { useAssistant } from './useAssistant';
 import { formatLocalDate, shiftLocalDate } from './assistant/dateUtils';
 import { normalizeProjectWorkHours, normalizeWorkHours } from './assistant/normalizers';
 import { createWeeklyReportDraft, mergeWeeklyReportDrafts } from './weeklyReportDrafts';
-import type { WeeklyReportDraft } from './projectReportActions';
+import { syncDraftRepoProject, type WeeklyReportDraft } from './projectReportActions';
 import { createWeeklyWorkHoursRecalculator } from './weeklyReportHours';
 
 type Assistant = ReturnType<typeof useAssistant>;
@@ -53,7 +54,22 @@ export function useWeeklyReportState(assistant: Assistant) {
   const dateRangeLabel = computed(() => availableDates.value.length ? `${availableDates.value[0]} 至 ${availableDates.value.at(-1)}（${availableDates.value.length} 天）` : '请选择有效日期范围');
   const displayRepoName = (repo: RepoInfo) => getRepoDisplayName(repo, assistant.config.repoDisplayNames);
   const getDefaultWorkHours = (id: string) => normalizeWorkHours(normalizeProjectWorkHours(assistant.config.feishuForm.projectWorkHours)[id], assistant.config.feishuForm.defaultWorkHours);
-  const createDraft = (date: string, repo: RepoInfo) => createWeeklyReportDraft(date, repo, assistant.config.feishuForm.projectOptionId.trim(), getDefaultWorkHours(assistant.config.feishuForm.projectOptionId.trim()));
+  const createDraft = (date: string, repo: RepoInfo) => {
+    const projectId = resolveRepoFeishuProject(assistant.config, [repo]);
+    return createWeeklyReportDraft(date, repo, projectId, getDefaultWorkHours(projectId));
+  };
+  watch(() => [assistant.config.feishuForm.shareToken, assistant.config.feishuForm.projectFieldId], ([token, field], [oldToken, oldField]) => {
+    if ((!oldToken && !oldField) || (token === oldToken && field === oldField)) return;
+    for (const draft of drafts.value) {
+      draft.projectOptionId = '';
+      draft.projectManuallySelected = true;
+      draft.publishStatus = 'idle';
+      draft.publishMessage = '飞书表单已切换，请重新选择所属项目';
+    }
+  }, { flush: 'sync' });
+  watch(() => assistant.config.repoFeishuProjects, () => {
+    for (const draft of drafts.value) syncDraftRepoProject(draft, assistant.config);
+  }, { deep: true, flush: 'sync' });
   const state = { dateRange, selectedRepoPaths, drafts, activeDraftKey, loading, pushing, status, availableDates, selectedRepos, activeDraft, activeReportModel, draftGroups, generatedDrafts, dirtyDrafts, pendingPublishDrafts, publishableDrafts, generatedHoursTotal, dateRangeLabel, displayRepoName, getDefaultWorkHours, createDraft };
   installDraftSynchronization(state, assistant);
   return state;
@@ -88,6 +104,7 @@ function updateDraftProject(state: WeeklyReportState, key: string, value: string
   const draft = state.drafts.value.find((item) => item.key === key);
   if (!draft) return;
   draft.projectOptionId = value;
+  draft.projectManuallySelected = true;
   if (draft.workHoursSource === 'default') draft.workHours = state.getDefaultWorkHours(value);
   draft.publishStatus = 'idle';
   draft.publishMessage = '';
