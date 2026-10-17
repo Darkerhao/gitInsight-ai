@@ -66,6 +66,7 @@ function createAssistant() {
 
   let removeAutoSyncListener: (() => void) | null = null;
   let removeFeishuAuthListener: (() => void) | null = null;
+  let initializationVersion = 0;
 
   const config = reactive<AppConfig>({
     workspaceDir: '',
@@ -268,17 +269,19 @@ function createAssistant() {
       ...(config.autoSync.enabled ? ['autoSync'] : []),
     ];
 
-    if (config.workspaceDirs.length) {
-      await repoState.refreshRepos();
-    }
-
+    repoState.restoreRepos();
     configState.markConfigSaved();
   }
 
   async function init() {
     dispose();
+    const version = initializationVersion;
+    performance.mark('gitinsight:assistant-start');
     await loadConfig();
+    if (version !== initializationVersion) return;
+    performance.mark('gitinsight:config-ready');
     await localDataState.refreshLocalData();
+    if (version !== initializationVersion) return;
     removeAutoSyncListener = window.api.onAutoSyncUpdated(autoSyncStateApi.applyAutoSyncState);
     try {
       await autoSyncStateApi.refreshAutoSyncState();
@@ -286,6 +289,9 @@ function createAssistant() {
       dispose();
       throw error;
     }
+    if (version !== initializationVersion) return;
+    performance.mark('gitinsight:local-ready');
+    performance.measure('gitinsight:local-initialization', 'gitinsight:assistant-start', 'gitinsight:local-ready');
     removeFeishuAuthListener = window.api.onFeishuAuthUpdated((snapshot) => {
       void feishuState.applyFeishuAuthSnapshot(snapshot).catch((error: unknown) => {
         ElMessage.error(error instanceof Error ? error.message : '同步飞书登录态失败');
@@ -297,9 +303,12 @@ function createAssistant() {
         void feishuState.loadFeishuProjects({ silent: true, background: true });
       }
     }
+    void repoState.refreshReposInBackground();
   }
 
   function dispose() {
+    initializationVersion++;
+    repoState.invalidateScan();
     removeAutoSyncListener?.();
     removeFeishuAuthListener?.();
     removeAutoSyncListener = null;

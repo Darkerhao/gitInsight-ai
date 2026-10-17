@@ -1,15 +1,23 @@
 ---
 path: Refactor
 stage: ship
-current_sprint_slug: repository-feishu
-current_roadmap_slug: none
-route_confidence: 0.97
-next_action: "仓库关联飞书项目与样式优化本地完成；功能代码未提交或推送"
+current_sprint_slug: startup-performance
+current_roadmap_slug: startup-performance
+route_confidence: 0.98
+next_action: "第一轮启动优化本地交付完成，已同步 dev；未暂存、提交或推送"
 pointers:
   latest_architecture_update: architecture/ARCHITECTURE.md
 ---
 
 # AI State Index
+
+## 本轮状态（2026-10-17）
+
+- 第一轮启动优化完成：恢复已有仓库与本地数据后后台扫描；业务页懒加载与生产压缩；立即移除离场页面、80ms 淡入；Performance API 分段计时与可复跑命令。
+- 修复审查发现的后台扫描覆盖生成进度、Vue 离场仍等待两帧导致新页位置跳动；对应回归先失败后通过。
+- 当前工作区默认日报首屏静态 JS 5,986,293 → 1,263,712 bytes，减少 78.89%；不含 ECharts/3D，无新增依赖。
+- 验证：可靠性 91/91；审查前全量浏览器 58/58、修正后相关页面 26/26；最终类型/构建、隔离 Electron 与当前工作区集成构建/冒烟通过。未验证真实安装包可见冷启动、大历史数据或窗口唤起目标。
+- 独立代码、规格、evaluator 与收敛检查 PASS；证据和审查见 `sprints/startup-performance/`，架构已更新。复用既有隔离 worktree 并同步至 dev，保留原项目状态内容，未提交或推送。
 
 ## 本轮状态（2026-10-14）
 
@@ -100,6 +108,8 @@ pointers:
 - current_sprint_slug: weekly-summary
 
 ## route_history
+
+- 2026-10-15: Refactor / startup-performance；用户已确认首轮范围，涉及启动状态、页面加载、构建和计时；置信度 0.98。隔离 worktree 实施，本地验收后同步回当前 checkout，不提交或推送。
 
 - 2026-10-14: Refactor / repository-feishu；配置、仓库和日报目标统一关联，单一业务闭环；置信度 0.97。隔离 worktree 实施，保留在途 UI 改动。
 

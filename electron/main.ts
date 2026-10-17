@@ -7,6 +7,8 @@ import { disposeFeishuAuthWatchers } from './main/feishuAuth.js';
 import { registerIpcHandlers } from './main/ipc.js';
 import { createMainWindow, mainWindow } from './main/windows.js';
 
+performance.mark('gitinsight:main-entry');
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -33,14 +35,20 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   void app.whenReady().then(async () => {
+    performance.mark('gitinsight:app-ready');
     await applyPendingRestore();
+    performance.mark('gitinsight:restore-ready');
     if (stopping) return;
     await loadConfig();
+    performance.mark('gitinsight:main-config-ready');
     if (stopping) return;
     await initializeAppUpdates();
+    performance.mark('gitinsight:updates-ready');
     if (stopping) return;
     registerIpcHandlers();
+    performance.mark('gitinsight:ipc-ready');
     createMainWindow();
+    performance.mark('gitinsight:window-created');
     await refreshAutoSyncSchedule();
     initialized = true;
 
