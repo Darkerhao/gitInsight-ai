@@ -12,6 +12,8 @@ declare global {
       configFailure: boolean;
       configReadFailure: boolean;
       configSaves: number;
+      repositoryScans: number;
+      finishRepositoryScan: () => void;
       emitAutoSync: (state: AutoSyncState) => void;
       backupOutcome: 'canceled' | 'error' | 'success';
       backupCalls: Array<'export' | 'restore'>;
@@ -48,6 +50,7 @@ export const test = base.extend({
       const state: Window['reportTest'] = window.reportTest = {
         generateFailures: 0, publishFailures: 0, saveFailure: false, configFailure: false,
         configReadFailure: params.has('configReadFailure'), configSaves: 0, emitAutoSync: () => {},
+        repositoryScans: 0, finishRepositoryScan: () => {},
         backupOutcome: 'canceled', backupCalls: [],
         generations: [], saves: [], submissions: [],
         updateState: {
@@ -96,7 +99,11 @@ export const test = base.extend({
           state.configSaves++;
           return value;
         },
-        scanRepositories: async () => repos,
+        scanRepositories: async () => {
+          state.repositoryScans++;
+          if (params.get('repos') === 'hanging') await new Promise<void>(resolve => { state.finishRepositoryScan = resolve; });
+          return repos;
+        },
         listFeishuFields: async (payload) => { structuredClone(payload); return metadata([]); },
         listFeishuProjects: async (payload) => { structuredClone(payload); return metadata([{ id: 'target', name: '测试项目' }]); },
         listDailyReports: async () => [], listSyncLogs: async () => [], listErrorLogs: async () => [],

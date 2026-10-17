@@ -2,6 +2,105 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { assistantHarness, deferred, tick } from './helpers/assistantHarness.mjs';
 
+test('startup restores selected repositories without waiting for discovery or blocking generation', async () => {
+  const scan = deferred();
+  const ctx = assistantHarness({ scanRepositories: () => scan.promise });
+  ctx.config.repoDisplayNames = { '/workspace/a': 'Saved project' };
+  let ready = false;
+  const initializing = ctx.assistant.init().then(() => { ready = true; });
+  await tick();
+  assert.equal(ready, true, 'local readiness must not await repository discovery');
+  assert.equal(ctx.assistant.selectedRepos.value[0].name, 'Saved project');
+  assert.equal(ctx.assistant.loading.value, false, 'background discovery must not lock report editing');
+  assert.equal(ctx.assistant.dailyReports.value[0].id, 1);
+  assert.equal(ctx.saves.length, 0);
+  assert.equal(ctx.assistant.isConfigDirty.value, false);
+  scan.resolve([{ path: '/workspace/a', name: 'Project A' }, { path: '/workspace/b', name: 'Project B' }]);
+  await initializing;
+  await tick();
+  assert.equal(ctx.assistant.repos.value.length, 2);
+  assert.equal(ctx.assistant.isConfigDirty.value, false);
+  ctx.assistant.dispose();
+});
+
+test('background discovery preserves report progress while explicit refresh reports its result', async () => {
+  const scan = deferred();
+  const ctx = assistantHarness({ scanRepositories: () => scan.promise });
+  await ctx.assistant.init();
+  ctx.assistant.loading.value = true;
+  ctx.assistant.status.value = '正在生成 Project A 的日报';
+  scan.resolve([{ path: '/workspace/a', name: 'Project A' }]);
+  await tick();
+  assert.equal(ctx.assistant.loading.value, true);
+  assert.equal(ctx.assistant.status.value, '正在生成 Project A 的日报');
+  ctx.assistant.loading.value = false;
+  await ctx.assistant.refreshRepos();
+  assert.equal(ctx.assistant.status.value, '已扫描到 1 个仓库');
+  ctx.assistant.dispose();
+});
+
+test('background discovery preserves selection changes and unsaved configuration edits', async () => {
+  const scan = deferred();
+  const ctx = assistantHarness({ scanRepositories: () => scan.promise });
+  void ctx.assistant.init();
+  await tick();
+  ctx.assistant.toggleRepo('/workspace/a');
+  await tick();
+  ctx.assistant.config.reporterName = 'Unsaved name';
+  scan.resolve([{ path: '/workspace/a', name: 'Project A' }, { path: '/workspace/b', name: 'Project B' }]);
+  await tick();
+  assert.deepEqual(ctx.assistant.selectedRepoPaths.value, [], 'discovery must not auto-select a repository');
+  assert.equal(ctx.assistant.config.reporterName, 'Unsaved name');
+  assert.equal(ctx.assistant.isConfigDirty.value, true);
+  assert.equal(ctx.saves.length, 1, 'only the explicit selection change saves configuration');
+  ctx.assistant.dispose();
+});
+
+test('removing a restored repository while discovery runs does not resurrect it', async () => {
+  const scan = deferred();
+  const ctx = assistantHarness({ scanRepositories: () => scan.promise });
+  void ctx.assistant.init();
+  await tick();
+  await ctx.assistant.removeRepo('/workspace/a');
+  scan.resolve([{ path: '/workspace/a', name: 'Project A' }]);
+  await tick();
+  assert.equal(ctx.assistant.repos.value.length, 0);
+  assert.deepEqual(ctx.assistant.selectedRepoPaths.value, []);
+  ctx.assistant.dispose();
+});
+
+for (const change of ['dispose', 'workspace']) {
+  test(`late repository discovery is discarded after ${change}`, async () => {
+    const scan = deferred();
+    const ctx = assistantHarness({ scanRepositories: () => scan.promise });
+    void ctx.assistant.init();
+    await tick();
+    if (change === 'dispose') ctx.assistant.dispose();
+    else { ctx.assistant.config.workspaceDir = '/new'; ctx.assistant.config.workspaceDirs = ['/new']; }
+    scan.resolve([{ path: '/workspace/b', name: 'Late repository' }]);
+    await tick();
+    assert.equal(ctx.assistant.repos.value.some(repo => repo.path === '/workspace/b'), false);
+    ctx.assistant.dispose();
+  });
+}
+
+test('discovery failure keeps restored repositories and explicit refresh can retry', async () => {
+  const scan = deferred();
+  const ctx = assistantHarness({ scanRepositories: () => scan.promise });
+  void ctx.assistant.init();
+  await tick();
+  scan.reject(new Error('Disk unavailable'));
+  await tick();
+  assert.deepEqual(ctx.assistant.selectedRepoPaths.value, ['/workspace/a']);
+  assert.equal(ctx.assistant.repos.value[0].path, '/workspace/a');
+  assert.ok(ctx.messages.includes('Disk unavailable'));
+  assert.equal(ctx.saves.length, 0);
+  ctx.api.scanRepositories = async () => [{ path: '/workspace/a', name: 'Project A' }];
+  await ctx.assistant.refreshRepos();
+  assert.equal(ctx.assistant.repos.value[0].name, 'Project A');
+  ctx.assistant.dispose();
+});
+
 for (const mode of ['hanging', 'failed']) {
   test(`local initialization completes with ${mode} Feishu metadata without writing config`, async () => {
     const pending = deferred();

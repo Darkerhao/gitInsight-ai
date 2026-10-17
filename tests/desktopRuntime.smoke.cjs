@@ -101,6 +101,27 @@ async function electronMain() {
     window.webContents.once('did-fail-load', (_event, code, description) => fail(new Error(`${code}: ${description}`)));
     window.webContents.once('did-finish-load', async () => {
       try {
+        // Poll from the main process: hidden renderer animation frames/timers are throttled.
+        // This measures DOM mounting, not a visible installed application's cold start.
+        const deadline = Date.now() + 10_000;
+        let rendererTiming;
+        do {
+          rendererTiming = await window.webContents.executeJavaScript(`({
+            timeOrigin: performance.timeOrigin,
+            entries: performance.getEntries().filter(entry => entry.name.startsWith('gitinsight:'))
+              .map(({ name, startTime, duration }) => ({ name, startTime, duration }))
+          })`);
+          if (rendererTiming.entries.some(entry => entry.name === 'gitinsight:first-page-ready')) break;
+          await new Promise(resolve => setTimeout(resolve, 20));
+        } while (Date.now() < deadline);
+        const firstPage = rendererTiming.entries.find(entry => entry.name === 'gitinsight:first-page-ready');
+        assert.ok(firstPage, 'The initial lazy page must mount');
+        emit({ event: 'startup', metric: 'isolated hidden window DOM mount; not visible cold start',
+          processToPageMs: Math.round(rendererTiming.timeOrigin + firstPage.startTime - Number(process.env.GITINSIGHT_SMOKE_STARTED_AT)),
+          main: performance.getEntriesByType('mark').filter(entry => entry.name.startsWith('gitinsight:'))
+            .map(({ name, startTime }) => ({ name, ms: Math.round(startTime) })),
+          renderer: rendererTiming.entries.map(({ name, startTime, duration }) => ({ name, ms: Math.round(startTime), durationMs: Math.round(duration) })),
+        });
         const result = await window.webContents.executeJavaScript(`(async () => {
           const config = await window.api.loadConfig();
           const material = await window.api.loadRoleMaterial('projectManager', '2026-01-02');
@@ -221,7 +242,7 @@ async function nodeMain() {
   delete env.VITE_DEV_SERVER_URL;
   const launch = phase => {
     const child = spawn(executable, [__filename, `--user-data-dir=${path.join(root, 'profile')}`], {
-      cwd: projectRoot, env: { ...env, GITINSIGHT_SMOKE_PHASE: phase },
+      cwd: projectRoot, env: { ...env, GITINSIGHT_SMOKE_PHASE: phase, GITINSIGHT_SMOKE_STARTED_AT: String(Date.now()) },
       windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
     });
     children.push(child);
@@ -241,6 +262,7 @@ async function nodeMain() {
         if (!line.startsWith(prefix)) continue;
         const message = JSON.parse(line.slice(prefix.length));
         messages.push(message);
+        if (message.event === 'startup') console.log(`${prefix}${JSON.stringify(message)}`);
         if (message.event === 'ready') readyResolve(message);
       }
     });

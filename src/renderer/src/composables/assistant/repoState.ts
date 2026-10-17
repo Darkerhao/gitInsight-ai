@@ -24,6 +24,19 @@ export function createRepoState(ctx: RepoStateContext) {
   const { config, repos, selectedRepoPaths, loading, status, persistConfig } = ctx;
 
   const getRepoKey = getRepoPathKey;
+  let scanVersion = 0;
+
+  function invalidateScan() {
+    scanVersion++;
+  }
+
+  function restoreRepos() {
+    const paths = normalizeRepoSelections([...selectedRepoPaths.value, ...(config.pinnedRepoPaths ?? [])]);
+    repos.value = mergeRepos([], filterIgnoredRepos(paths.map((path) => ({
+      path,
+      name: path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path,
+    }))));
+  }
 
   function getRepoDisplayName(repo: RepoInfo) {
     return resolveRepoDisplayName(repo, config.repoDisplayNames ?? {});
@@ -95,6 +108,7 @@ export function createRepoState(ctx: RepoStateContext) {
     const dir = await window.api.selectDirectory();
     if (!dir) return [];
 
+    invalidateScan();
     loading.value = true;
     const previous = {
       workspaceDir: config.workspaceDir, workspaceDirs: config.workspaceDirs,
@@ -132,28 +146,49 @@ export function createRepoState(ctx: RepoStateContext) {
   }
 
 
-  async function refreshRepos() {
-    const workspaceDirs = getWorkspaceDirs();
+  async function scanRepos(background: boolean) {
+    const version = ++scanVersion;
+    const workspaceDirs = [...getWorkspaceDirs()];
+    const workspaceKey = workspaceDirs.map(getRepoKey).join('\n');
+    const isCurrent = () => version === scanVersion && workspaceKey === getWorkspaceDirs().map(getRepoKey).join('\n');
     if (!workspaceDirs.length) {
-      repos.value = [];
-      selectedRepoPaths.value = [];
+      if (!background) {
+        repos.value = [];
+        selectedRepoPaths.value = [];
+      }
       return;
     }
 
-    loading.value = true;
+    // Discovery runs alongside editing; loading is also used by report generation.
+    if (!background) loading.value = true;
+    const startedAt = performance.now();
     try {
-      repos.value = mergeRepos([], await scanWorkspaceDirs(workspaceDirs));
-      const repoPathSet = new Set(repos.value.map((repo) => getRepoKey(repo.path)));
-      const selectedPaths = selectedRepoPaths.value.filter((path) => repoPathSet.has(getRepoKey(path)));
-      const firstDisplayRepo = sortReposForDisplay(repos.value)[0];
-      selectedRepoPaths.value = selectedPaths.length || !firstDisplayRepo ? selectedPaths : [firstDisplayRepo.path];
-      config.selectedRepoPaths = normalizeRepoSelections(selectedRepoPaths.value);
-      status.value = `已扫描到 ${repos.value.length} 个仓库`;
+      const scanned = await scanWorkspaceDirs(workspaceDirs);
+      if (!isCurrent()) return;
+      repos.value = mergeRepos(background ? repos.value : [], scanned);
+      if (!background) {
+        const repoPathSet = new Set(repos.value.map((repo) => getRepoKey(repo.path)));
+        const selectedPaths = selectedRepoPaths.value.filter((path) => repoPathSet.has(getRepoKey(path)));
+        const firstDisplayRepo = sortReposForDisplay(repos.value)[0];
+        selectedRepoPaths.value = selectedPaths.length || !firstDisplayRepo ? selectedPaths : [firstDisplayRepo.path];
+        config.selectedRepoPaths = normalizeRepoSelections(selectedRepoPaths.value);
+        status.value = `已扫描到 ${repos.value.length} 个仓库`;
+      }
     } catch (error) {
+      if (!isCurrent()) return;
       ElMessage.error(error instanceof Error ? error.message : '扫描失败');
     } finally {
-      loading.value = false;
+      if (!background) loading.value = false;
+      performance.measure('gitinsight:repository-scan', { start: startedAt, end: performance.now() });
     }
+  }
+
+  function refreshRepos() {
+    return scanRepos(false);
+  }
+
+  function refreshReposInBackground() {
+    return scanRepos(true);
   }
 
 
@@ -235,6 +270,7 @@ export function createRepoState(ctx: RepoStateContext) {
 
 
   async function removeRepo(path: string) {
+    invalidateScan();
     const repo = repos.value.find((item) => getRepoKey(item.path) === getRepoKey(path));
     const repoPath = repo?.path ?? path;
     const repoKey = getRepoKey(repoPath);
@@ -271,6 +307,9 @@ export function createRepoState(ctx: RepoStateContext) {
     getRepoDisplayName,
     chooseWorkspace,
     refreshRepos,
+    refreshReposInBackground,
+    restoreRepos,
+    invalidateScan,
     saveRepoSelection,
     toggleRepo,
     isRepoPinned,

@@ -1,25 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, h, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import type { Component, VNode } from 'vue';
+import { ElButton, ElEmpty, ElMessageBox, ElResult } from 'element-plus';
 import { useRoute, useRouter } from 'vue-router';
 import { useAssistant } from '@/composables/useAssistant';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppTopbar from '@/components/AppTopbar.vue';
 import WelcomeGate from '@/components/WelcomeGate.vue';
-import ReportConfigView from '@/views/ReportConfigView.vue';
-import ReportGenerateView from '@/views/ReportGenerateView.vue';
-import WeeklyReportsView from '@/views/WeeklyReportsView.vue';
-import WeeklySummaryView from '@/views/WeeklySummaryView.vue';
-import WeeklyReflectionView from '@/views/WeeklyReflectionView.vue';
-import HistoryLogsView from '@/views/HistoryLogsView.vue';
-import JiaziTimelineView from '@/views/JiaziTimelineView.vue';
-import SystemSettingsView from '@/views/SystemSettingsView.vue';
-import AboutView from '@/views/AboutView.vue';
-import DashboardView from '@/views/DashboardView.vue';
-import RepositoryCenterView from '@/views/RepositoryCenterView.vue';
-import SyncTasksView from '@/views/SyncTasksView.vue';
-import MessageCenterView from '@/views/MessageCenterView.vue';
-import UsageHelpView from '@/views/UsageHelpView.vue';
-import MaterialReportsView from '@/views/MaterialReportsView.vue';
 import { useAppUpdates } from '@/composables/useAppUpdates';
 import { usePageZoom } from '@/composables/usePageZoom';
 import { navKeys } from '@/router';
@@ -48,23 +35,46 @@ const legacyNavMap: Record<string, NavKey> = {
   farm: 'timeline',
 };
 
-const viewMap = {
-  dashboard: DashboardView,
-  repositories: RepositoryCenterView,
-  sync: SyncTasksView,
-  messages: MessageCenterView,
-  help: UsageHelpView,
-  material: MaterialReportsView,
-  config: ReportConfigView,
-  generate: ReportGenerateView,
-  weekly: WeeklyReportsView,
-  summary: WeeklySummaryView,
-  reflection: WeeklyReflectionView,
-  history: HistoryLogsView,
-  timeline: JiaziTimelineView,
-  ai: ReportConfigView,
-  system: SystemSettingsView,
-  about: AboutView,
+async function reloadApplication() {
+  try {
+    await ElMessageBox.confirm('重新加载会丢失尚未保存的修改，是否继续？', '重新加载应用', {
+      confirmButtonText: '重新加载', cancelButtonText: '保留当前内容', type: 'warning',
+    });
+    window.location.reload();
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') throw error;
+  }
+}
+
+const pageLoadingView = { render: () => h(ElEmpty, { description: '正在加载页面…', 'data-page-pending': '' }) };
+const pageErrorView = {
+  render: () => h(ElResult, { icon: 'error', title: '页面加载失败', subTitle: '可继续使用其他页面，或重新加载应用后重试。', 'data-page-pending': '' }, {
+    extra: () => h(ElButton, { type: 'primary', onClick: reloadApplication }, () => '重新加载应用'),
+  }),
+};
+
+function lazyView(loader: () => Promise<{ default: Component }>) {
+  return defineAsyncComponent({ loader, loadingComponent: pageLoadingView, errorComponent: pageErrorView, delay: 0 });
+}
+
+const reportConfigView = lazyView(() => import('@/views/ReportConfigView.vue'));
+const viewMap: Record<NavKey, Component> = {
+  dashboard: lazyView(() => import('@/views/DashboardView.vue')),
+  repositories: lazyView(() => import('@/views/RepositoryCenterView.vue')),
+  sync: lazyView(() => import('@/views/SyncTasksView.vue')),
+  messages: lazyView(() => import('@/views/MessageCenterView.vue')),
+  help: lazyView(() => import('@/views/UsageHelpView.vue')),
+  material: lazyView(() => import('@/views/MaterialReportsView.vue')),
+  config: reportConfigView,
+  generate: lazyView(() => import('@/views/ReportGenerateView.vue')),
+  weekly: lazyView(() => import('@/views/WeeklyReportsView.vue')),
+  summary: lazyView(() => import('@/views/WeeklySummaryView.vue')),
+  reflection: lazyView(() => import('@/views/WeeklyReflectionView.vue')),
+  history: lazyView(() => import('@/views/HistoryLogsView.vue')),
+  timeline: lazyView(() => import('@/views/JiaziTimelineView.vue')),
+  ai: reportConfigView,
+  system: lazyView(() => import('@/views/SystemSettingsView.vue')),
+  about: lazyView(() => import('@/views/AboutView.vue')),
 };
 
 const routeNav = computed<NavKey>(() => {
@@ -75,7 +85,20 @@ const activeNav = computed({
   get: () => routeNav.value,
   set: (value: string) => handleNavigate(value),
 });
-const activeView = computed(() => viewMap[activeNav.value as keyof typeof viewMap] ?? ReportGenerateView);
+const activeView = computed(() => viewMap[routeNav.value]);
+watch(routeNav, () => performance.mark('gitinsight:page-requested'), { immediate: true });
+
+function onPageMounted(vnode: VNode) {
+  // Async wrappers also mount their placeholder; only time the real page element.
+  const element = vnode.el as HTMLElement | null;
+  if (!element || element.nodeType !== Node.ELEMENT_NODE || element.hasAttribute('data-page-pending')) return;
+  performance.mark('gitinsight:page-ready');
+  performance.measure('gitinsight:page-load', 'gitinsight:page-requested', 'gitinsight:page-ready');
+  if (!performance.getEntriesByName('gitinsight:first-page-ready').length) {
+    performance.mark('gitinsight:first-page-ready');
+    performance.measure('gitinsight:first-page', { start: 0, end: performance.now() });
+  }
+}
 const appVersionText = computed(() => {
   const info = assistant.storageInfo.value;
   if (!info?.appVersion) return '';
@@ -290,8 +313,8 @@ onBeforeUnmount(() => {
           </template>
         </el-result>
         <el-empty v-else-if="!assistantReady" description="正在加载本地数据…" />
-        <Transition v-else name="route-switch" mode="out-in">
-          <component :is="activeView" :key="activeNav" :active-nav="activeNav" @navigate="handleNavigate" />
+        <Transition v-else name="route-switch" @leave="(_element, done) => done()">
+          <component :is="activeView" :key="activeNav" :active-nav="activeNav" @navigate="handleNavigate" @vue:mounted="onPageMounted" />
         </Transition>
 
         <footer v-if="activeNav !== 'timeline'" class="app-footer">

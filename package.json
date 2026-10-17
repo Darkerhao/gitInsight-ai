@@ -37,7 +37,8 @@
     "test:material": "node --test tests/materialReports.test.mjs",
     "test:app-update:desktop": "npm run build && node tests/appUpdateRuntime.smoke.cjs",
     "test:e2e": "playwright test",
-    "test:desktop": "npm run build && node tests/desktopRuntime.smoke.cjs"
+    "test:desktop": "npm run build && node tests/desktopRuntime.smoke.cjs",
+    "measure:startup": "npm run build && node scripts/measure-startup.mjs && node tests/desktopRuntime.smoke.cjs"
   },
   "dependencies": {
     "echarts": "^6.1.0",

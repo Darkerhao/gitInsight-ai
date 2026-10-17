@@ -7,7 +7,10 @@ import './styles/index.scss';
 import App from './App.vue';
 import router from './router';
 
+performance.mark('gitinsight:renderer-entry');
 createApp(App).use(router).use(ElementPlus, { locale: zhCn }).mount('#app');
+performance.mark('gitinsight:shell-mounted');
+performance.measure('gitinsight:shell-mount', 'gitinsight:renderer-entry', 'gitinsight:shell-mounted');
 
 const bootShell = document.getElementById('app-boot');
 if (bootShell) {

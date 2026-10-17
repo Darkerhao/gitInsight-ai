@@ -44,36 +44,21 @@
   display: none;
 }
 
-.route-switch-enter-active,
-.route-switch-leave-active {
-  transition:
-    opacity 180ms ease,
-    transform 180ms ease-out;
+.route-switch-enter-active {
+  transition: opacity 80ms ease;
 }
 
 .route-switch-enter-from {
   opacity: 0;
-  transform: translateY(4px);
-}
-
-.route-switch-leave-active {
-  transition-duration: 40ms;
-}
-
-.route-switch-leave-to {
-  opacity: 0;
 }
 
 @include reduced-motion {
-  .route-switch-enter-active,
-  .route-switch-leave-active {
+  .route-switch-enter-active {
     transition: none;
   }
 
-  .route-switch-enter-from,
-  .route-switch-leave-to {
+  .route-switch-enter-from {
     opacity: 1;
-    transform: none;
   }
 }
 

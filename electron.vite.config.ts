@@ -43,6 +43,7 @@ export default defineConfig({
       strictPort: true,
     },
     build: {
+      minify: 'esbuild',
       rollupOptions: {
         input: {
           index: resolve('src/renderer/index.html'),
@@ -52,7 +53,7 @@ export default defineConfig({
             const normalizedId = id.replace(/\\/g, '/');
             if (!normalizedId.includes('/node_modules/')) return undefined;
             if (normalizedId.includes('/element-plus/')) return 'vendor-element-plus';
-            if (normalizedId.includes('/echarts/')) return 'vendor-echarts';
+            if (normalizedId.includes('/echarts/') || normalizedId.includes('/zrender/')) return 'vendor-echarts';
             if (normalizedId.includes('/lucide-vue-next/')) return 'vendor-icons';
             if (normalizedId.includes('/three/')) return 'vendor-3d';
             if (normalizedId.includes('/@vueuse/')) return 'vendor-vueuse';
