@@ -668,6 +668,7 @@ export interface FeishuDuplicateCheckPayload extends FeishuLoginPayload {
 export interface FeishuDuplicateCheckResult {
   available: boolean;
   matches: number;
+  reason?: string;
 }
 
 export interface FeishuAuthSnapshot {
