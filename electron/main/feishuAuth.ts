@@ -292,9 +292,10 @@ function buildFeishuDuplicateCheckScript(payload: Pick<FeishuDuplicateCheckPaylo
   const text = documents.map((doc) => doc.body?.innerText || '').join('\\n');
   if (!text || !/(我的提交记录|提交记录)/.test(text)) return { available: false, matches: 0 };
   const recordText = (element) => normalize(element.innerText || element.textContent);
+  const hoursPattern = /(?:每日工作时长|工作时长)(?:[（(]h[）)])?[：:]?([0-9]+(?:\\.[0-9]+)?)/;
   const hasRecordFields = (element) => {
     const value = recordText(element);
-    return normalizeDate(value) && value.includes('所属项目') && /(?:每日工作时长|工作时长)[：:]?([0-9]+(?:\\.[0-9]+)?)/.test(value);
+    return normalizeDate(value) && value.includes('所属项目') && hoursPattern.test(value);
   };
   const cards = documents.flatMap((doc) => Array.from(doc.querySelectorAll('body *')))
     .filter((element) => hasRecordFields(element) && !Array.from(element.children || []).some(hasRecordFields));
@@ -305,7 +306,7 @@ function buildFeishuDuplicateCheckScript(payload: Pick<FeishuDuplicateCheckPaylo
     const value = recordText(card);
     if (normalizeDate(value) !== date) return false;
     if (project && !value.includes(project)) return false;
-    const hours = value.match(/(?:每日工作时长|工作时长)[：:]?([0-9]+(?:\\.[0-9]+)?)/);
+    const hours = value.match(hoursPattern);
     return hours ? Number(hours[1]) === targetHours : false;
   }).length;
   return { available: true, matches };
@@ -685,7 +686,10 @@ export async function checkFeishuDuplicate(payload: FeishuDuplicateCheckPayload)
   });
   try {
     await checkWindow.loadURL(targetUrl);
-    if (!(await focusFeishuSubmissionRecords(checkWindow))) return { available: false, matches: 0 };
+    if (!(await focusFeishuSubmissionRecords(checkWindow))) {
+      return { available: false, matches: 0, reason: '未能打开飞书提交记录页，请确认已登录且可查看提交记录' };
+    }
+    let reason = '提交记录未加载完成，或页面中的日期、所属项目、工作时长字段无法识别';
     for (let attempt = 0; attempt < 8; attempt += 1) {
       if (checkWindow.isDestroyed()) break;
       try {
@@ -693,12 +697,12 @@ export async function checkFeishuDuplicate(payload: FeishuDuplicateCheckPayload)
         if (result?.available === true && Number.isInteger(result.matches) && result.matches >= 0) {
           return result as FeishuDuplicateCheckResult;
         }
-      } catch {
-        // The records page may still be rendering.
+      } catch (error) {
+        reason = error instanceof Error ? error.message : String(error);
       }
       await wait(400);
     }
-    return { available: false, matches: 0 };
+    return { available: false, matches: 0, reason };
   } finally {
     if (!checkWindow.isDestroyed()) checkWindow.destroy();
   }

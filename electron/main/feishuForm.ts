@@ -1,6 +1,7 @@
 import { dialog } from 'electron';
 import { DEFAULT_FEISHU_FORM_CONFIG } from '../../src/shared/types.js';
 import type {
+  FeishuDuplicateCheckResult,
   FeishuFieldOption,
   FeishuFormConfig,
   FeishuProjectOption,
@@ -435,25 +436,29 @@ async function submitFeishuDaily(payload: SyncFeishuDailyPayload): Promise<SyncF
   const startedAt = Date.now();
   try {
     const auth = await resolveFeishuAuth(formConfig, '同步飞书日报失败');
-    const duplicate = await checkFeishuDuplicate({
+    const duplicate: FeishuDuplicateCheckResult = await checkFeishuDuplicate({
       config: formConfig,
       targetDate: payload.date,
       projectName: formConfig.projectName,
       projectOptionId: formConfig.projectOptionId,
       workHours: normalizeWorkHours(payload.workHours, formConfig.defaultWorkHours),
-    }).catch(() => ({ available: false, matches: 0 }));
+    }).catch((error: unknown) => ({ available: false, matches: 0, reason: getErrorMessage(error) }));
     if (!duplicate.available || duplicate.matches > 0) {
       const reason = duplicate.available
         ? `飞书已存在 ${duplicate.matches} 条可能重复的日报`
         : '无法读取飞书提交记录';
+      const failureReason = !duplicate.available ? duplicate.reason : '';
+      if (!duplicate.available) {
+        await recordErrorLog('feishu:duplicate-check', new Error(failureReason || reason)).catch(() => {});
+      }
       if (payload.triggerType === 'scheduled') {
-        throw new Error(`待核对：${reason}，自动同步已停止，请核对提交记录`);
+        throw new Error(`待核对：${reason}${failureReason ? `：${failureReason}` : ''}，自动同步已停止，请核对提交记录`);
       }
       const options: Electron.MessageBoxOptions = {
         type: 'warning',
         title: '核对飞书日报',
         message: reason,
-        detail: `${payload.date}「${formConfig.projectName || formConfig.projectOptionId}」${normalizeWorkHours(payload.workHours, formConfig.defaultWorkHours)} 小时。请先在“飞书提交记录”中核对；继续发布可能产生重复日报。`,
+        detail: `${payload.date}「${formConfig.projectName || formConfig.projectOptionId}」${normalizeWorkHours(payload.workHours, formConfig.defaultWorkHours)} 小时。请先在“飞书提交记录”中核对；继续发布可能产生重复日报。${failureReason ? `\n读取失败原因：${failureReason}` : ''}`,
         buttons: ['取消发布', '仍然发布'],
         defaultId: 0,
         cancelId: 0,

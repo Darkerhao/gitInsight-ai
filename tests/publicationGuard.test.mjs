@@ -34,12 +34,13 @@ async function publication({ check = async () => ({ available: true, matches: 0 
   const dialogs = [];
   const posts = [];
   const logs = [];
+  const errorLogs = [];
   const api = await loadModule('feishuForm', {
     electron: { dialog: { async showMessageBox(...args) { dialogs.push(args.at(-1)); return { response }; } } },
     '../../src/shared/types.js': { DEFAULT_FEISHU_FORM_CONFIG: {} },
     './config.js': { normalizeWorkHours: (value, fallback) => value ?? fallback },
     './windows.js': { mainWindow: null },
-    './database.js': { async recordSyncLog(log) { logs.push(log); }, async recordErrorLog() {} },
+    './database.js': { async recordSyncLog(log) { logs.push(log); }, async recordErrorLog(scope, error) { errorLogs.push({ scope, error }); } },
     './networkRequest.js': { async fetchWithTimeout(url, options) {
       posts.push({ url, options });
       if (submit) return submit();
@@ -53,7 +54,7 @@ async function publication({ check = async () => ({ available: true, matches: 0 
       async checkFeishuDuplicate(value) { checks.push(value); return check(value); },
     },
   });
-  return { api, checks, dialogs, posts, logs };
+  return { api, checks, dialogs, posts, logs, errorLogs };
 }
 
 test('scheduled duplicate stops before POST and reports that verification is required', async () => {
@@ -333,14 +334,14 @@ test('config edits and runtime status updates compose in either save order witho
   }
 });
 
-test('record header alone is unavailable; the hidden check waits for readable record cards', async () => {
+test('record header alone is unavailable; actual Feishu hours labels with units are readable', async () => {
   const rawResults = [];
   const card = {
-    innerText: '日期：2026-10-08\n所属项目：Project One\n工作时长：8\n工作内容：完成测试',
+    innerText: '日期：2026/10/08\n所属项目：Project One\n每日工作时长（h）\n8.0\n工作内容：完成测试',
     children: [
       { innerText: '日期：2026-10-08', children: [] },
       { innerText: '所属项目：Project One', children: [] },
-      { innerText: '工作时长：8', children: [] },
+      { innerText: '每日工作时长（h）\n8.0', children: [] },
     ],
   };
   let duplicateScript;
@@ -370,6 +371,29 @@ test('record header alone is unavailable; the hidden check waits for readable re
   });
   assert.deepEqual(rawResults[0], { available: false, matches: 0 });
   assert.deepEqual(result, { available: true, matches: 1 });
-  const previousDay = { ...card, innerText: card.innerText.replace('2026-10-08', '2026-10-07') };
+  const previousDay = { ...card, innerText: card.innerText.replace('2026/10/08', '2026/10/07') };
   assert.deepEqual(compileFunction(`return (${duplicateScript})`, ['document'])(documentFor([previousDay])), { available: true, matches: 0 });
+  for (const label of ['每日工作时长（h）', '每日工作时长 (h)', '工作时长', '每日工作时长']) {
+    const fixture = { ...card, innerText: card.innerText.replace('每日工作时长（h）\n8.0', `${label}：8.0`) };
+    assert.deepEqual(compileFunction(`return (${duplicateScript})`, ['document'])(documentFor([fixture])), { available: true, matches: 1 });
+  }
+  const otherHours = { ...card, innerText: card.innerText.replace('8.0', '6.5') };
+  assert.deepEqual(compileFunction(`return (${duplicateScript})`, ['document'])(documentFor([otherHours])), { available: true, matches: 0 });
+  const otherProject = { ...card, innerText: card.innerText.replace('Project One', 'Project Two') };
+  assert.deepEqual(compileFunction(`return (${duplicateScript})`, ['document'])(documentFor([otherProject])), { available: true, matches: 0 });
+});
+
+test('failed record checks retain the specific cause in manual and scheduled publication', async () => {
+  for (const triggerType of ['manual', 'scheduled']) {
+    for (const check of [
+      async () => ({ available: false, matches: 0, reason: '未能打开飞书提交记录页' }),
+      async () => { throw new Error('记录页加载失败'); },
+    ]) {
+      const context = await publication({ check });
+      await assert.rejects(context.api.syncFeishuDaily(payload({ triggerType })), triggerType === 'manual' ? /取消发布/ : /待核对.*(?:未能打开飞书提交记录页|记录页加载失败)/);
+      if (triggerType === 'manual') assert.match(context.dialogs[0].detail, /读取失败原因：(?:未能打开飞书提交记录页|记录页加载失败)/);
+      assert.match(context.errorLogs.find(log => log.scope === 'feishu:duplicate-check').error.message, /未能打开飞书提交记录页|记录页加载失败/);
+      assert.equal(context.posts.length, 0);
+    }
+  }
 });

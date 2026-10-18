@@ -1,10 +1,10 @@
 ---
 path: Refactor
-stage: ship
-current_sprint_slug: startup-performance
-current_roadmap_slug: startup-performance
+stage: plan
+current_sprint_slug: report-performance
+current_roadmap_slug: report-performance
 route_confidence: 0.98
-next_action: "第一轮启动优化本地交付完成，已同步 dev；未暂存、提交或推送"
+next_action: "剩余性能项：Git 采集、日报流式预览和数据库合并持久化"
 pointers:
   latest_architecture_update: architecture/ARCHITECTURE.md
 ---
@@ -108,6 +108,10 @@ pointers:
 - current_sprint_slug: weekly-summary
 
 ## route_history
+
+- 2026-10-18: Bugfix / feishu-record-hours；真实飞书记录页的工时字段带（h）单位导致查重解析失败，定点修正与失败诊断；置信度 0.99。保留 report-performance 主任务状态，不提交或发布。
+
+- 2026-10-17: Refactor / report-performance；用户授权继续三项剩余性能优化，调用链和验收明确，涉及主进程/IPC/渲染/持久化；置信度 0.98。隔离 worktree 实施，保留第一轮，不提交或推送。
 
 - 2026-10-15: Refactor / startup-performance；用户已确认首轮范围，涉及启动状态、页面加载、构建和计时；置信度 0.98。隔离 worktree 实施，本地验收后同步回当前 checkout，不提交或推送。
 
