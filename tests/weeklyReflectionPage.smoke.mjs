@@ -8,7 +8,7 @@ const app = await readFile(new URL('../src/renderer/src/App.vue', import.meta.ur
 const sidebar = await readFile(new URL('../src/renderer/src/components/AppSidebar.vue', import.meta.url), 'utf8');
 const preload = await readFile(new URL('../electron/preload.ts', import.meta.url), 'utf8');
 
-assert.match(app, /reflection: WeeklyReflectionView/, 'reflection view should be mounted by the app shell');
+assert.match(app, /reflection:\s*lazyView\(\(\) => import\('@\/views\/WeeklyReflectionView\.vue'\)\)/, 'reflection view should be lazy-loaded by the app shell');
 assert.match(sidebar, /key: 'reflection'.+label: '复盘项目问题'/, 'reflection page should have a report-center menu item');
 assert.match(page, /useWeeklyReflection/, 'reflection page should use the dedicated workflow composable');
 assert.match(page, /做得好的地方/, 'reflection result should render strengths');

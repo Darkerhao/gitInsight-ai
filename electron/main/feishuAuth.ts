@@ -114,40 +114,14 @@ function buildFeishuSubmissionRecordScript(targetDate?: string) {
         rect: getClickableShell(element).getBoundingClientRect(),
         text: normalizeText(element.textContent),
       }))
-      .filter(({ text }) => text.includes('查看提交记录') || !text.includes('分享'))
+      .filter(({ text }) => !text || labels.includes(text))
       .sort((a, b) => a.rect.left - b.rect.left);
     if (exactButtons[0]?.element) return exactButtons[0].element;
 
     return getVisibleElements()
       .map((element) => ({ element, text: normalizeText(element.textContent) }))
       .filter(({ text }) => labels.some((label) => text === label || (text.includes(label) && text.length <= 24)))
-      .sort((a, b) => a.text.length - b.text.length)[0]?.element
-      ?.closest('button,a,[role="button"],[class*="tab"],[class*="Tab"],[class*="record"],[class*="Record"]') || null;
-  };
-  const findTopRightButton = () => getVisibleElements('button,a,[role="button"],[class*="button"],[class*="Button"]')
-    .map((element) => ({ element: getClickableShell(element), rect: getClickableShell(element).getBoundingClientRect(), view: getElementView(element) }))
-    .filter(({ rect, view }) => (
-      rect.top >= 0
-      && rect.top <= 84
-      && rect.right > view.innerWidth - 360
-      && rect.left < view.innerWidth - 80
-      && rect.width >= 48
-      && rect.width <= 190
-      && rect.height >= 24
-      && rect.height <= 58
-    ))
-    .sort((a, b) => a.rect.left - b.rect.left)[0]?.element || null;
-  const findTopRightPointTarget = () => {
-    const pointOffsets = [220, 240, 200, 260, 180];
-    for (const targetDocument of getCandidateDocuments()) {
-      const view = targetDocument.defaultView || window;
-      for (const offset of pointOffsets) {
-        const pointTarget = targetDocument.elementFromPoint(Math.max(1, view.innerWidth - offset), 28);
-        const clickable = getClickableShell(pointTarget);
-        if (clickable && isVisible(clickable)) return clickable;
-      }
-    }
-    return null;
+      .sort((a, b) => a.text.length - b.text.length)[0]?.element || null;
   };
   const hasRecordsView = () => {
     const text = normalizeText(getPageText());
@@ -252,7 +226,7 @@ function buildFeishuSubmissionRecordScript(targetDate?: string) {
     return { recordsOpened: false, action: 'waiting-records' };
   }
 
-  const button = findSubmissionButton() || findTopRightButton() || findTopRightPointTarget();
+  const button = findSubmissionButton();
   if (button) {
     state.recordsButtonClickedAt = now;
     clickElement(button, 'records-button-clicked');
@@ -299,8 +273,17 @@ function buildFeishuDuplicateCheckScript(payload: Pick<FeishuDuplicateCheckPaylo
   };
   const cards = documents.flatMap((doc) => Array.from(doc.querySelectorAll('body *')))
     .filter((element) => hasRecordFields(element) && !Array.from(element.children || []).some(hasRecordFields));
-  // A header is visible before record loading finishes; an empty/unrecognized page is not proof of no duplicates.
-  if (!cards.length) return { available: false, matches: 0 };
+  // Only an explicit, visible empty state proves there are no records. A header alone may still be loading.
+  if (!cards.length) {
+    const empty = documents.some((doc) => normalize(doc.body?.innerText).includes('我的提交记录')
+      && Array.from(doc.querySelectorAll('body *')).some((element) => {
+        if (!/^(暂无提交记录|暂无记录|暂无数据|还没有提交记录)$/.test(recordText(element))) return false;
+        const rect = element.getBoundingClientRect();
+        const style = doc.defaultView.getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+      }));
+    return { available: empty, matches: 0 };
+  }
   const project = normalize(projectName) || normalize(projectOptionId);
   const matches = cards.filter((card) => {
     const value = recordText(card);
@@ -526,24 +509,11 @@ function wait(ms: number) {
 }
 
 
-async function clickFeishuSubmissionRecordsButtonByPosition(targetWindow: BrowserWindow) {
-  if (targetWindow.isDestroyed()) return;
-  const { width } = targetWindow.getContentBounds();
-  const x = Math.max(1, width - 220);
-  const y = 28;
-  targetWindow.webContents.sendInputEvent({ type: 'mouseMove', x, y });
-  targetWindow.webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
-  targetWindow.webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
-  await wait(650);
-}
-
-
 export async function focusFeishuSubmissionRecords(targetWindow: BrowserWindow, targetDate?: string) {
   const shouldOpenDetail = Boolean(targetDate?.trim());
   let recordsOpened = false;
   let recordClicked = false;
   let targetDateNotFoundAttempts = 0;
-  let nativeClickAttempts = 0;
 
   for (let attempt = 0; attempt < 30; attempt += 1) {
     if (targetWindow.isDestroyed()) return false;
@@ -564,10 +534,6 @@ export async function focusFeishuSubmissionRecords(targetWindow: BrowserWindow, 
       }
     } catch {
       // The page may still be navigating; retry shortly.
-    }
-    if (!recordsOpened && attempt >= 4 && nativeClickAttempts < 2) {
-      nativeClickAttempts += 1;
-      await clickFeishuSubmissionRecordsButtonByPosition(targetWindow);
     }
     await wait(350);
   }

@@ -286,6 +286,38 @@ test('failed record navigation still destroys the hidden check window', async ()
   assert.equal(destroyed, true);
 });
 
+test('record navigation never guesses an unrelated top-right control', async () => {
+  let navigationScript;
+  const api = await loadModule('feishuAuth', {
+    electron: {}, '../../src/shared/types.js': { DEFAULT_FEISHU_FORM_CONFIG: {} }, './windows.js': {},
+  });
+  await api.focusFeishuSubmissionRecords({
+    isDestroyed: () => false,
+    webContents: { executeJavaScript: async script => { navigationScript = script; return { recordsOpened: true }; } },
+  });
+  let clicks = 0;
+  const unrelated = { tagName: 'BUTTON', textContent: '使用该模板',
+    getBoundingClientRect: () => ({ left: 950, right: 1050, top: 10, width: 100, height: 32 }),
+    click: () => { clicks++; }, closest() { return this; } };
+  const window = { innerWidth: 1200, getComputedStyle: () => ({ display: 'block', visibility: 'visible', opacity: '1' }) };
+  const document = { body: { innerText: '每日日报填写' },
+    querySelectorAll: selector => selector === 'button,a,[role="button"],[class*="button"],[class*="Button"]' ? [unrelated] : [],
+    elementFromPoint: () => unrelated,
+  };
+  const result = compileFunction(`return (${navigationScript})`, ['document', 'window'])(document, window);
+  assert.equal(result.action, 'records-button-not-found');
+  assert.equal(clicks, 0);
+  // A labelled button works even without a matching ancestor wrapper.
+  const entry = { ...unrelated, textContent: '查看提交记录' };
+  const form = { ...document, querySelectorAll: selector => selector === 'button,a,[role="button"],span,div,input,textarea' ? [entry] : [] };
+  const opened = compileFunction(`return (${navigationScript})`, ['document', 'window'])(form, { ...window });
+  assert.equal(opened.action, 'records-button-clicked');
+  assert.equal(clicks, 1);
+  const wrongHeader = { ...document, querySelectorAll: selector => selector.includes('share-form-entry-header-button') ? [unrelated] : [] };
+  assert.equal(compileFunction(`return (${navigationScript})`, ['document', 'window'])(wrongHeader, { ...window, __gitInsightSubmissionRecordState: {} }).action, 'records-button-not-found');
+  assert.equal(clicks, 1);
+});
+
 test('config edits and runtime status updates compose in either save order without restoring deleted tasks', async () => {
   for (const statusFirst of [true, false]) {
     let saved = {
@@ -381,6 +413,23 @@ test('record header alone is unavailable; actual Feishu hours labels with units 
   assert.deepEqual(compileFunction(`return (${duplicateScript})`, ['document'])(documentFor([otherHours])), { available: true, matches: 0 });
   const otherProject = { ...card, innerText: card.innerText.replace('Project One', 'Project Two') };
   assert.deepEqual(compileFunction(`return (${duplicateScript})`, ['document'])(documentFor([otherProject])), { available: true, matches: 0 });
+  const readPage = document => compileFunction(`return (${duplicateScript})`, ['document'])(document);
+  for (const label of ['暂无提交记录', '暂无记录', '暂无数据', '还没有提交记录']) {
+    const empty = { innerText: label, children: [], getBoundingClientRect: () => ({ width: 120, height: 32 }) };
+    const doc = {
+      body: { innerText: `我的提交记录\n${label}` },
+      defaultView: { getComputedStyle: () => ({ visibility: 'visible', display: 'block' }) },
+      querySelectorAll: selector => selector === 'body *' ? [empty] : [],
+    };
+    assert.deepEqual(readPage(doc), { available: true, matches: 0 }, label);
+    // A hidden empty placeholder is not evidence that loading has completed.
+    assert.deepEqual(readPage({ ...doc, defaultView: { getComputedStyle: () => ({ visibility: 'hidden' }) } }), { available: false, matches: 0 });
+    // A form's record-entry label must not be mistaken for the records page.
+    assert.deepEqual(readPage({ ...doc, body: { innerText: `查看提交记录\n${label}` } }), { available: false, matches: 0 });
+  }
+  for (const text of ['我的提交记录', '我的提交记录\n加载中', '我的提交记录\n加载失败，请重试']) {
+    assert.deepEqual(readPage({ body: { innerText: text }, querySelectorAll: () => [] }), { available: false, matches: 0 });
+  }
 });
 
 test('failed record checks retain the specific cause in manual and scheduled publication', async () => {
