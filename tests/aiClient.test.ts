@@ -1,3 +1,4 @@
+import { DEFAULT_CUSTOM_REPORT_PROMPT } from '../src/shared/reportPrompt.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { callAiReport, callAiStructuredExtract, callAiWeeklyReflection, testAiConnection } from '../electron/main/aiClient.js';
@@ -239,3 +240,30 @@ test('callAiStructuredExtract 保留具体工作描述并按实际目标分类',
   }
 });
 
+
+
+test('custom prompt starts with the standard template and replaces all default style requirements', async () => {
+  const originalFetch = globalThis.fetch;
+  const prompts: string[] = [];
+  globalThis.fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body));
+    prompts.push(body.messages.find((message: { role: string }) => message.role === 'user').content);
+    return new Response(JSON.stringify({ choices: [{ message: { content: '自定义正文' } }] }));
+  };
+  const config = { aiBaseUrl: 'https://api.example.com/v1', aiApiKey: 'key', aiModel: 'demo' };
+  const input = { gitLogs: '真实提交', files: 'list.ts', diff: '真实变更', manualWorkContent: '需求讨论' };
+  const range = { startDateTime: '2026-10-22T00:00:00', endDateTime: '2026-10-23T00:00:00', label: '当天' };
+  try {
+    await callAiReport(config, input, range, 'standard');
+    await callAiReport(config, input, range, 'custom', undefined, DEFAULT_CUSTOM_REPORT_PROMPT);
+    assert.equal(prompts[0], prompts[1]);
+    await callAiReport(config, input, range, 'custom', undefined, '只写一段话，不加模块标签和明日计划。');
+    assert.ok(prompts[2].startsWith('只写一段话，不加模块标签和明日计划。'));
+    assert.doesNotMatch(prompts[2], /本次日报风格|正文每条35-80字|输出格式：|【一级模块/);
+    for (const fact of ['真实提交', '真实变更', '需求讨论', 'list.ts', '当天']) assert.ok(prompts[2].includes(fact));
+    await assert.rejects(callAiReport(config, input, range, 'custom', undefined, '  '), /请填写自定义日报提示词/);
+    assert.equal(prompts.length, 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

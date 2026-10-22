@@ -234,7 +234,7 @@
   gap: 10px 14px;
 
   > .field { grid-column: span 2; }
-  > .repo-picker-field { grid-column: 1 / -1; }
+  > .repo-picker-field, > .custom-prompt-field { grid-column: 1 / -1; }
   > .report-style-field { grid-column: span 4; }
 }
 

@@ -28,13 +28,14 @@ function createHistoryAssistant() {
   const imports = {
     vue, 'element-plus': { ElMessage: { warning() {} } }, '@shared/types': sharedTypes,
     '@shared/repositoryName': names,
+    '@shared/reportPrompt': loadTs(resolve(root, 'src/shared/reportPrompt.ts')),
     './assistant/normalizers': normalizers, './assistant/dateUtils': dateUtils,
     './assistant/projectGeneration': project,
   };
   return evaluate(readFileSync(resolve(root, 'src/renderer/src/composables/useAssistant.ts'), 'utf8'),
     (name) => imports[name] ?? new Proxy({}, { get: () => () => ({}) })).useAssistant();
 }
-function createPage(t, api, count = 2, confirm = async () => {}) {
+function createPage(t, api, count = 2, confirm = async () => {}, storage = new Map()) {
   const messages = [];
   let refreshes = 0;
   const repos = Array.from({ length: count }, (_, index) => ({ path: `repo-${index}`, name: `Project ${index}` }));
@@ -65,6 +66,7 @@ function createPage(t, api, count = 2, confirm = async () => {}) {
     '@/composables/projectReportActions': loadTs(resolve(root, 'src/renderer/src/composables/projectReportActions.ts')),
     '@/composables/assistant/normalizers': normalizers,
     '@shared/repositoryName': names,
+    '@shared/reportPrompt': loadTs(resolve(root, 'src/shared/reportPrompt.ts')),
     '@shared/weeklyReport': loadTs(resolve(root, 'src/shared/weeklyReport.ts')),
     '@/composables/assistant/reportState': {
       getReportRangePayloadFromForm: (form) => ({ startDateTime: form.startDateTime, endDateTime: form.endDateTime }),
@@ -72,7 +74,7 @@ function createPage(t, api, count = 2, confirm = async () => {}) {
       resolveReportTimeRange: (range, label) => ({ ...range, label }),
     },
   };
-  const module = evaluate(script, (name) => imports[name] ?? {}, { api });
+  const module = evaluate(script, (name) => imports[name] ?? {}, { api, localStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) } });
   const page = scope.run(() => module.default.setup({}, { expose() {}, emit() {} }));
   return { page, assistant, messages, refreshes: () => refreshes };
 }
@@ -233,4 +235,42 @@ test('cancelling combined regeneration preserves the prior report and source ide
   assert.deepEqual(assistant.projectDrafts.value[0].sourceRepos.map((repo) => repo.path), ['repo-0', 'repo-1']);
   assert.equal(assistant.projectDrafts.value[0].generateStatus, 'cancelled');
   assert.deepEqual(requests[1].repoPaths, ['repo-0', 'repo-1']);
+});
+
+
+test('custom prompt is prefilled, retained across style changes and reloads, and sent for combined generation', async (t) => {
+  const storage = new Map();
+  const payloads = [];
+  const api = { generateReport: async (payload) => { payloads.push(payload); return result('custom'); } };
+  const { page } = createPage(t, api, 2, undefined, storage);
+  assert.match(page.customReportPrompt.value, /本次日报风格：标准均衡/);
+  assert.match(page.customReportPrompt.value, /输出格式：/);
+  page.reportPromptStyle.value = 'custom';
+  page.customReportPrompt.value = '只写工作内容，不加标签';
+  await vue.nextTick();
+  page.reportPromptStyle.value = 'standard';
+  await vue.nextTick();
+  assert.equal(page.customReportPrompt.value, '只写工作内容，不加标签');
+  page.reportPromptStyle.value = 'custom';
+  await vue.nextTick();
+  const restored = createPage(t, api, 2, undefined, storage);
+  assert.equal(restored.page.reportPromptStyle.value, 'custom');
+  assert.equal(restored.page.customReportPrompt.value, '只写工作内容，不加标签');
+  restored.assistant.activeAiProfile.value = { enabled: true, baseUrl: 'https://example.invalid', model: 'demo', apiKey: 'test' };
+  await restored.page.handleGenerateCombined();
+  assert.equal(payloads.length, 1);
+  assert.equal(payloads[0].customPrompt, '只写工作内容，不加标签');
+  assert.equal(payloads[0].promptStyle, 'custom');
+  assert.deepEqual(payloads[0].repoPaths, ['repo-0', 'repo-1']);
+});
+
+test('blank custom prompt survives reload and blocks generation', async (t) => {
+  const storage = new Map([['gitinsight:daily-report-prompt', JSON.stringify({ style: 'custom', prompt: '' })]]);
+  let called = false;
+  const { page, assistant } = createPage(t, { generateReport: async () => { called = true; return result('unexpected'); } }, 2, undefined, storage);
+  assistant.activeAiProfile.value = { enabled: true, baseUrl: 'https://example.invalid', model: 'demo', apiKey: 'test' };
+  assert.equal(page.customReportPrompt.value, '');
+  assert.equal(page.blockedGenerationCheck.value.key, 'prompt');
+  await page.handleGenerateAll();
+  assert.equal(called, false);
 });

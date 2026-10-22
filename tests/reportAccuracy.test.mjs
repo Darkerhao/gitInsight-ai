@@ -42,7 +42,7 @@ test('empty evidence yields no invented work', () => {
   assert.match(report, /暂无可用工作记录/);
 });
 
-function createGenerator(overrides = {}, hasCommits = true) {
+function createGenerator(overrides = {}, hasCommits = true, params = {}) {
   const saved = [];
   const imports = {
     'node:path': { basename },
@@ -70,7 +70,7 @@ function createGenerator(overrides = {}, hasCommits = true) {
   compileFunction(outputText, ['require', 'exports'])((name) => imports[name], module);
   return {
     saved,
-    generate: (signal) => module.generateReport({ date: '2026-09-29', reporterName: '张三', repoPaths: ['/repo'] }, signal),
+    generate: (signal) => module.generateReport({ date: '2026-09-29', reporterName: '张三', repoPaths: ['/repo'], ...params }, signal),
   };
 }
 
@@ -113,4 +113,38 @@ test('ordinary AI failure still produces a factual saved fallback', async () => 
   assert.match(result.report, /AI提示：服务暂不可用/);
   assert.doesNotMatch(result.report, /8小时|交互稳定性/);
   assert.equal(saved.length, 1);
+});
+
+
+test('custom generation passes the edited prompt and preserves unlabelled output', async () => {
+  const prompt = '只写今日工作，不加模块标签';
+  const report = '今日工作内容：\n1. 调整筛选逻辑';
+  const { generate, saved } = createGenerator({ './aiClient.js': {
+    callAiReport: async (_config, _input, _range, style, _signal, customPrompt) => {
+      assert.equal(style, 'custom');
+      assert.equal(customPrompt, prompt);
+      return report;
+    },
+  } }, true, { promptStyle: 'custom', customPrompt: prompt });
+  assert.equal((await generate()).report, report);
+  assert.equal(saved[0][1].report, report);
+});
+
+test('custom generation does not save a default template when AI fails', async () => {
+  const { generate, saved } = createGenerator({ './aiClient.js': {
+    callAiReport: async () => { throw new Error('服务暂不可用'); },
+  } }, true, { promptStyle: 'custom', customPrompt: '只写一段话' });
+  await assert.rejects(generate(), /服务暂不可用/);
+  assert.equal(saved.length, 0);
+});
+
+test('custom generation rejects blank instructions and unavailable AI before collecting work', async () => {
+  for (const customPrompt of ['', '  ']) {
+    const { generate, saved } = createGenerator({}, true, { promptStyle: 'custom', customPrompt });
+    await assert.rejects(generate(), /请填写自定义日报提示词/);
+    assert.equal(saved.length, 0);
+  }
+  const { generate } = createGenerator({ './aiClient.js': { resolveAiConfig: () => ({ aiApiKey: '' }) } }, true,
+    { promptStyle: 'custom', customPrompt: '只写一段话' });
+  await assert.rejects(generate(), /配置并启用 AI/);
 });

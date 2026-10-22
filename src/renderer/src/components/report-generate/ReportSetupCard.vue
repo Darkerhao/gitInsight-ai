@@ -39,6 +39,8 @@ const props = defineProps<{
   repoDisplayNames: Record<string, string>;
   aiProfileOptions: AiProfileOption[];
   promptStyle: ReportPromptStyle;
+  customPrompt: string;
+  generating: boolean;
   dateShortcut: DateShortcut;
   isRepoSelected: (path: string) => boolean;
   isRepoPinned: (path: string) => boolean;
@@ -48,6 +50,7 @@ const emit = defineEmits<{
   (e: 'choose-workspace'): void;
   (e: 'select-ai-profile', value: string): void;
   (e: 'select-prompt-style', value: ReportPromptStyle): void;
+  (e: 'update:custom-prompt', value: string): void;
   (e: 'report-date-change', value: string): void;
   (e: 'start-date-time-change', value: string): void;
   (e: 'end-date-time-change', value: string): void;
@@ -91,7 +94,7 @@ function handleAiProfileChange(value: string) {
 }
 
 function handlePromptStyleChange(value: string | number | boolean | undefined) {
-  if (value === 'concise' || value === 'standard' || value === 'detailed') {
+  if (value === 'concise' || value === 'standard' || value === 'detailed' || value === 'custom') {
     emit('select-prompt-style', value);
   }
 }
@@ -100,6 +103,7 @@ const promptStyleHints: Record<ReportPromptStyle, string> = {
   concise: '提炼核心事项，减少篇幅，适合快速汇报',
   standard: '兼顾信息量与可读性，适合常规研发日报',
   detailed: '展开具体动作与实际结果，适合完整复盘',
+  custom: '按照下方提示词生成日报，可直接修改标准均衡模板',
 };
 
 function handleReportDateChange(value: string | null) {
@@ -243,12 +247,27 @@ function handleEndDateTimeChange(value: string | null) {
 
       <div class="field report-style-field">
         <label>日报风格</label>
-        <el-radio-group :model-value="promptStyle" @change="handlePromptStyleChange">
+        <el-radio-group :model-value="promptStyle" :disabled="generating" @change="handlePromptStyleChange">
           <el-radio-button value="concise">简短精炼</el-radio-button>
           <el-radio-button value="standard">标准均衡</el-radio-button>
           <el-radio-button value="detailed">具体详细</el-radio-button>
+          <el-radio-button value="custom">自定义</el-radio-button>
         </el-radio-group>
         <small class="field-hint">{{ promptStyleHints[promptStyle] }}</small>
+      </div>
+
+      <div v-if="promptStyle === 'custom'" class="field custom-prompt-field">
+        <label for="daily-custom-prompt">自定义日报提示词</label>
+        <el-input
+          id="daily-custom-prompt"
+          :model-value="customPrompt"
+          type="textarea"
+          :rows="12"
+          :disabled="generating"
+          placeholder="请填写日报生成要求"
+          @update:model-value="emit('update:custom-prompt', $event)"
+        />
+        <small class="field-hint">已预填标准均衡提示词，可直接修改；修改自动保存在本机。提交记录、代码变更和补充工作会自动提供，无需填写。</small>
       </div>
 
       <div class="field">

@@ -62,6 +62,7 @@ interface GenerationOptions {
   requestId?: string;
   signal?: AbortSignal;
   promptStyle?: GenerateReportParams['promptStyle'];
+  customPrompt?: string;
 }
 
 export function fullDayReportScope(draft: { date: string }): ReportScope {
@@ -82,7 +83,7 @@ export function createProjectReportActions<T extends ProjectReportDraft>(ctx: Ac
         startDateTime: scope.timeRange?.startDateTime, endDateTime: scope.timeRange?.endDateTime,
         reporterName: ctx.config.reporterName, gitAuthorEmail: ctx.config.gitAuthorEmail,
         aiProfileId: ctx.config.activeAiProfileId,
-        requestId: options.requestId, promptStyle: options.promptStyle,
+        requestId: options.requestId, promptStyle: options.promptStyle, customPrompt: options.customPrompt,
       });
       // A completed request may already be persisted, even if cancellation raced with it.
       draft.lastReportResult = result;

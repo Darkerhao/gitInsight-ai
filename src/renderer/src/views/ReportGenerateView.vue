@@ -13,6 +13,7 @@ import type { ProjectReportDraft } from '@/composables/projectReportActions';
 import { countWeeklyReportFiles as countResultFiles } from '@shared/weeklyReport';
 import { getReportRangePayloadFromForm, resolveReportTimeRange } from '@/composables/assistant/reportState';
 import { allocateProjectWorkHours, normalizeProjectWorkHours, normalizeWorkHours } from '@/composables/assistant/normalizers';
+import { DEFAULT_CUSTOM_REPORT_PROMPT } from '@shared/reportPrompt';
 import type { DailyReportRecord, RepoInfo, ReportPromptStyle } from '@shared/types';
 import {
   getRepoDisplayName,
@@ -80,6 +81,21 @@ const {
 
 const dateShortcut = ref<DateShortcut>('today');
 const reportPromptStyle = ref<ReportPromptStyle>('standard');
+const customReportPrompt = ref(DEFAULT_CUSTOM_REPORT_PROMPT);
+try {
+  const saved = JSON.parse(window.localStorage.getItem('gitinsight:daily-report-prompt') || '{}');
+  if (['concise', 'standard', 'detailed', 'custom'].includes(saved.style)) reportPromptStyle.value = saved.style;
+  if (typeof saved.prompt === 'string') customReportPrompt.value = saved.prompt;
+} catch {
+  // Unavailable or invalid local preferences leave the standard defaults in place.
+}
+watch([reportPromptStyle, customReportPrompt], ([style, prompt]) => {
+  try {
+    window.localStorage.setItem('gitinsight:daily-report-prompt', JSON.stringify({ style, prompt }));
+  } catch {
+    ElMessage.warning('提示词未能保存到本机，请检查本地存储空间');
+  }
+});
 const workHourPresets = [1, 2, 4, 6, 7, 7.5, 8, 10];
 
 function displayRepoName(repo: RepoInfo) {
@@ -240,8 +256,13 @@ const generationChecks = computed<GenerationCheck[]>(() => [
         ? activeAiProfile.value.model
         : '未配置时将使用基础模板生成',
     action: 'ai',
-    required: false,
+    required: reportPromptStyle.value === 'custom',
   },
+  ...(reportPromptStyle.value === 'custom' ? [{
+    key: 'prompt', label: '自定义提示词', ok: Boolean(customReportPrompt.value.trim()),
+    detail: customReportPrompt.value.trim() ? '已填写自定义生成要求' : '请填写自定义日报提示词',
+    action: '' as const, required: true,
+  }] : []),
 ]);
 
 const requiredGenerationChecks = computed(() => generationChecks.value.filter((item) => item.required));
@@ -568,6 +589,7 @@ async function generateDraft(draftKey: string, options: { updateStatus?: boolean
   try {
     const success = await draftActions.generateDraft(draft, {
       requestId, signal: generationController.signal, promptStyle: reportPromptStyle.value,
+      customPrompt: reportPromptStyle.value === 'custom' ? customReportPrompt.value : undefined,
     });
     if (options.updateStatus !== false) status.value = success ? `${displayDraftName(draft)} 日报已生成` : draft.generateMessage;
     return success;
@@ -1058,12 +1080,15 @@ onBeforeUnmount(() => {
           :repo-display-names="config.repoDisplayNames"
           :ai-profile-options="aiProfileOptions"
           :prompt-style="reportPromptStyle"
+          :custom-prompt="customReportPrompt"
+          :generating="loading"
           :date-shortcut="dateShortcut"
           :is-repo-selected="isRepoSelected"
           :is-repo-pinned="isRepoPinned"
           @choose-workspace="chooseWorkspace"
           @select-ai-profile="selectAiProfile"
           @select-prompt-style="reportPromptStyle = $event"
+          @update:custom-prompt="customReportPrompt = $event"
           @report-date-change="handleReportDateChange"
           @start-date-time-change="handleStartDateTimeChange"
           @end-date-time-change="handleEndDateTimeChange"
