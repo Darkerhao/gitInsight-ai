@@ -252,6 +252,10 @@ export async function generateReport(params: GenerateReportParams, signal?: Abor
   const config = await loadConfig();
   signal?.throwIfAborted();
   const aiConfig = resolveAiConfig(config, params.aiProfileId);
+  if (params.promptStyle === 'custom') {
+    if (!params.customPrompt?.trim()) throw new Error('请填写自定义日报提示词');
+    if (!aiConfig.aiApiKey) throw new Error('自定义提示词需要先配置并启用 AI');
+  }
   const generatedAt = new Date().toISOString();
   const timeRange = normalizeReportTimeRange(params);
   const repos = params.repoPaths.map((repoPath) => ({ name: basename(repoPath), path: repoPath }));
@@ -290,10 +294,11 @@ export async function generateReport(params: GenerateReportParams, signal?: Abor
   let report = '';
   if (aiConfig.aiApiKey) {
     try {
-      report = await callAiReport(aiConfig, rawInput, timeRange, params.promptStyle, signal);
+      report = await callAiReport(aiConfig, rawInput, timeRange, params.promptStyle, signal, params.customPrompt);
     } catch (error) {
       signal?.throwIfAborted();
       if (error instanceof Error && error.name === 'AbortError') throw error;
+      if (params.promptStyle === 'custom') throw error;
       report = fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange, rawInput.manualWorkContent);
       report = `${report}\n\nAI提示：${error instanceof Error ? error.message : '调用失败'}`;
     }
@@ -303,11 +308,9 @@ export async function generateReport(params: GenerateReportParams, signal?: Abor
     report = `${report}\n\nAI提示：请先在 AI 设置中为${profileLabel}配置 OpenAI 兼容接口与 API Key。`;
   }
   signal?.throwIfAborted();
-  report = ensureReportWorkItemModuleLabels(
-    report,
-    commits,
-    repos.map((item) => item.name),
-  );
+  if (params.promptStyle !== 'custom') {
+    report = ensureReportWorkItemModuleLabels(report, commits, repos.map((item) => item.name));
+  }
 
   // 二次 AI 调用：从日报文本中提取结构化元数据（失败不影响主流程）
   let structuredJson: StructuredReportMetadata | undefined;

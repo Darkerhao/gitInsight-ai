@@ -161,7 +161,7 @@ export interface RepoFeishuProject extends FeishuProjectOption {
   projectFieldId: string;
 }
 
-export type ReportPromptStyle = 'concise' | 'standard' | 'detailed';
+export type ReportPromptStyle = 'concise' | 'standard' | 'detailed' | 'custom';
 
 export interface GenerateReportParams {
   requestId?: string;
@@ -174,6 +174,8 @@ export interface GenerateReportParams {
   aiProfileId?: string;
   /** 本次生成使用的日报表达风格；未传时保持标准风格。 */
   promptStyle?: ReportPromptStyle;
+  /** 自定义模式下使用的完整生成要求，工作素材由系统自动追加。 */
+  customPrompt?: string;
   /** 用户补充的非 Git 工作内容，例如网页测试、上线、会议或联调。 */
   manualWorkContent?: string;
 }
