@@ -10,7 +10,7 @@ const files = {
   ipc: await readFile(new URL('../electron/main/ipc.ts', import.meta.url), 'utf8'),
 };
 
-assert.match(files.app, /summary: WeeklySummaryView/, 'summary view should be mounted');
+assert.match(files.app, /summary:\s*lazyView\(\(\) => import\('@\/views\/WeeklySummaryView\.vue'\)\)/, 'summary view should be lazy-loaded by the app shell');
 assert.match(files.sidebar, /key: 'summary'.+汇总本周工作/, 'summary should have a navigation item');
 assert.match(files.page, /选择工作周/, 'page should explain the weekly workflow');
 assert.match(files.page, /上一周/, 'page should expose previous week shortcut');

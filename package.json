@@ -38,6 +38,7 @@
     "test:app-update:desktop": "npm run build && node tests/appUpdateRuntime.smoke.cjs",
     "test:e2e": "playwright test",
     "test:desktop": "npm run build && node tests/desktopRuntime.smoke.cjs",
+    "test:feishu-records:desktop": "node tests/feishuRecordsRuntime.smoke.cjs",
     "measure:startup": "npm run build && node scripts/measure-startup.mjs && node tests/desktopRuntime.smoke.cjs"
   },
   "dependencies": {
