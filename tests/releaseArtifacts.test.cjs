@@ -78,9 +78,8 @@ test('only main pushes publish, after checks and all packages from one commit', 
   assert.equal(workflow.jobs.verify.uses, './.github/workflows/checks.yml');
   const checks = load(readFileSync(join(__dirname, '../.github/workflows/checks.yml'), 'utf8'));
   assert.deepEqual(checks.on.pull_request, { branches: ['dev', 'main'] });
-  assert.deepEqual(checks.on.push, { branches: ['dev'] });
+  assert.equal(checks.on.push, undefined, 'Checks run on pull requests and the release workflow, not branch pushes');
   assert.ok(Object.hasOwn(checks.on, 'workflow_call'));
-  assert.ok(!checks.on.push.branches.includes('main'), 'main must not run the same checks twice');
   assert.equal(workflow.jobs.package.needs, 'prepare');
   assert.equal(workflow.jobs.package.if, "needs.prepare.outputs.ready == 'true'");
   const checkout = workflow.jobs.package.steps.find(step => step.uses?.startsWith('actions/checkout@'));

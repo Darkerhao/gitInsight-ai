@@ -8,12 +8,12 @@
 
 | 事件 | 检查 | 安装包 | 升版与发布 |
 | --- | --- | --- | --- |
-| 推送 `dev` | 测试、类型检查、构建、浏览器回归 | 不生成 | 不执行 |
+| 推送 `dev` | 不触发 | 不生成 | 不执行 |
 | PR 目标为 `dev` 或 `main` | 同上 | 不生成 | 不执行 |
 | 推送 `main` | 由发布流程统一执行 | 三平台统一安装包 | 自动执行 |
 | 在 `main` 手动运行打包流程 | 同上 | 三平台统一安装包 | 不执行 |
 
-其他分支推送不触发这些流程；PR 按目标分支筛选，其他分支向 `dev/main` 提 PR 时仍会检查。手动打包选择非 `main` 分支或标签时，所有任务跳过。
+`dev` 和其他分支的推送不触发这些流程；PR 按目标分支筛选，其他分支向 `dev/main` 提 PR 时仍会检查。手动打包选择非 `main` 分支或标签时，所有任务跳过。
 
 ## 推送 main 自动发布
 
@@ -26,7 +26,7 @@
 5. 与版本同步并行，三个打包任务使用同一个 main 版本提交，分别构建 Windows、macOS、Linux 安装包。
 6. 全部打包任务成功后，创建 Release 草稿，上传安装包、blockmap 与更新清单；全部上传成功后公开 Release 并标记为最新版本，客户端才会发现该版本。
 
-`main` 的检查统一由发布流程调用，避免重复执行；`dev` 推送和目标为 `dev/main` 的 PR 独立执行检查。
+`main` 的检查统一由发布流程调用，避免重复执行；目标为 `dev/main` 的 PR 独立执行检查。
 
 ```bash
 # 在 main 上提交代码后
@@ -53,7 +53,7 @@ git pull --ff-only origin dev
 
 ### 仓库权限
 
-流程使用仓库自带的 `GITHUB_TOKEN`，无需额外 PAT。只有升版、版本同步和发布 job 请求 `contents: write`。使用该 token 回写的提交和标签不会再次触发 push 工作流，因此不会循环升级，也不会因自动同步版本再次触发 dev 检查；人工推送 dev 仍正常检查。[GitHub 官方说明](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow)
+流程使用仓库自带的 `GITHUB_TOKEN`，无需额外 PAT。只有升版、版本同步和发布 job 请求 `contents: write`。使用该 token 回写的提交和标签不会再次触发 push 工作流，因此不会循环升级或触发重复检查。[GitHub 官方说明](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow)
 
 仓库规则需要允许 GitHub Actions 向 `main` 和 `dev` 写入版本提交并创建 `v*` 标签。如果分支保护要求所有写入必须通过 PR，或组织策略禁止 Actions 写入，版本推送会失败；需要仓库管理员调整对应规则，流程不会强推或绕过保护。
 
