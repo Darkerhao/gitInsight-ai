@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { GitInsightApi } from '../src/shared/api.js';
 import type { AppLink, AppUpdateState } from '../src/shared/appUpdate.js';
 import type {
   AppConfig,
@@ -50,7 +51,7 @@ import type {
   WeeklySummarySource,
 } from '../src/shared/types.js';
 
-contextBridge.exposeInMainWorld('api', {
+const api: GitInsightApi = {
   getAppUpdateState: () => ipcRenderer.invoke('app-update:get-state') as Promise<AppUpdateState>,
   checkForAppUpdates: () => ipcRenderer.invoke('app-update:check') as Promise<AppUpdateState>,
   downloadAppUpdate: () => ipcRenderer.invoke('app-update:download') as Promise<AppUpdateState>,
@@ -146,4 +147,6 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('feishu:auth-updated', listener);
     return () => ipcRenderer.removeListener('feishu:auth-updated', listener);
   },
-});
+};
+
+contextBridge.exposeInMainWorld('api', api);

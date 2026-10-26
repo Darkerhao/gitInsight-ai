@@ -116,6 +116,23 @@ async function electronMain() {
         } while (Date.now() < deadline);
         const firstPage = rendererTiming.entries.find(entry => entry.name === 'gitinsight:first-page-ready');
         assert.ok(firstPage, 'The initial lazy page must mount');
+        if (phase === 'write') {
+          const rendererErrors = [];
+          window.webContents.on('console-message', (_event, _level, message) => rendererErrors.push(message));
+          await window.webContents.executeJavaScript("window.location.hash = '/timeline'");
+          const timelineDeadline = Date.now() + 5000;
+          let timelineState;
+          do {
+            timelineState = await window.webContents.executeJavaScript(`({
+              mounted: Boolean(document.querySelector('.timeline-view')),
+              failed: document.body.textContent.includes('页面加载失败'),
+            })`);
+            if (timelineState.mounted || timelineState.failed) break;
+            await new Promise(resolve => setTimeout(resolve, 20));
+          } while (Date.now() < timelineDeadline);
+          assert.ok(timelineState.mounted && !timelineState.failed,
+            'The built timeline page must mount: ' + rendererErrors.join('\n'));
+        }
         emit({ event: 'startup', metric: 'isolated hidden window DOM mount; not visible cold start',
           processToPageMs: Math.round(rendererTiming.timeOrigin + firstPage.startTime - Number(process.env.GITINSIGHT_SMOKE_STARTED_AT)),
           main: performance.getEntriesByType('mark').filter(entry => entry.name.startsWith('gitinsight:'))

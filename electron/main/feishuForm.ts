@@ -18,7 +18,6 @@ import { mainWindow } from './windows.js';
 import {
   checkFeishuDuplicate,
   getFeishuCookieHeader,
-  getFeishuCsrfToken,
   getFeishuRequestContext,
   getFeishuShareToken,
   parseFeishuEndpointUrl,

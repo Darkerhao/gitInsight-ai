@@ -1,17 +1,37 @@
-import { simpleGit } from 'simple-git';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import type { CommitEntry } from '../../src/shared/types.js';
 import { formatDateTimeForGit, type NormalizedReportTimeRange } from './dateUtils.js';
 
-export async function collectGitData(repoPath: string, timeRange: NormalizedReportTimeRange) {
-  const git = simpleGit(repoPath);
+const execFileAsync = promisify(execFile);
+const MAX_GIT_OUTPUT_BYTES = 16 * 1024 * 1024;
+const MAX_COMPARE_CHARS = 12_000;
+const MAX_COMMIT_SHOW_CHARS = 4_000;
+
+async function runGit(repoPath: string, args: string[]) {
+  const { stdout } = await execFileAsync('git', args, {
+    cwd: repoPath,
+    encoding: 'utf8',
+    maxBuffer: MAX_GIT_OUTPUT_BYTES,
+    windowsHide: true,
+  });
+  return stdout;
+}
+
+export async function collectGitData(
+  repoPath: string,
+  timeRange: NormalizedReportTimeRange,
+  reporterName = '',
+  gitAuthorEmail = '',
+) {
   const marker = '__COMMIT__';
   // git log 的 --since/--until 过滤的是 committer date，但日报关心的是 author date：
   // 提交被 rebase / merge 后 committer date 会被刷新到处理那一刻，author date 仍是当初写代码的时间。
   // 因此这里只用宽松的 committer-date 下界做粗筛（committer date 一般 ≥ author date），不设 --until，
-  // 再在 JS 里按 author date(%ad) 精确筛到目标时间段，避免漏掉「前一时间段写、之后才合并」的提交。
+  // 再在 JS 里按 author date(%ad) 精确筛到目标时间段，避免漏掉「前一段时间写、之后才合并」的提交。
   const coarseSince = formatDateTimeForGit(new Date(timeRange.startMs - 2 * 24 * 60 * 60 * 1000));
 
-  const logOutput = await git.raw([
+  const logOutput = await runGit(repoPath, [
     'log',
     `--since=${coarseSince}`,
     `--pretty=format:${marker}%H%x09%ad%x09%an%x09%ae%x09%s`,
@@ -20,7 +40,7 @@ export async function collectGitData(repoPath: string, timeRange: NormalizedRepo
     '--no-merges',
   ]);
 
-  const commits: CommitEntry[] = [];
+  const allCommits: CommitEntry[] = [];
   let current: CommitEntry | null = null;
 
   for (const rawLine of logOutput.split(/\r?\n/)) {
@@ -34,7 +54,7 @@ export async function collectGitData(repoPath: string, timeRange: NormalizedRepo
         continue;
       }
       current = { hash, date: commitDate, author, authorEmail, message, files: [], show: '' };
-      commits.push(current);
+      allCommits.push(current);
       continue;
     }
     if (current && !line.startsWith(' ')) {
@@ -42,8 +62,11 @@ export async function collectGitData(repoPath: string, timeRange: NormalizedRepo
     }
   }
 
+  const commits = filterCommitsByReporter(allCommits, reporterName, gitAuthorEmail);
+  let showBudget = MAX_COMPARE_CHARS;
   for (const commit of commits) {
-    const show = await git.raw([
+    if (showBudget <= 0) break;
+    const show = await runGit(repoPath, [
       'show',
       commit.hash,
       '--stat',
@@ -52,10 +75,11 @@ export async function collectGitData(repoPath: string, timeRange: NormalizedRepo
       '--no-ext-diff',
       '--unified=3',
     ]);
-    commit.show = show.slice(0, 4000);
+    commit.show = show.slice(0, Math.min(MAX_COMMIT_SHOW_CHARS, showBudget));
+    showBudget -= commit.show.length;
   }
 
-  return { commits };
+  return { commits, totalCommits: allCommits.length };
 }
 
 
@@ -85,8 +109,7 @@ export function formatCollectedGitData(commits: CommitEntry[]) {
     .join('\n');
 
   const files = [...new Set(commits.flatMap((commit) => commit.files))].join('\n');
-  const diff = commits.map((commit) => `### ${commit.hash}\n${commit.show}`).join('\n\n').slice(0, 12000);
+  const diff = commits.map((commit) => `### ${commit.hash}\n${commit.show}`).join('\n\n').slice(0, MAX_COMPARE_CHARS);
 
   return { commits, gitLogs, files, diff };
 }
-

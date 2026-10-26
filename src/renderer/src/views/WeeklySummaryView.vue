@@ -7,7 +7,7 @@ const emit = defineEmits<{ (event: 'navigate', value: string): void }>();
 const {
   dateRange, projectPath, projectOptions, sources, history, current, content, loading, sourceLoading, saving,
   status, error, showSources, rangeLabel, sourceDays, sourceProjects, commits, files, dirty,
-  shiftWeek, loadSources, selectHistory, generate, save, copy, exportMarkdown,
+  shiftWeek, selectHistory, generate, save, copy, exportMarkdown,
 } = useWeeklySummary();
 </script>
 

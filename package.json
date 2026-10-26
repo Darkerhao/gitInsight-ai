@@ -30,7 +30,7 @@
     "test:weekly-reflection": "tsc --outDir .weekly-reflection-test-dist --module NodeNext --moduleResolution NodeNext --target ES2022 --types node --skipLibCheck src/shared/types.ts src/shared/weeklyReflection.ts src/shared/weeklyReflectionMarkdown.ts electron/main/reflectionStore.ts tests/weeklyReflection.test.ts tests/weeklyReflectionStore.test.ts && node --test .weekly-reflection-test-dist/tests/weeklyReflection.test.js .weekly-reflection-test-dist/tests/weeklyReflectionStore.test.js && node tests/weeklyReflectionPage.smoke.mjs && node -e \"require('fs').rmSync('.weekly-reflection-test-dist',{recursive:true,force:true})\"",
     "test:weekly-summary": "tsc --outDir .weekly-summary-test-dist --module NodeNext --moduleResolution NodeNext --target ES2022 --types node --skipLibCheck src/shared/types.ts src/shared/weeklySummary.ts src/shared/weeklySummaryMarkdown.ts electron/main/weeklySummaryStore.ts tests/weeklySummary.test.ts tests/weeklySummaryStore.test.ts && node --test .weekly-summary-test-dist/tests/weeklySummary.test.js .weekly-summary-test-dist/tests/weeklySummaryStore.test.js && node tests/weeklySummaryPage.smoke.mjs && node -e \"require('fs').rmSync('.weekly-summary-test-dist',{recursive:true,force:true})\"",
     "test:auto-sync": "tsc --outDir .auto-sync-test-dist --module NodeNext --moduleResolution NodeNext --target ES2022 --types node --skipLibCheck src/shared/types.ts electron/main/dateUtils.ts electron/main/autoSyncCore.ts tests/autoSyncCore.test.ts && node --test .auto-sync-test-dist/tests/autoSyncCore.test.js && node -e \"require('fs').rmSync('.auto-sync-test-dist',{recursive:true,force:true})\"",
-    "test": "npm run test:timeline && npm run test:repo-names && npm run test:page-zoom && npm run test:ai-client && npm run test:git-collect && npm run test:weekly-report && npm run test:weekly-reflection && npm run test:weekly-summary && npm run test:history && npm run test:auto-sync && npm run test:reliability && npm run test:app-update && npm run test:material && node --test tests/releaseArtifacts.test.cjs",
+    "test": "npm run test:timeline && npm run test:repo-names && npm run test:page-zoom && npm run test:local-date && npm run test:ai-client && npm run test:git-collect && npm run test:weekly-report && npm run test:weekly-reflection && npm run test:weekly-summary && npm run test:history && npm run test:auto-sync && npm run test:reliability && npm run test:app-update && npm run test:material && node --test --test-timeout=60000 tests/releaseArtifacts.test.cjs",
     "check": "npm run typecheck && npm run build",
     "test:reliability": "tsc --outDir .cache/reliability-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --types node --skipLibCheck tests/projectGeneration.test.ts && node --test .cache/reliability-tests/tests/projectGeneration.test.js tests/networkRequest.test.mjs tests/persistencePublication.test.mjs tests/reportAccuracy.test.mjs tests/reportGenerateWorkflow.test.mjs tests/windowBounds.test.mjs tests/configPersistence.test.mjs tests/repositoryFeishu.test.mjs tests/singleInstance.test.mjs tests/publicationGuard.test.mjs tests/assistantInitialization.test.mjs tests/autoSyncEditing.test.mjs tests/backupRestore.test.mjs",
     "test:app-update": "node --test tests/appUpdate.test.mjs",
@@ -39,29 +39,29 @@
     "test:e2e": "playwright test",
     "test:desktop": "npm run build && node tests/desktopRuntime.smoke.cjs",
     "test:feishu-records:desktop": "node tests/feishuRecordsRuntime.smoke.cjs",
-    "measure:startup": "npm run build && node scripts/measure-startup.mjs && node tests/desktopRuntime.smoke.cjs"
+    "measure:startup": "npm run build && node scripts/measure-startup.mjs && node tests/desktopRuntime.smoke.cjs",
+    "test:local-date": "tsc --outDir .local-date-test-dist --module NodeNext --moduleResolution NodeNext --target ES2022 --types node --skipLibCheck src/shared/localDate.ts tests/localDate.test.ts && node --test .local-date-test-dist/tests/localDate.test.js && node -e \"require('fs').rmSync('.local-date-test-dist',{recursive:true,force:true})\""
   },
   "dependencies": {
     "echarts": "^6.1.0",
     "electron-updater": "^6.8.9",
     "element-plus": "^2.10.4",
     "lucide-vue-next": "^0.548.0",
-    "simple-git": "^3.27.0",
     "sql.js": "^1.14.1",
     "three": "^0.185.1",
-    "vue": "^3.5.17",
+    "vue": "^3.5.44",
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@types/three": "^0.185.0",
-    "@vitejs/plugin-vue": "^5.2.4",
-    "electron": "^37.2.6",
-    "electron-builder": "^26.15.3",
-    "electron-vite": "^3.1.0",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
     "sass": "^1.101.0",
     "typescript": "^5.8.3",
-    "vite": "^5.4.19",
+    "vite": "^8.3.5",
     "vue-tsc": "^2.2.12"
   }
 }

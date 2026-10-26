@@ -9,6 +9,7 @@ import { writeFileAtomically } from './atomicFile.js';
 import { DEFAULT_CONFIG, loadConfig, normalizeConfig, recoverConfigTransaction, stripSensitiveConfig } from './config.js';
 import { getDatabase, loadSqlEngine } from './database.js';
 import { ensureConfigDir, getConfigPath, getDatabasePath, getSecretsPath } from './paths.js';
+import { toLocalDateString } from './dateUtils.js';
 
 const FORMAT = 'gitinsight-backup';
 const VERSION = 1;
@@ -134,7 +135,7 @@ async function validateBackup(value: unknown): Promise<{ backup: DataBackup; dat
 }
 
 export async function exportDataBackup(): Promise<BackupOperationResult> {
-  const result = await dialog.showSaveDialog({ title: '导出数据备份', defaultPath: `码迹AI-${new Date().toISOString().slice(0, 10)}.gitinsight-backup`, filters });
+  const result = await dialog.showSaveDialog({ title: '导出数据备份', defaultPath: `码迹AI-${toLocalDateString()}.gitinsight-backup`, filters });
   if (result.canceled || !result.filePath) return { canceled: true };
   const config = portableConfig(await loadConfig());
   const db = await getDatabase();

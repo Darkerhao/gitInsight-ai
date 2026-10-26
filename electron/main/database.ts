@@ -31,7 +31,9 @@ import { backfillTimelineSnapshots, ensureTimelineSchema, upsertTimelineSnapshot
 
 export let sqlDatabase: import('sql.js').Database | null = null;
 let databaseInitialization: Promise<import('sql.js').Database> | null = null;
-let databaseWriteQueue: Promise<void> = Promise.resolve();
+let persistRequestedVersion = 0;
+let persistedVersion = 0;
+let persistLoop: Promise<void> | null = null;
 
 const dailyReportSelection = `SELECT daily_reports.*, EXISTS (
   SELECT 1 FROM sync_logs WHERE sync_logs.report_id = daily_reports.id
@@ -154,13 +156,24 @@ async function initializeDatabase() {
 
 
 export function persistDatabase(): Promise<void> {
-  const save = databaseWriteQueue.then(async () => {
-    if (!sqlDatabase) return;
-    await ensureConfigDir();
-    await writeFileAtomically(getDatabasePath(), sqlDatabase.export());
-  });
-  databaseWriteQueue = save.catch(() => {});
-  return save;
+  persistRequestedVersion += 1;
+  if (!persistLoop) {
+    persistLoop = (async () => {
+      while (persistedVersion < persistRequestedVersion) {
+        if (!sqlDatabase) {
+          persistedVersion = persistRequestedVersion;
+          return;
+        }
+        const targetVersion = persistRequestedVersion;
+        await ensureConfigDir();
+        await writeFileAtomically(getDatabasePath(), sqlDatabase.export());
+        persistedVersion = targetVersion;
+      }
+    })().finally(() => {
+      persistLoop = null;
+    });
+  }
+  return persistLoop;
 }
 
 
@@ -840,4 +853,3 @@ export async function recordErrorLog(scope: string, error: unknown) {
   ]);
   await persistDatabase();
 }
-

@@ -19,7 +19,7 @@ npm run check      # typecheck + build
 npm test           # all unit and source-level regression suites
 ```
 
-Tests in [tests/](tests/) use Node's built-in `node:test` runner and source-level smoke scripts. Per-suite npm scripts either compile TypeScript into test output directories or run `.mjs`/`.cjs` tests directly; see `package.json` for the current suite list. To run one suite, use its `test:<name>` script, such as `test:auto-sync`, `test:material`, or `test:reliability`. Add new unit suites to the `test` script. Browser flows run separately with `npm run test:e2e` (Playwright), and `npm run test:desktop` builds the app and runs the isolated Electron smoke test. [tests/ui-shell.smoke.mjs](tests/ui-shell.smoke.mjs) asserts on renderer source text and is not wired into an npm script.
+Tests in [tests/](tests/) use Node's built-in `node:test` runner and source-level smoke scripts. Per-suite npm scripts either compile TypeScript into test output directories or run `.mjs`/`.cjs` tests directly; see `package.json` for the current suite list. To run one suite, use its `test:<name>` script, such as `test:auto-sync`, `test:material`, or `test:reliability`. Add new unit suites to the `test` script. Browser flows run separately with `npm run test:e2e` (Playwright), and `npm run test:desktop` builds the app and runs the isolated Electron smoke test. CI runs browser E2E on Ubuntu and the real Electron smoke on Windows. [tests/ui-shell.smoke.mjs](tests/ui-shell.smoke.mjs) asserts on renderer source text and is not wired into an npm script.
 
 `npm run dev` requires TCP port **15174** to be free (`strictPort: true`). If Windows reports `listen EACCES`, check `netsh interface ipv4 show excludedportrange protocol=tcp` and choose a port outside the excluded ranges in `electron.vite.config.ts`.
 
@@ -36,17 +36,17 @@ Project/product manager reports use `MaterialReportsView.vue` and `useMaterialRe
 Three Electron processes, each a separate bundle target in `electron.vite.config.ts`:
 
 - **Main** — [electron/main.ts](electron/main.ts) is a thin lifecycle entry. Domain logic lives in [electron/main/](electron/main/): windows, config+secrets persistence, sql.js database, repo scanning, Git collection, AI report generation, Feishu auth/form submission, auto-sync scheduling, and IPC registration.
-- **Preload** — [electron/preload.ts](electron/preload.ts): `contextBridge` exposes a narrow, typed `window.api` (contextIsolation on, nodeIntegration off). The renderer has **no** direct Node access.
+- **Preload** — [electron/preload.ts](electron/preload.ts): `contextBridge` exposes a narrow, typed `window.api` defined by [src/shared/api.ts](src/shared/api.ts). The main window runs with contextIsolation on, sandbox on, and nodeIntegration off; the renderer has **no** direct Node access.
 - **Renderer** — [src/renderer/src/App.vue](src/renderer/src/App.vue) is a layout shell (sidebar + topbar + active view) plus a first-launch `WelcomeGate` animation. Navigation uses vue-router with hash history ([src/renderer/src/router.ts](src/renderer/src/router.ts)); routes carry navigation state, and `App.vue` maps each `navKeys` entry to its view in `src/renderer/src/views/`. This covers the integrated pages above plus configuration, history, settings, and About; `config` and `ai` share `ReportConfigView`. The router persists the last route in localStorage. Shared application state uses the module-level [useAssistant.ts](src/renderer/src/composables/useAssistant.ts) facade, with state/actions split by domain under [composables/assistant/](src/renderer/src/composables/assistant/) and dedicated composables for individual features. No store library.
 
 ### IPC is the only main↔renderer contract
 
-To add or change a feature that crosses the process boundary, edit **four** places in lockstep, or types and runtime drift silently:
+To add or change a feature that crosses the process boundary, edit these places in lockstep, or types and runtime drift silently:
 
-1. `ipcMain.handle('channel', ...)` in [electron/main/ipc.ts](electron/main/ipc.ts) via `registerIpcHandlers()`.
-2. The matching `ipcRenderer.invoke('channel', ...)` wrapper in [electron/preload.ts](electron/preload.ts).
-3. The `window.api` method signature in [src/renderer/src/env.d.ts](src/renderer/src/env.d.ts).
-4. Any shared payload/return shapes in [src/shared/types.ts](src/shared/types.ts).
+1. Register the channel in [electron/main/ipc.ts](electron/main/ipc.ts) through the main-window-checked `handle()` wrapper.
+2. Add the matching `ipcRenderer.invoke('channel', ...)` wrapper in [electron/preload.ts](electron/preload.ts).
+3. Add the method signature to `GitInsightApi` in [src/shared/api.ts](src/shared/api.ts).
+4. Put shared payload/return shapes in [src/shared/types.ts](src/shared/types.ts).
 
 Invoke channels: `app:load-config`, `app:save-config`, `dialog:select-directory`, `repo:scan`, `report:generate`, `daily-report:list`, `daily-report:save`, `sync-log:list`, `error-log:list`, `storage:info`, `feishu:login`, `feishu:list-fields`, `feishu:list-projects`, `feishu:test-submit`, `report:sync-feishu`, `auto-sync:get-state`, `auto-sync:validate`, `auto-sync:run-now`. Auto-sync validation and execution accept an optional `taskId`; omitted execution targets all enabled tasks, while a task-specific manual run is allowed even when that task or the global schedule switch is disabled. The pushed `auto-sync:updated` payload includes per-task state plus the global and next-task scheduling fields.
 
@@ -56,9 +56,9 @@ Main also **pushes** two events via `webContents.send` — `auto-sync:updated` (
 
 `generateReport` → normalize the time range (a single day by default; `startDateTime`/`endDateTime` allow custom windows) → for each selected repo `collectGitData(repoPath, timeRange)`:
 
-- `git log` via **simple-git** with a `__COMMIT__` marker + `%x09` tab format parsed line-by-line into `CommitEntry[]`. Filtering is deliberately two-phase: a coarse `--since` at *committer* date (range start minus 2 days, no `--until`), then a precise JS filter on *author* date (`%ad`) against the range — because rebase/merge refreshes committer date while author date keeps the original authoring time. Don't "simplify" this back to `--since`/`--until`.
-- Commits are then filtered to those whose git author matches `reporterName` (case-insensitive).
-- `git show --stat --summary` per commit; each capped at 4000 chars, the combined diff at 12000 chars (LLM context budgeting — preserve these caps).
+- `git log` via Node `child_process.execFile` (no shell string) with a `__COMMIT__` marker + `%x09` tab format parsed line-by-line into `CommitEntry[]`. Filtering is deliberately two-phase: a coarse `--since` at *committer* date (range start minus 2 days, no `--until`), then a precise JS filter on *author* date (`%ad`) against the range — because rebase/merge refreshes committer date while author date keeps the original authoring time. Don't "simplify" this back to `--since`/`--until`.
+- Commits are filtered to those whose git author matches `reporterName`/`gitAuthorEmail` (case-insensitive) before detailed diffs are collected.
+- `git show --stat --summary` runs only for matched commits; each capped at 4000 chars, the combined diff at 12000 chars (LLM context budgeting — preserve these caps).
 - A fixed Chinese prompt goes to `callAiReport` against the OpenAI-compatible `/chat/completions` endpoint.
 - Every generated report is recorded into the local DB (`recordGeneratedReport`), returning a `historyId` the renderer uses for later saves/syncs.
 

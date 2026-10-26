@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import * as echarts from 'echarts';
+import * as echarts from 'echarts/core';
+import { CalendarComponent, TooltipComponent, VisualMapComponent } from 'echarts/components';
+import { HeatmapChart } from 'echarts/charts';
+import { CanvasRenderer } from 'echarts/renderers';
+import type { ECharts } from 'echarts';
 import { useRouter } from 'vue-router';
 import { Activity, Award, ChevronLeft, ChevronRight, Filter, GitCommitHorizontal, Maximize2, Minimize2, PanelRightClose, PanelRightOpen, Pause, Play, RefreshCw, Sparkles, Star, Zap, ZoomIn, ZoomOut } from 'lucide-vue-next';
 import { useTimeline, typeOptions } from '@/composables/useTimeline';
@@ -9,9 +13,15 @@ import { useFullscreen } from '@/composables/useFullscreen';
 import { tone, formatDate, dayTitle, daySummary, displayTitle, detailSections } from '@/utils/timelineText';
 import type { TimelineScale } from '@/composables/useTimeline';
 import { usePageZoom } from '@/composables/usePageZoom';
+import { formatLocalDate } from '@/composables/assistant/dateUtils';
+
+echarts.use([CalendarComponent, TooltipComponent, VisualMapComponent, HeatmapChart, CanvasRenderer]);
+
+type HeatmapEventParams = { value?: unknown };
 
 const router = useRouter();
 const timelineRoot = ref<HTMLElement | null>(null);
+const today = formatLocalDate(new Date());
 
 const {
   snapshot, loading, loadError, scale, activeType,
@@ -34,7 +44,7 @@ watch(detailCollapsed, async () => {
 
 /* ── 年度热力图(ECharts calendar + heatmap) ── */
 const heatmapChart = ref<HTMLElement | null>(null);
-let heatChart: ReturnType<typeof echarts.init> | null = null;
+let heatChart: ECharts | null = null;
 
 function disposeHeatChart() {
   heatChart?.dispose();
@@ -50,7 +60,7 @@ function buildHeatmapOption() {
       backgroundColor: 'rgba(10, 16, 28, 0.94)',
       borderColor: 'rgba(148, 163, 184, 0.24)',
       textStyle: { color: '#dbe6f5', fontSize: 12 },
-      formatter: (params: any) => {
+      formatter: (params: HeatmapEventParams) => {
         const date = Array.isArray(params.value) ? String(params.value[0]) : '';
         const day = days.value.find((item) => item.date === date);
         if (!day) return date;
@@ -102,7 +112,7 @@ function renderHeatChart() {
   if (!el) return;
   if (!heatChart) {
     heatChart = echarts.init(el);
-    heatChart.on('click', (params: any) => {
+    heatChart.on('click', (params: HeatmapEventParams) => {
       const date = Array.isArray(params.value) ? String(params.value[0]) : '';
       const day = days.value.find((item) => item.date === date);
       if (day) selectDay(day);
@@ -200,7 +210,7 @@ function onWheel(event: WheelEvent) {
       <article v-for="day in timelineWindow" :key="day.date" class="event" :class="[`distance-${distance(day)}`, { selected: selectedDay?.date === day.date, milestone: day.milestone }]" :style="eventPosition(day)" tabindex="0" @click="selectDay(day)" @keydown.enter="selectDay(day)">
         <div class="copy"><span :style="{ color: tone(representative(day).primaryType) }">{{ day.workTypes.join(' / ') }} · {{ day.projects.join(' / ') || '未识别项目' }}</span><h2>{{ dayTitle(day) }}</h2><p>{{ daySummary(day) }}</p></div>
         <button class="node" :aria-label="`${day.date}，${day.itemCount} 项工作${day.milestone ? '，里程碑' : ''}`" :style="{ '--tone': tone(representative(day).primaryType) }"><i /><b /><span v-if="day.milestone" class="node-milestone" aria-hidden="true"><Star :size="9" /></span><strong>{{ day.itemCount }}</strong><small>项工作</small></button>
-        <time><b>{{ day.date === new Date().toISOString().slice(0, 10) ? 'TODAY' : day.date.slice(0, 4) }}</b>{{ formatDate(day.date) }}</time>
+        <time><b>{{ day.date === today ? 'TODAY' : day.date.slice(0, 4) }}</b>{{ formatDate(day.date) }}</time>
       </article>
       <div v-if="isMergingToday" class="merge"><span v-for="label in ['日报', '提交', '成果']" :key="label">{{ label }}</span><div><Sparkles :size="24" /></div><strong>真实数据正在汇入时间长河</strong></div>
     </section>
