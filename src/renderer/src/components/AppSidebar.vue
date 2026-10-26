@@ -7,7 +7,7 @@ import { useMessages } from '@/composables/useMessages';
 const { hasUpdate } = useAppUpdates();
 const { unreadCount } = useMessages();
 
-const props = defineProps<{
+defineProps<{
   activeNav: string;
 }>();
 

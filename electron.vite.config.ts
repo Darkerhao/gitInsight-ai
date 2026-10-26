@@ -26,7 +26,6 @@ export default defineConfig({
     css: {
       preprocessorOptions: {
         scss: {
-          api: 'modern-compiler',
           additionalData: `@use "@/styles/tools" as *;`,
         },
       },
@@ -43,7 +42,7 @@ export default defineConfig({
       strictPort: true,
     },
     build: {
-      minify: 'esbuild',
+      minify: 'oxc',
       rollupOptions: {
         input: {
           index: resolve('src/renderer/index.html'),

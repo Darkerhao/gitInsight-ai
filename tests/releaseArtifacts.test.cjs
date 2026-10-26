@@ -5,6 +5,7 @@ const { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } = require(
 const { join, resolve } = require('node:path');
 const { tmpdir } = require('node:os');
 const { test } = require('node:test');
+const shellTest = process.platform === 'win32' ? test.skip : test;
 const { expandMacro } = require('app-builder-lib/out/util/macroExpander');
 const { createUpdateInfoTasks, writeUpdateInfoFiles } = require('app-builder-lib/out/publish/updateInfoBuilder');
 const { Platform } = require('app-builder-lib');
@@ -180,6 +181,7 @@ function releaseFixture(t) {
     const result = spawnSync(bash, ['--noprofile', '--norc', '-e', '-o', 'pipefail', scriptFile.replaceAll('\\', '/')], {
       cwd: checkout,
       encoding: 'utf8',
+      timeout: 20_000,
       env: {
         ...process.env, GITHUB_EVENT_NAME: eventName, GITHUB_SHA: sourceSha,
         GITHUB_OUTPUT: outputFile.replaceAll('\\', '/'),
@@ -216,12 +218,12 @@ function versionSyncFixture(t) {
   const gitExecPath = git('--exec-path');
   const bash = process.platform === 'win32' ? resolve(gitExecPath, '../../../bin/bash.exe') : 'bash';
   const sync = () => spawnSync(bash, ['--noprofile', '--norc', '-e', '-o', 'pipefail', scriptFile.replaceAll('\\', '/')], {
-    cwd: checkout, encoding: 'utf8', env: { ...process.env, VERSION_COMMIT: versionCommit },
+    cwd: checkout, encoding: 'utf8', timeout: 20_000, env: { ...process.env, VERSION_COMMIT: versionCommit },
   });
   return { ...fixture, versionCommit, devSha, sync };
 }
 
-test('version sync cherry-picks only the version commit onto dev and is safe to retry', t => {
+shellTest('version sync cherry-picks only the version commit onto dev and is safe to retry', t => {
   const { remote, git, devSha, versionCommit, sync } = versionSyncFixture(t);
   const result = sync();
   assert.equal(result.status, 0, result.stderr);
@@ -239,7 +241,7 @@ test('version sync cherry-picks only the version commit onto dev and is safe to 
   assert.equal(git('--git-dir', remote, 'rev-parse', 'dev'), synced);
 });
 
-test('version conflicts leave dev untouched and abort the cherry-pick', t => {
+shellTest('version conflicts leave dev untouched and abort the cherry-pick', t => {
   const { remote, checkout, git, devSha, sync } = versionSyncFixture(t);
   git('checkout', '--detach', devSha);
   const file = join(checkout, 'package.json');
@@ -257,7 +259,7 @@ test('version conflicts leave dev untouched and abort the cherry-pick', t => {
   assert.equal(git('status', '--porcelain'), '');
 });
 
-test('a concurrent dev push rejects version sync without losing development work', t => {
+shellTest('a concurrent dev push rejects version sync without losing development work', t => {
   const { remote, checkout, git, devSha, sync } = versionSyncFixture(t);
   git('checkout', '--detach', devSha);
   git('commit', '--allow-empty', '-m', 'Concurrent development');
@@ -271,7 +273,7 @@ test('a concurrent dev push rejects version sync without losing development work
   assert.equal(git('--git-dir', remote, 'rev-parse', 'dev'), newer);
 });
 
-test('dev branch protection failures preserve the prepared main version and tag', t => {
+shellTest('dev branch protection failures preserve the prepared main version and tag', t => {
   const { remote, git, devSha, versionCommit, sync } = versionSyncFixture(t);
   writeFileSync(join(remote, 'hooks', 'update'), '#!/bin/sh\ncase "$1" in refs/heads/dev) exit 1 ;; esac\n', { mode: 0o755 });
   const result = sync();
@@ -282,7 +284,7 @@ test('dev branch protection failures preserve the prepared main version and tag'
   assert.equal(git('--git-dir', remote, 'rev-parse', 'v3.8.7'), versionCommit);
 });
 
-test('main release bumps both manifests and atomically pushes the version commit and tag', t => {
+shellTest('main release bumps both manifests and atomically pushes the version commit and tag', t => {
   const { remote, checkout, git, sha, run } = releaseFixture(t);
   const result = run();
   assert.equal(result.status, 0, result.stderr || result.error?.message);
@@ -303,7 +305,7 @@ test('main release bumps both manifests and atomically pushes the version commit
   assert.equal(git('--git-dir', remote, 'tag', '--list'), 'v3.8.7');
 });
 
-test('manual builds preserve the selected commit and do not create release refs', t => {
+shellTest('manual builds preserve the selected commit and do not create release refs', t => {
   const { remote, git, sha, run } = releaseFixture(t);
   const result = run('workflow_dispatch');
   assert.equal(result.status, 0, result.stderr);
@@ -313,7 +315,7 @@ test('manual builds preserve the selected commit and do not create release refs'
   assert.equal(git('status', '--porcelain'), '');
 });
 
-test('an outdated push cannot bump or overwrite newer main changes', t => {
+shellTest('an outdated push cannot bump or overwrite newer main changes', t => {
   const { remote, git, sha, run } = releaseFixture(t);
   git('commit', '--allow-empty', '-m', 'Newer change');
   const newer = git('rev-parse', 'HEAD');
@@ -327,7 +329,7 @@ test('an outdated push cannot bump or overwrite newer main changes', t => {
   assert.equal(git('status', '--porcelain'), '');
 });
 
-test('an existing remote version tag prevents a release without changing main', t => {
+shellTest('an existing remote version tag prevents a release without changing main', t => {
   const { remote, git, sha, run } = releaseFixture(t);
   // Create the tag only on the remote, like a concurrent writer after checkout.
   git('--git-dir', remote, 'tag', 'v3.8.7', sha);
@@ -338,7 +340,7 @@ test('an existing remote version tag prevents a release without changing main', 
   assert.equal(git('--git-dir', remote, 'rev-parse', 'v3.8.7'), sha);
 });
 
-test('remote tag protection rejects the atomic push without leaving a version commit on main', t => {
+shellTest('remote tag protection rejects the atomic push without leaving a version commit on main', t => {
   const { remote, git, sha, run } = releaseFixture(t);
   writeFileSync(join(remote, 'hooks/update'), '#!/bin/sh\ncase "$1" in refs/tags/*) exit 1 ;; esac\n', { mode: 0o755 });
   const result = run();

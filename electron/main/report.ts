@@ -4,7 +4,7 @@ import { callAiReport, callAiStructuredExtract, resolveAiConfig } from './aiClie
 import { loadConfig } from './config.js';
 import { recordGeneratedReport } from './database.js';
 import { nextDateString, normalizeDateTimeValue, parseLocalDateTimeMs, formatDateTimeForDisplay, type NormalizedReportTimeRange } from './dateUtils.js';
-import { collectGitData, filterCommitsByReporter, formatCollectedGitData } from './gitCollect.js';
+import { collectGitData, formatCollectedGitData } from './gitCollect.js';
 
 export function normalizeReportTimeRange(params: GenerateReportParams): NormalizedReportTimeRange {
   const startDateTime = normalizeDateTimeValue(params.startDateTime || `${params.date}T00:00:00`);
@@ -259,14 +259,13 @@ export async function generateReport(params: GenerateReportParams, signal?: Abor
   const generatedAt = new Date().toISOString();
   const timeRange = normalizeReportTimeRange(params);
   const repos = params.repoPaths.map((repoPath) => ({ name: basename(repoPath), path: repoPath }));
-  const allRepoDataList = await Promise.all(params.repoPaths.map((repoPath) => collectGitData(repoPath, timeRange)));
+  const collectedRepoData = await Promise.all(params.repoPaths.map((repoPath) => (
+    collectGitData(repoPath, timeRange, params.reporterName, params.gitAuthorEmail)
+  )));
   signal?.throwIfAborted();
-  const repoDataList = allRepoDataList.map((item) => {
-    const commits = filterCommitsByReporter(item.commits, params.reporterName, params.gitAuthorEmail);
-    return formatCollectedGitData(commits);
-  });
+  const repoDataList = collectedRepoData.map((item) => formatCollectedGitData(item.commits));
   const commits = repoDataList.flatMap((item) => item.commits);
-  const allCommits = allRepoDataList.flatMap((item) => item.commits);
+  const allCommitsCount = collectedRepoData.reduce((total, item) => total + item.totalCommits, 0);
   const rawInput = {
     gitLogs: repoDataList
       .map((item, index) => `## ${repos[index]?.name ?? `项目${index + 1}`}\n${item.gitLogs || '该时间段无记录'}`)
@@ -280,8 +279,8 @@ export async function generateReport(params: GenerateReportParams, signal?: Abor
   };
 
   if (!commits.length && !rawInput.manualWorkContent) {
-    const matchedTip = allCommits.length
-      ? `所选时间段存在 ${allCommits.length} 条提交记录，但没有匹配到汇报人“${params.reporterName}”或 Git 作者邮箱“${params.gitAuthorEmail?.trim() || '未配置'}”的提交。`
+    const matchedTip = allCommitsCount
+      ? `所选时间段存在 ${allCommitsCount} 条提交记录，但没有匹配到汇报人“${params.reporterName}”或 Git 作者邮箱“${params.gitAuthorEmail?.trim() || '未配置'}”的提交。`
       : '所选时间段未采集到代码提交记录。';
     const report = `${fallbackReport(repos.map((item) => item.name), params.date, params.reporterName, commits, timeRange)}\n\nAI提示：${matchedTip}请确认工作日期、仓库路径、汇报人名称或 Git 作者邮箱，或补充实际非代码工作。`;
 

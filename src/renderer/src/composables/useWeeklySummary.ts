@@ -1,30 +1,22 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import type { WeeklySummaryParams, WeeklySummaryRecord, WeeklySummarySource } from '@shared/types';
-
-function dateToString(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
+import { formatLocalDate, shiftLocalDate } from '@shared/localDate';
 
 function mondayOf(date: Date) {
   const result = new Date(date);
   const day = result.getDay() || 7;
   result.setDate(result.getDate() - day + 1);
-  return result;
+  return formatLocalDate(result);
 }
 
 function currentCompleteWeek(): [string, string] {
-  const monday = mondayOf(new Date());
-  monday.setDate(monday.getDate() - 7);
-  const sunday = new Date(monday);
-  sunday.setDate(sunday.getDate() + 6);
-  return [dateToString(monday), dateToString(sunday)];
+  const monday = shiftLocalDate(mondayOf(new Date()), -7);
+  return [monday, shiftLocalDate(monday, 6)];
 }
 
 function currentWeek(): [string, string] {
   const monday = mondayOf(new Date());
-  const sunday = new Date(monday);
-  sunday.setDate(sunday.getDate() + 6);
-  return [dateToString(monday), dateToString(sunday)];
+  return [monday, shiftLocalDate(monday, 6)];
 }
 
 export function useWeeklySummary() {
@@ -56,15 +48,8 @@ export function useWeeklySummary() {
   const dirty = computed(() => Boolean(current.value && content.value !== current.value.content));
 
   function shiftWeek(offset: number) {
-    if (offset === 0) {
-      dateRange.value = currentWeek();
-      return;
-    }
-    const start = new Date(`${dateRange.value[0]}T00:00:00Z`);
-    start.setUTCDate(start.getUTCDate() + offset * 7);
-    const end = new Date(start);
-    end.setUTCDate(end.getUTCDate() + 6);
-    dateRange.value = [dateToString(start), dateToString(end)];
+    const start = offset === 0 ? currentWeek()[0] : shiftLocalDate(dateRange.value[0], offset * 7);
+    dateRange.value = [start, shiftLocalDate(start, 6)];
   }
 
   async function loadSources() {

@@ -1,70 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import type { Component } from 'vue';
-import AiAwakenEffect from '@/components/rewards/effects/AiAwakenEffect.vue';
-import AuroraEffect from '@/components/rewards/effects/AuroraEffect.vue';
-import BioScanEffect from '@/components/rewards/effects/BioScanEffect.vue';
-import BirthdayEffect from '@/components/rewards/effects/BirthdayEffect.vue';
-import BlackHoleEffect from '@/components/rewards/effects/BlackHoleEffect.vue';
-import BreathingUiEffect from '@/components/rewards/effects/BreathingUiEffect.vue';
-import CockpitHudEffect from '@/components/rewards/effects/CockpitHudEffect.vue';
-import CityScanEffect from '@/components/rewards/effects/CityScanEffect.vue';
-import CodeMaterializeEffect from '@/components/rewards/effects/CodeMaterializeEffect.vue';
-import ColliderEffect from '@/components/rewards/effects/ColliderEffect.vue';
-import CrownEffect from '@/components/rewards/effects/CrownEffect.vue';
-import CyberDataFlowEffect from '@/components/rewards/effects/CyberDataFlowEffect.vue';
-import DataStormEffect from '@/components/rewards/effects/DataStormEffect.vue';
-import DeepSonarEffect from '@/components/rewards/effects/DeepSonarEffect.vue';
-import DroneFlyoverEffect from '@/components/rewards/effects/DroneFlyoverEffect.vue';
-import DysonRingEffect from '@/components/rewards/effects/DysonRingEffect.vue';
-import EmpBlastEffect from '@/components/rewards/effects/EmpBlastEffect.vue';
-import EnergyRingEffect from '@/components/rewards/effects/EnergyRingEffect.vue';
-import EnergyShieldEffect from '@/components/rewards/effects/EnergyShieldEffect.vue';
-import FireworksEffect from '@/components/rewards/effects/FireworksEffect.vue';
-import FloatingHudEffect from '@/components/rewards/effects/FloatingHudEffect.vue';
-import GalaxyMapEffect from '@/components/rewards/effects/GalaxyMapEffect.vue';
-import GlassRefractionEffect from '@/components/rewards/effects/GlassRefractionEffect.vue';
-import GravityWaveEffect from '@/components/rewards/effects/GravityWaveEffect.vue';
-import HoloCoreEffect from '@/components/rewards/effects/HoloCoreEffect.vue';
-import HoloDisassembleEffect from '@/components/rewards/effects/HoloDisassembleEffect.vue';
-import LaserGridEffect from '@/components/rewards/effects/LaserGridEffect.vue';
-import LittleBoyEffect from '@/components/rewards/effects/LittleBoyEffect.vue';
-import MatrixEffect from '@/components/rewards/effects/MatrixEffect.vue';
-import MechaBootEffect from '@/components/rewards/effects/MechaBootEffect.vue';
-import NanoSwarmEffect from '@/components/rewards/effects/NanoSwarmEffect.vue';
-import NeonDriveEffect from '@/components/rewards/effects/NeonDriveEffect.vue';
-import NeuralThinkEffect from '@/components/rewards/effects/NeuralThinkEffect.vue';
-import OrbitalStrikeEffect from '@/components/rewards/effects/OrbitalStrikeEffect.vue';
-import QuantumGateEffect from '@/components/rewards/effects/QuantumGateEffect.vue';
-import QuantumFlickerEffect from '@/components/rewards/effects/QuantumFlickerEffect.vue';
-import RainGlassEffect from '@/components/rewards/effects/RainGlassEffect.vue';
-import RiftTearEffect from '@/components/rewards/effects/RiftTearEffect.vue';
-import RocketLaunchEffect from '@/components/rewards/effects/RocketLaunchEffect.vue';
-import SatelliteSweepEffect from '@/components/rewards/effects/SatelliteSweepEffect.vue';
-import SkyUplinkEffect from '@/components/rewards/effects/SkyUplinkEffect.vue';
-import SolarFlareEffect from '@/components/rewards/effects/SolarFlareEffect.vue';
-import SpaceJumpEffect from '@/components/rewards/effects/SpaceJumpEffect.vue';
-import SparkleEffect from '@/components/rewards/effects/SparkleEffect.vue';
-import SupernovaEffect from '@/components/rewards/effects/SupernovaEffect.vue';
-import TimeFoldEffect from '@/components/rewards/effects/TimeFoldEffect.vue';
-import VelocityTrailEffect from '@/components/rewards/effects/VelocityTrailEffect.vue';
-import WarpEffect from '@/components/rewards/effects/WarpEffect.vue';
-// 创世级 GENESIS（五期）
-import CelestialThroneEffect from '@/components/rewards/effects/CelestialThroneEffect.vue';
-import CosmicStringEffect from '@/components/rewards/effects/CosmicStringEffect.vue';
-import DimensionFoilEffect from '@/components/rewards/effects/DimensionFoilEffect.vue';
-import EntropyReversalEffect from '@/components/rewards/effects/EntropyReversalEffect.vue';
-import EpochZeroEffect from '@/components/rewards/effects/EpochZeroEffect.vue';
-import ExtinctionRainEffect from '@/components/rewards/effects/ExtinctionRainEffect.vue';
-import GalaxyDevourEffect from '@/components/rewards/effects/GalaxyDevourEffect.vue';
-import GammaLanceEffect from '@/components/rewards/effects/GammaLanceEffect.vue';
-import GenesisBangEffect from '@/components/rewards/effects/GenesisBangEffect.vue';
-import MagnetarSurgeEffect from '@/components/rewards/effects/MagnetarSurgeEffect.vue';
-import OvermindEffect from '@/components/rewards/effects/OvermindEffect.vue';
-import PlasmaDrakeEffect from '@/components/rewards/effects/PlasmaDrakeEffect.vue';
-import StarForgeEffect from '@/components/rewards/effects/StarForgeEffect.vue';
-import ThunderVerdictEffect from '@/components/rewards/effects/ThunderVerdictEffect.vue';
-import VacuumDecayEffect from '@/components/rewards/effects/VacuumDecayEffect.vue';
 import { EFFECT_OPTION_MAP, EFFECT_TIERS } from '@/components/rewards/rewardEffects';
 import type { RewardEffectKey } from '@/components/rewards/rewardEffects';
 
@@ -74,70 +10,74 @@ import { CinemaEnvironment } from './engine/CinemaEnvironment';
 const props = defineProps<{ effect: RewardEffectKey | null; seed: number; canReplay?: boolean; replaying?: boolean; replayError?: string }>();
 const emit = defineEmits<{ close: []; replay: [] }>();
 
+function lazyEffect(loader: () => Promise<{ default: Component }>) {
+  return defineAsyncComponent(loader);
+}
+
 const effectComponentMap: Record<RewardEffectKey, Component> = {
-  fireworks: FireworksEffect,
-  birthday: BirthdayEffect,
-  sparkle: SparkleEffect,
-  aurora: AuroraEffect,
-  warp: WarpEffect,
-  matrix: MatrixEffect,
-  crown: CrownEffect,
-  neonDrive: NeonDriveEffect,
-  cockpit: CockpitHudEffect,
-  holoCore: HoloCoreEffect,
-  laserGrid: LaserGridEffect,
-  quantumGate: QuantumGateEffect,
-  cyberDataFlow: CyberDataFlowEffect,
-  velocityTrail: VelocityTrailEffect,
-  cityScan: CityScanEffect,
-  floatingHud: FloatingHudEffect,
-  neuralThink: NeuralThinkEffect,
-  timeFold: TimeFoldEffect,
-  rainGlass: RainGlassEffect,
-  codeMaterialize: CodeMaterializeEffect,
-  energyRing: EnergyRingEffect,
-  droneFlyover: DroneFlyoverEffect,
-  quantumFlicker: QuantumFlickerEffect,
-  breathingUi: BreathingUiEffect,
-  dataStorm: DataStormEffect,
-  glassRefraction: GlassRefractionEffect,
-  spaceJump: SpaceJumpEffect,
-  blackHole: BlackHoleEffect,
-  supernova: SupernovaEffect,
-  gravityWave: GravityWaveEffect,
-  riftTear: RiftTearEffect,
-  aiAwaken: AiAwakenEffect,
-  dysonRing: DysonRingEffect,
-  collider: ColliderEffect,
-  mechaBoot: MechaBootEffect,
-  orbitalStrike: OrbitalStrikeEffect,
-  galaxyMap: GalaxyMapEffect,
-  solarFlare: SolarFlareEffect,
-  nanoSwarm: NanoSwarmEffect,
-  holoDisassemble: HoloDisassembleEffect,
-  rocketLaunch: RocketLaunchEffect,
-  bioScan: BioScanEffect,
-  empBlast: EmpBlastEffect,
-  littleBoy: LittleBoyEffect,
-  satelliteSweep: SatelliteSweepEffect,
-  energyShield: EnergyShieldEffect,
-  deepSonar: DeepSonarEffect,
-  skyUplink: SkyUplinkEffect,
-  genesisBang: GenesisBangEffect,
-  dimensionFoil: DimensionFoilEffect,
-  gammaLance: GammaLanceEffect,
-  magnetarSurge: MagnetarSurgeEffect,
-  vacuumDecay: VacuumDecayEffect,
-  starForge: StarForgeEffect,
-  galaxyDevour: GalaxyDevourEffect,
-  overmind: OvermindEffect,
-  extinctionRain: ExtinctionRainEffect,
-  thunderVerdict: ThunderVerdictEffect,
-  plasmaDrake: PlasmaDrakeEffect,
-  epochZero: EpochZeroEffect,
-  cosmicString: CosmicStringEffect,
-  entropyReversal: EntropyReversalEffect,
-  celestialThrone: CelestialThroneEffect,
+  fireworks: lazyEffect(() => import("@/components/rewards/effects/FireworksEffect.vue")),
+  birthday: lazyEffect(() => import("@/components/rewards/effects/BirthdayEffect.vue")),
+  sparkle: lazyEffect(() => import("@/components/rewards/effects/SparkleEffect.vue")),
+  aurora: lazyEffect(() => import("@/components/rewards/effects/AuroraEffect.vue")),
+  warp: lazyEffect(() => import("@/components/rewards/effects/WarpEffect.vue")),
+  matrix: lazyEffect(() => import("@/components/rewards/effects/MatrixEffect.vue")),
+  crown: lazyEffect(() => import("@/components/rewards/effects/CrownEffect.vue")),
+  neonDrive: lazyEffect(() => import("@/components/rewards/effects/NeonDriveEffect.vue")),
+  cockpit: lazyEffect(() => import("@/components/rewards/effects/CockpitHudEffect.vue")),
+  holoCore: lazyEffect(() => import("@/components/rewards/effects/HoloCoreEffect.vue")),
+  laserGrid: lazyEffect(() => import("@/components/rewards/effects/LaserGridEffect.vue")),
+  quantumGate: lazyEffect(() => import("@/components/rewards/effects/QuantumGateEffect.vue")),
+  cyberDataFlow: lazyEffect(() => import("@/components/rewards/effects/CyberDataFlowEffect.vue")),
+  velocityTrail: lazyEffect(() => import("@/components/rewards/effects/VelocityTrailEffect.vue")),
+  cityScan: lazyEffect(() => import("@/components/rewards/effects/CityScanEffect.vue")),
+  floatingHud: lazyEffect(() => import("@/components/rewards/effects/FloatingHudEffect.vue")),
+  neuralThink: lazyEffect(() => import("@/components/rewards/effects/NeuralThinkEffect.vue")),
+  timeFold: lazyEffect(() => import("@/components/rewards/effects/TimeFoldEffect.vue")),
+  rainGlass: lazyEffect(() => import("@/components/rewards/effects/RainGlassEffect.vue")),
+  codeMaterialize: lazyEffect(() => import("@/components/rewards/effects/CodeMaterializeEffect.vue")),
+  energyRing: lazyEffect(() => import("@/components/rewards/effects/EnergyRingEffect.vue")),
+  droneFlyover: lazyEffect(() => import("@/components/rewards/effects/DroneFlyoverEffect.vue")),
+  quantumFlicker: lazyEffect(() => import("@/components/rewards/effects/QuantumFlickerEffect.vue")),
+  breathingUi: lazyEffect(() => import("@/components/rewards/effects/BreathingUiEffect.vue")),
+  dataStorm: lazyEffect(() => import("@/components/rewards/effects/DataStormEffect.vue")),
+  glassRefraction: lazyEffect(() => import("@/components/rewards/effects/GlassRefractionEffect.vue")),
+  spaceJump: lazyEffect(() => import("@/components/rewards/effects/SpaceJumpEffect.vue")),
+  blackHole: lazyEffect(() => import("@/components/rewards/effects/BlackHoleEffect.vue")),
+  supernova: lazyEffect(() => import("@/components/rewards/effects/SupernovaEffect.vue")),
+  gravityWave: lazyEffect(() => import("@/components/rewards/effects/GravityWaveEffect.vue")),
+  riftTear: lazyEffect(() => import("@/components/rewards/effects/RiftTearEffect.vue")),
+  aiAwaken: lazyEffect(() => import("@/components/rewards/effects/AiAwakenEffect.vue")),
+  dysonRing: lazyEffect(() => import("@/components/rewards/effects/DysonRingEffect.vue")),
+  collider: lazyEffect(() => import("@/components/rewards/effects/ColliderEffect.vue")),
+  mechaBoot: lazyEffect(() => import("@/components/rewards/effects/MechaBootEffect.vue")),
+  orbitalStrike: lazyEffect(() => import("@/components/rewards/effects/OrbitalStrikeEffect.vue")),
+  galaxyMap: lazyEffect(() => import("@/components/rewards/effects/GalaxyMapEffect.vue")),
+  solarFlare: lazyEffect(() => import("@/components/rewards/effects/SolarFlareEffect.vue")),
+  nanoSwarm: lazyEffect(() => import("@/components/rewards/effects/NanoSwarmEffect.vue")),
+  holoDisassemble: lazyEffect(() => import("@/components/rewards/effects/HoloDisassembleEffect.vue")),
+  rocketLaunch: lazyEffect(() => import("@/components/rewards/effects/RocketLaunchEffect.vue")),
+  bioScan: lazyEffect(() => import("@/components/rewards/effects/BioScanEffect.vue")),
+  empBlast: lazyEffect(() => import("@/components/rewards/effects/EmpBlastEffect.vue")),
+  littleBoy: lazyEffect(() => import("@/components/rewards/effects/LittleBoyEffect.vue")),
+  satelliteSweep: lazyEffect(() => import("@/components/rewards/effects/SatelliteSweepEffect.vue")),
+  energyShield: lazyEffect(() => import("@/components/rewards/effects/EnergyShieldEffect.vue")),
+  deepSonar: lazyEffect(() => import("@/components/rewards/effects/DeepSonarEffect.vue")),
+  skyUplink: lazyEffect(() => import("@/components/rewards/effects/SkyUplinkEffect.vue")),
+  genesisBang: lazyEffect(() => import("@/components/rewards/effects/GenesisBangEffect.vue")),
+  dimensionFoil: lazyEffect(() => import("@/components/rewards/effects/DimensionFoilEffect.vue")),
+  gammaLance: lazyEffect(() => import("@/components/rewards/effects/GammaLanceEffect.vue")),
+  magnetarSurge: lazyEffect(() => import("@/components/rewards/effects/MagnetarSurgeEffect.vue")),
+  vacuumDecay: lazyEffect(() => import("@/components/rewards/effects/VacuumDecayEffect.vue")),
+  starForge: lazyEffect(() => import("@/components/rewards/effects/StarForgeEffect.vue")),
+  galaxyDevour: lazyEffect(() => import("@/components/rewards/effects/GalaxyDevourEffect.vue")),
+  overmind: lazyEffect(() => import("@/components/rewards/effects/OvermindEffect.vue")),
+  extinctionRain: lazyEffect(() => import("@/components/rewards/effects/ExtinctionRainEffect.vue")),
+  thunderVerdict: lazyEffect(() => import("@/components/rewards/effects/ThunderVerdictEffect.vue")),
+  plasmaDrake: lazyEffect(() => import("@/components/rewards/effects/PlasmaDrakeEffect.vue")),
+  epochZero: lazyEffect(() => import("@/components/rewards/effects/EpochZeroEffect.vue")),
+  cosmicString: lazyEffect(() => import("@/components/rewards/effects/CosmicStringEffect.vue")),
+  entropyReversal: lazyEffect(() => import("@/components/rewards/effects/EntropyReversalEffect.vue")),
+  celestialThrone: lazyEffect(() => import("@/components/rewards/effects/CelestialThroneEffect.vue")),
 };
 
 const activeComponent = computed(() => props.effect ? effectComponentMap[props.effect] : null);

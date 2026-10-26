@@ -57,7 +57,7 @@ const scene: SceneFn = (api) => {
   type IrisSeg = { ring: number; start: number; span: number; bootAt: number; color: string; booted: boolean };
   const segments: IrisSeg[] = [];
   const ringRadii = [0.4, 0.55, 0.7, 0.84, 0.97];
-  ringRadii.forEach((rr, ring) => {
+  ringRadii.forEach((_, ring) => {
     const count = 8 + Math.floor(api.rng() * 7);
     for (let s = 0; s < count; s += 1) {
       segments.push({

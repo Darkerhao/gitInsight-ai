@@ -85,7 +85,7 @@ const emit = defineEmits<{
         :disabled="loading || pushing"
         @update:model-value="(value: unknown) => emit('update:selectedRepoPaths', value as string[])"
       >
-        <el-checkbox v-for="repo in sortedRepos" :key="repo.path" :label="repo.path" border>
+        <el-checkbox v-for="repo in sortedRepos" :key="repo.path" :value="repo.path" border>
           {{ displayRepoName(repo) }}
         </el-checkbox>
       </el-checkbox-group>
