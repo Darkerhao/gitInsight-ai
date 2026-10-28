@@ -18,6 +18,7 @@ const project = ref('');
 const records = ref<TimelineRecord[]>([]);
 const loading = ref(false);
 const error = ref('');
+const exporting = ref<'svg' | 'png' | ''>('');
 const projects = computed(() => [...new Set(records.value.flatMap(record => record.projects))].sort());
 const invalidRange = computed(() => !startDate.value || !endDate.value || startDate.value > endDate.value);
 const data = computed(() => buildWorkMemoryCard(records.value, { startDate: startDate.value, endDate: endDate.value, project: project.value }));
@@ -35,15 +36,40 @@ async function load() {
   finally { loading.value = false; }
 }
 
-function exportCard() {
-  if (!ready.value || !unlocked.value) return;
-  const url = URL.createObjectURL(new Blob([svg.value], { type: 'image/svg+xml;charset=utf-8' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `工作纪念卡-${startDate.value}-${endDate.value}-${selectedId.value}.svg`;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  ElMessage.success('已发起 SVG 下载');
+async function exportCard(format: 'svg' | 'png') {
+  if (!ready.value || !unlocked.value || exporting.value) return;
+  exporting.value = format;
+  const filename = `工作纪念卡-${startDate.value}-${endDate.value}-${selectedId.value}.${format}`;
+  let blob = new Blob([svg.value], { type: 'image/svg+xml;charset=utf-8' });
+  const sourceUrl = URL.createObjectURL(blob);
+  try {
+    if (format === 'png') {
+      const image = new Image();
+      image.src = sourceUrl;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth * 2;
+      canvas.height = image.naturalHeight * 2;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('无法生成图片，请重试');
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(result => result ? resolve(result) : reject(new Error('PNG 生成失败，请重试')), 'image/png');
+      });
+    }
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    ElMessage.success(`已发起 ${format.toUpperCase()} 下载`);
+  } catch (cause) {
+    ElMessage.error(cause instanceof Error ? cause.message : '导出失败，请重试');
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+    exporting.value = '';
+  }
 }
 onMounted(load);
 </script>
@@ -76,7 +102,7 @@ onMounted(load);
         <div class="memory-stage-caption"><span>{{ selectedCard.name }} / 成品预览</span><span>{{ unlocked ? '已解锁 · 可导出' : '免费预览 · 解锁后可导出' }}</span></div>
         <div class="memory-preview"><img :src="previews[selectedId]" alt="工作纪念卡预览" /></div>
       </div>
-      <div class="memory-export"><div><strong>把这一程，保存下来。</strong><p>SVG 高清矢量原图 · 放大不失真 · 无外部素材</p></div><el-button type="primary" :disabled="!ready || !unlocked" @click="exportCard">导出 SVG</el-button></div>
+      <div class="memory-export"><div><strong>把这一程，保存下来。</strong><p>PNG 高清图片 · SVG 矢量原图 · 无外部素材</p></div><div class="memory-export-actions"><el-button :disabled="!ready || !unlocked || Boolean(exporting)" :loading="exporting === 'svg'" @click="exportCard('svg')">导出 SVG</el-button><el-button type="primary" :disabled="!ready || !unlocked || Boolean(exporting)" :loading="exporting === 'png'" @click="exportCard('png')">导出 PNG</el-button></div></div>
     </div>
     <p class="memory-note">统计来源于已保存日报的时间长河记录；合篇日报按整份统计，不拆分各项目贡献。预览与导出内容一致。</p>
   </section>
@@ -126,6 +152,8 @@ onMounted(load);
 .memory-preview img { display: block; width: 100%; border-radius: 2%; box-shadow: 0 20px 32px -10px #0006, 0 2px 5px #0002; }
 .memory-export strong { font-size: 14px; font-weight: 500; }
 .memory-export p { margin: 5px 0 0; font-size: 11px; }
+.memory-export { flex-wrap: wrap; }
+.memory-export-actions { display: flex; }
 .memory-note { margin: 0; font-size: 11px; }
 @media (prefers-reduced-motion: reduce) { .memory-thumb img, .memory-product { transition: none; } }
 @media (max-width: 1000px) { .memory-products { gap: 10px; } .memory-purchase { flex-wrap: wrap; } }
