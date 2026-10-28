@@ -77,6 +77,28 @@ for (const weekly of [false, true]) {
   });
 }
 
+test('仓库选择长路径不会溢出列表或遮挡操作按钮', async ({ page }) => {
+  await page.goto('/#/generate');
+  await page.locator('.repo-picker-trigger').click();
+  const popper = page.locator('.repo-picker-popper');
+  await expect(popper).toBeVisible();
+  await popper.locator('.repo-picker-copy small').first().evaluate((element) => {
+    element.textContent = 'D:\\MyWork\\project\\SHUZHI\\teacher-development-platform\\teacher-growth-portal\\src\\renderer\\src\\views\\reports\\ReportGenerateView.vue';
+  });
+
+  const hasOverflow = await popper.locator('.repo-picker-list').evaluate((list) => {
+    if (list.scrollWidth > list.clientWidth) return true;
+    const row = list.querySelector('.repo-picker-item')!;
+    const copy = row.querySelector('.repo-picker-copy')!.getBoundingClientRect();
+    const firstAction = row.querySelector('.repo-picker-icon')!.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(row.querySelector('.repo-picker-copy small')!);
+    return Array.from(range.getClientRects()).some((rect) => rect.right > firstAction.left || rect.left < copy.left);
+  });
+
+  expect(hasOverflow).toBe(false);
+});
+
 for (const scale of [1, 1.25, 1.5]) {
   test(`1366×768 屏幕，${scale * 100}% 等效缩放可编辑和发布`, async ({ page }) => {
     // Reserve 68 physical pixels for the taskbar/window chrome; resize in CSS pixels.
