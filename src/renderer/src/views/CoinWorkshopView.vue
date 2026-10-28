@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { ArrowDownLeft, ArrowUpRight, Check, Coins, Flower2, Palette, RefreshCw, ShoppingBag, Sprout } from 'lucide-vue-next';
+import { ArrowDownLeft, ArrowUpRight, Check, Coins, Flower2, Palette, RefreshCw, ShoppingBag, Sprout, Timer } from 'lucide-vue-next';
 import { ElMessage, ElMessageBox, ElSkeleton } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import GardenPlant from '@/components/rewards/GardenPlant.vue';
+import FocusSpace from '@/components/rewards/FocusSpace.vue';
 import WorkMemoryCards from '@/components/rewards/WorkMemoryCards.vue';
 import { useCoinWorkshop } from '@/composables/useCoinWorkshop';
 import { COIN_SHOP_ITEMS } from '@shared/coinWorkshop';
@@ -11,7 +12,7 @@ import type { CoinShopItem, CoinTransactionPage, CoinTransactionQuery } from '@s
 
 const workshop = useCoinWorkshop();
 const { snapshot, loading, error, pending } = workshop;
-const tab = ref<'shop' | 'garden' | 'cards' | 'ledger'>('shop');
+const tab = ref<'shop' | 'garden' | 'cards' | 'focus' | 'ledger'>('shop');
 const themes = COIN_SHOP_ITEMS.filter(item => item.kind === 'theme');
 const pots = COIN_SHOP_ITEMS.filter(item => item.kind === 'pot');
 const seeds = COIN_SHOP_ITEMS.filter(item => item.kind === 'seed');
@@ -120,9 +121,11 @@ onMounted(() => { void workshop.refresh(); });
         <button id="coin-shop-tab" role="tab" :aria-selected="tab === 'shop'" aria-controls="coin-shop-panel" @click="tab = 'shop'"><ShoppingBag :size="17" />装扮商店</button>
         <button id="coin-garden-tab" role="tab" :aria-selected="tab === 'garden'" aria-controls="coin-garden-panel" @click="tab = 'garden'"><Sprout :size="17" />代码花园<span>{{ growing.length }}/3</span></button>
         <button id="coin-cards-tab" role="tab" :aria-selected="tab === 'cards'" aria-controls="coin-cards-panel" @click="tab = 'cards'"><Palette :size="17" />工作纪念卡</button>
+        <button id="coin-focus-tab" role="tab" :aria-selected="tab === 'focus'" aria-controls="coin-focus-panel" @click="tab = 'focus'"><Timer :size="17" />专注空间</button>
         <button id="coin-ledger-tab" role="tab" :aria-selected="tab === 'ledger'" aria-controls="coin-ledger-panel" @click="tab = 'ledger'"><Coins :size="17" />收支明细</button>
       </nav>
 
+      <FocusSpace v-if="tab === 'focus'" id="coin-focus-panel" role="tabpanel" aria-labelledby="coin-focus-tab" :owned-item-ids="snapshot.ownedItemIds" :balance="balance" :pending="pending" @purchase="purchase" />
       <WorkMemoryCards v-if="tab === 'cards'" id="coin-cards-panel" role="tabpanel" aria-labelledby="coin-cards-tab" :owned-item-ids="snapshot.ownedItemIds" :balance="balance" :pending="pending" @purchase="purchase" />
       <section v-if="tab === 'shop'" id="coin-shop-panel" role="tabpanel" aria-labelledby="coin-shop-tab" class="coin-shop-panel">
         <div class="coin-section-head"><div><h2><Palette :size="20" /> 为工作台换一种心情</h2><p>一次购买，永久拥有。明亮与深色模式都能使用。</p></div><span class="coin-section-note">购买后点击使用，即刻切换配色</span></div>

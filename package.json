@@ -36,7 +36,7 @@
     "test:reliability": "tsc --outDir .cache/reliability-tests --module NodeNext --moduleResolution NodeNext --target ES2022 --types node --skipLibCheck tests/projectGeneration.test.ts && node --test .cache/reliability-tests/tests/projectGeneration.test.js tests/networkRequest.test.mjs tests/persistencePublication.test.mjs tests/reportAccuracy.test.mjs tests/reportGenerateWorkflow.test.mjs tests/windowBounds.test.mjs tests/configPersistence.test.mjs tests/repositoryFeishu.test.mjs tests/singleInstance.test.mjs tests/publicationGuard.test.mjs tests/assistantInitialization.test.mjs tests/autoSyncEditing.test.mjs tests/backupRestore.test.mjs",
     "test:app-update": "node --test tests/appUpdate.test.mjs",
     "test:material": "node --test tests/materialReports.test.mjs",
-    "test:coins": "node --test tests/coinWorkshop.test.mjs tests/workMemoryCard.test.mjs",
+    "test:coins": "node --test tests/coinWorkshop.test.mjs tests/workMemoryCard.test.mjs tests/focusTimer.test.mjs",
     "test:app-update:desktop": "npm run build && node tests/appUpdateRuntime.smoke.cjs",
     "test:e2e": "playwright test",
     "test:desktop": "npm run build && node tests/desktopRuntime.smoke.cjs",

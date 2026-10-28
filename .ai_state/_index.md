@@ -1,15 +1,23 @@
 ---
 path: Refactor
 stage: ship
-current_sprint_slug: work-memory-cards
+current_sprint_slug: focus-space
 current_roadmap_slug: none
 route_confidence: 0.97
-next_action: "工作纪念卡实现及本地验证、独立审查与收敛检查完成；未提交、推送或发布"
+next_action: "专注空间实现及本地验证、独立审查与收敛检查完成；未提交、推送或发布"
 pointers:
   latest_architecture_update: architecture/ARCHITECTURE.md
 ---
 
 # AI State Index
+
+## 专注空间完成（2026-10-28）
+
+- 工坊新增专注空间，免费书桌及雨夜100万/咖啡馆200万/宇宙舱300万，预览、永久购买和统一账本闭环。
+- App 托管25/5分钟计时器，暂停/继续/结束，跨页连续，全局完成提示与可关闭提示音；关闭应用不续计。
+- 当前工作区专项17/17、Chrome集成13/13、类型/构建通过；真实隔离Electron购买幂等、重启、备份恢复通过。独立代码/规格/evaluator均PASS，清理无用节点并更新架构。
+- 已按互斥写集从 `.cache/worktrees/focus-space` 同步；保留实施期间提交的85adf4b及原本地配置。未提交、推送或发布。证据：`sprints/focus-space/`。
+
 
 ## 工作纪念卡完成（2026-10-28）
 
@@ -188,3 +196,10 @@ pointers:
 - 本轮 Bugfix：一周日报深层 Proxy IPC 回归测试 13/13、全量测试 48/48、typecheck、build、diff check 通过；独立 Review Pass 1 = PASS
 - 最终证据：周反思 11/11、全量 48/48、两个页面 smoke、typecheck、build、diff check 全部通过
 - Electron 证据：真实 AI 跨周生成成功；上一期动作复盘 3/3、重复问题 2 条、页面状态和 Markdown 持久化通过
+
+## 专注空间路由（2026-10-28）
+- Refactor / 0.98：跨商品、计时与界面，单一不可拆使用闭环。隔离工作区 .cache/worktrees/focus-space。
+
+## 专注空间视觉迭代（2026-10-28）
+- 三款付费场景独立插画及氛围动画完成，大画幅与完整预览卡；减少动态效果可停播，缩略图静态。
+- Chrome 专项5/5及类型/构建通过，明暗截图已检查；未提交或推送。证据追加至 focus-space/runtime-verify.md。
