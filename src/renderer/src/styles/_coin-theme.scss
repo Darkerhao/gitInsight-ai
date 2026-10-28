@@ -1,0 +1,22 @@
+/* Purchased palettes share the existing app and Element Plus color tokens. */
+:root[data-coin-theme]:not([data-coin-theme='theme-default']) {
+  --c-primary: color-mix(in srgb, var(--coin-accent) 56%, #18333e);
+  --c-primary-hover: color-mix(in srgb, var(--c-primary) 85%, #000);
+  --c-primary-soft: color-mix(in srgb, var(--coin-accent) 15%, var(--c-surface));
+  --c-on-primary: #fff;
+  --tone-blue: var(--c-primary);
+  --tone-blue-bg: var(--c-primary-soft);
+  --el-color-primary: var(--c-primary);
+  --el-color-primary-dark-2: var(--c-primary-hover);
+  --el-color-primary-light-3: color-mix(in srgb, var(--c-primary) 70%, var(--c-surface));
+  --el-color-primary-light-5: color-mix(in srgb, var(--c-primary) 50%, var(--c-surface));
+  --el-color-primary-light-7: color-mix(in srgb, var(--c-primary) 30%, var(--c-surface));
+  --el-color-primary-light-8: color-mix(in srgb, var(--c-primary) 20%, var(--c-surface));
+  --el-color-primary-light-9: var(--c-primary-soft);
+}
+
+:root[data-coin-theme]:not([data-coin-theme='theme-default'])[data-theme='dark'] {
+  --c-primary: var(--coin-accent);
+  --c-primary-hover: color-mix(in srgb, var(--coin-accent) 80%, #fff);
+  --c-on-primary: #152126;
+}

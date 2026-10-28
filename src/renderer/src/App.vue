@@ -9,6 +9,7 @@ import AppTopbar from '@/components/AppTopbar.vue';
 import WelcomeGate from '@/components/WelcomeGate.vue';
 import { useAppUpdates } from '@/composables/useAppUpdates';
 import { usePageZoom } from '@/composables/usePageZoom';
+import { useCoinWorkshop } from '@/composables/useCoinWorkshop';
 import { navKeys } from '@/router';
 import type { NavKey } from '@/router';
 
@@ -21,6 +22,7 @@ type ViewTransitionDocument = Document & {
 
 const assistant = useAssistant();
 const appUpdates = useAppUpdates();
+const coinWorkshop = useCoinWorkshop();
 const THEME_STORAGE_KEY = 'gitinsight:theme-mode';
 const WELCOME_STORAGE_KEY = 'gitinsight:welcome-finished';
 const WELCOME_ANIMATION_ENABLED_KEY = 'gitinsight:welcome-animation-enabled';
@@ -72,6 +74,7 @@ const viewMap: Record<NavKey, Component> = {
   reflection: lazyView(() => import('@/views/WeeklyReflectionView.vue')),
   history: lazyView(() => import('@/views/HistoryLogsView.vue')),
   timeline: lazyView(() => import('@/views/JiaziTimelineView.vue')),
+  coins: lazyView(() => import('@/views/CoinWorkshopView.vue')),
   ai: reportConfigView,
   system: lazyView(() => import('@/views/SystemSettingsView.vue')),
   about: lazyView(() => import('@/views/AboutView.vue')),
@@ -262,6 +265,17 @@ watch(
   { flush: 'sync', immediate: true },
 );
 
+watch(coinWorkshop.theme, (theme) => {
+  const root = document.documentElement;
+  if (theme?.accent && theme.id !== 'theme-default') {
+    root.dataset.coinTheme = theme.id;
+    root.style.setProperty('--coin-accent', theme.accent);
+  } else {
+    root.removeAttribute('data-coin-theme');
+    root.style.removeProperty('--coin-accent');
+  }
+}, { immediate: true });
+
 async function initializeAssistant() {
   initializationError.value = '';
   try {
@@ -277,12 +291,14 @@ onMounted(() => {
   void initializePageZoom();
   void initializeAssistant();
   void appUpdates.initialize();
+  void coinWorkshop.initialize();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handlePageZoomShortcut, true);
   assistant.dispose();
   appUpdates.dispose();
+  coinWorkshop.dispose();
 });
 </script>
 

@@ -143,6 +143,24 @@ async function initializeDatabase() {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_checkin_coin_transactions_created_at ON checkin_coin_transactions(created_at);
+    CREATE TABLE IF NOT EXISTS coin_workshop_items (
+      item_id TEXT PRIMARY KEY,
+      purchased_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS coin_workshop_settings (
+      id INTEGER PRIMARY KEY CHECK(id = 1),
+      theme_id TEXT NOT NULL DEFAULT 'theme-default',
+      pot_id TEXT NOT NULL DEFAULT 'pot-default'
+    );
+    INSERT OR IGNORE INTO coin_workshop_settings (id) VALUES (1);
+    CREATE TABLE IF NOT EXISTS coin_garden_plants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      seed_id TEXT NOT NULL,
+      planted_at TEXT NOT NULL,
+      planted_date TEXT NOT NULL,
+      required_days INTEGER NOT NULL,
+      harvested_at TEXT
+    );
 
   `);
   ensureDailyReportTimeRangeColumns(sqlDatabase);

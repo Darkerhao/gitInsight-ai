@@ -34,7 +34,7 @@ test('新旧导航均可访问，工作台生成入口复用当前编辑流程',
     ['仓库中心', 'repositories'], ['同步任务', 'sync'], ['消息中心', 'messages'], ['使用帮助', 'help'],
     ['素材日报', 'material'], ['写今日日报', 'generate'], ['批量补日报', 'weekly'],
     ['汇总本周工作', 'summary'], ['复盘项目问题', 'reflection'], ['历史日志', 'history'],
-    ['时间长河', 'timeline'], ['日报配置', 'config'], ['AI 设置', 'ai'], ['系统设置', 'system'], ['关于', 'about'], ['工作台', 'dashboard'],
+    ['时间长河', 'timeline'], ['码币工坊', 'coins'], ['日报配置', 'config'], ['AI 设置', 'ai'], ['系统设置', 'system'], ['关于', 'about'], ['工作台', 'dashboard'],
   ];
   for (const [label, route] of entries) {
     const item = page.getByRole('menuitem', { name: label, exact: true });

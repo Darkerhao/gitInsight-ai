@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Coins, Gift, Search, Sparkles, Zap } from 'lucide-vue-next';
 import { ElMessage } from 'element-plus';
+import { useRouter } from 'vue-router';
 const loadRewardOverlay = () => import('@/components/rewards/RewardEffectOverlay.vue');
 const RewardEffectOverlay = defineAsyncComponent(loadRewardOverlay);
 import {
@@ -14,6 +15,7 @@ import type { EffectTierKey, RewardEffectKey, RewardEffectOption } from '@/compo
 import type { CheckinWallet, CheckinWalletImportPayload, CheckinWalletSnapshot } from '@shared/types';
 
 const CHECKIN_STORAGE_KEY = 'gitinsight:checkin-wallet';
+const router = useRouter();
 const DAILY_CHECKIN_REWARD_MIN = 88888;
 const DAILY_CHECKIN_REWARD_MAX = 888888;
 
@@ -100,6 +102,15 @@ watch(effectQuery, () => {
   const firstMatch = filteredEffectTierGroups.value[0]?.options[0];
   if (firstMatch) inspectEffect(firstMatch);
 });
+
+watch(coinPanelVisible, (visible) => {
+  if (visible) void loadWalletSnapshot();
+});
+
+function openWorkshop() {
+  coinPanelVisible.value = false;
+  void router.push('/coins');
+}
 
 function normalizeLocalWallet(value: unknown): CheckinWalletImportPayload {
   if (!value || typeof value !== 'object') {
@@ -260,7 +271,7 @@ onBeforeUnmount(() => {
   >
     <template #reference>
       <el-button class="topbar-coin-btn" :icon="Coins" :loading="walletLoading" aria-label="码币签到">
-        <span :key="wallet.coins" class="coin-amount">{{ wallet.coins }}</span>
+        <span :key="wallet.coins" class="coin-amount">{{ wallet.coins.toLocaleString('zh-CN') }}</span>
         <small>码币</small>
       </el-button>
     </template>
@@ -268,7 +279,7 @@ onBeforeUnmount(() => {
     <div class="coin-panel">
       <div class="coin-panel-head">
         <div>
-          <strong :key="wallet.coins" class="coin-amount">{{ wallet.coins }} 码币</strong>
+          <strong :key="wallet.coins" class="coin-amount">{{ wallet.coins.toLocaleString('zh-CN') }} 码币</strong>
           <span>{{ walletStatusText }} · NEXUS 视觉协议库</span>
         </div>
         <el-tag class="coin-streak-tag" type="warning" effect="light" round>
@@ -286,6 +297,8 @@ onBeforeUnmount(() => {
       >
         {{ checkinButtonText }}
       </el-button>
+
+      <el-button class="coin-workshop-link" :icon="Coins" @click="openWorkshop">前往码币工坊 · 装扮、花园与收支</el-button>
 
       <section
         class="effect-inspector"
@@ -501,6 +514,11 @@ onBeforeUnmount(() => {
   background: #fff7e6;
   color: #9a5f08;
   font-weight: 700;
+}
+
+.coin-workshop-link.el-button {
+  width: 100%;
+  margin: 10px 0 0;
 }
 
 .coin-checkin-btn.el-button {

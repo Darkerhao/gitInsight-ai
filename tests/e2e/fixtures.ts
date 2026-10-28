@@ -2,6 +2,8 @@ import { test as base, expect } from '@playwright/test';
 import { DEFAULT_AI_PROFILE, DEFAULT_AUTO_SYNC_CONFIG, DEFAULT_AUTO_SYNC_TASK_CONFIG, DEFAULT_FEISHU_FORM_CONFIG } from '../../src/shared/types';
 import type { AutoSyncState, GenerateReportParams, SaveDailyReportPayload, SyncFeishuDailyPayload } from '../../src/shared/types';
 import type { AppUpdateState } from '../../src/shared/appUpdate';
+import { COIN_SHOP_ITEMS } from '../../src/shared/coinWorkshop';
+import type { CoinTransaction, CoinWorkshopSnapshot } from '../../src/shared/coinWorkshop';
 
 declare global {
   interface Window {
@@ -28,13 +30,18 @@ declare global {
       updatePreferenceFailure: boolean;
       openedLinks: string[];
       emitUpdate: (patch: Partial<AppUpdateState>) => void;
+      coinFailure: boolean;
+      coinReadFailure: boolean;
+      coinPurchases: string[];
+      coinEquips: string[];
+      maturePlants: () => void;
     };
   }
 }
 
 export const test = base.extend({
   page: async ({ page }, use) => {
-    await page.addInitScript(({ ai, autoSync, task, feishu }) => {
+    await page.addInitScript(({ ai, autoSync, task, feishu, coinCatalog }) => {
       localStorage.setItem('gitinsight:welcome-finished', 'true');
       localStorage.setItem('gitinsight:welcome-animation-enabled', 'false');
       const repos = [{ name: 'Project A', path: '/workspace/a' }, { name: 'Project B', path: '/workspace/b' }];
@@ -59,6 +66,38 @@ export const test = base.extend({
         },
         updateChecks: 0, updateDownloads: 0, updateInstalls: 0, updateFailure: false,
         updatePreferenceFailure: false, openedLinks: [], emitUpdate: () => {},
+        coinFailure: false, coinReadFailure: false, coinPurchases: [], coinEquips: [], maturePlants: () => {},
+      };
+      const today = new Date().toLocaleDateString('sv-SE');
+      const now = new Date().toISOString();
+      const initialCoins = Number(params.get('coinsBalance') ?? 1000000);
+      let coinData: { snapshot: CoinWorkshopSnapshot; transactions: CoinTransaction[] } = JSON.parse(localStorage.getItem('test:coin-workshop') || 'null') || {
+        snapshot: {
+          wallet: { wallet: { coins: initialCoins, lastCheckinDate: '', streak: 0, updatedAt: now }, today, checkedInToday: false },
+          ownedItemIds: ['theme-default', 'pot-default'], equippedThemeId: 'theme-default', equippedPotId: 'pot-default', plants: [],
+          summary: { todayIncome: initialCoins, todaySpent: 0, totalIncome: initialCoins, totalSpent: 0 },
+        },
+        transactions: [{ id: 1, type: 'import', amount: initialCoins, balanceAfter: initialCoins, reason: '迁移本地码币钱包', refKey: 'localStorage', createdAt: now }],
+      };
+      const walletListeners = new Set<(snapshot: CoinWorkshopSnapshot['wallet']) => void>();
+      function persistCoins() {
+        localStorage.setItem('test:coin-workshop', JSON.stringify(coinData));
+        walletListeners.forEach(listener => listener(structuredClone(coinData.snapshot.wallet)));
+      }
+      function addCoinEntry(amount: number, reason: string, refKey: string, type = 'spend') {
+        coinData.snapshot.wallet.wallet.coins += amount;
+        coinData.transactions.push({ id: coinData.transactions.length + 1, type, amount,
+          balanceAfter: coinData.snapshot.wallet.wallet.coins, reason, refKey, createdAt: now });
+        const summary = coinData.snapshot.summary;
+        if (amount > 0) { summary.todayIncome += amount; summary.totalIncome += amount; }
+        else { summary.todaySpent -= amount; summary.totalSpent -= amount; }
+      }
+      if (params.has('coinHistory') && coinData.transactions.length === 1) {
+        for (let entry = 0; entry < 14; entry++) addCoinEntry(entry % 2 ? -40 : 100, entry % 2 ? '观看视觉特效' : '每日签到', String(entry), entry % 2 ? 'spend' : 'checkin');
+      }
+      state.maturePlants = () => {
+        coinData.snapshot.plants.forEach(plant => { plant.growthDays = plant.requiredDays; });
+        persistCoins();
       };
       async function metadata<T>(value: T): Promise<T> {
         if (params.get('feishu') === 'hanging') return new Promise(() => {});
@@ -135,8 +174,63 @@ export const test = base.extend({
         getAutoSyncState: async () => ({ ...config.autoSync, tasks: config.autoSync.tasks.map((item) => ({ ...item, nextRunAt: '', isRunning: false })), isRunning: false }),
         onAutoSyncUpdated: (listener) => { state.emitAutoSync = listener; return () => { state.emitAutoSync = () => {}; }; },
         onFeishuAuthUpdated: () => () => {},
-        getCheckinWalletSnapshot: async () => ({ wallet: { coins: 1000000, lastCheckinDate: '', streak: 0 }, today: '2026-09-29' }),
-        onCheckinWalletUpdated: () => () => {},
+        getCheckinWalletSnapshot: async () => structuredClone(coinData.snapshot.wallet),
+        onCheckinWalletUpdated: listener => { walletListeners.add(listener); return () => { walletListeners.delete(listener); }; },
+        runDailyCheckin: async () => {
+          const snapshot = coinData.snapshot.wallet;
+          const rewardCoins = snapshot.checkedInToday ? 0 : 488888;
+          if (rewardCoins) {
+            addCoinEntry(rewardCoins, '每日签到', today, 'checkin');
+            snapshot.wallet.lastCheckinDate = today;
+            snapshot.wallet.streak++;
+            snapshot.checkedInToday = true;
+            persistCoins();
+          }
+          return { ...structuredClone(snapshot), rewardCoins };
+        },
+        getCoinWorkshop: async () => {
+          if (state.coinReadFailure) throw new Error('工坊数据读取失败');
+          return structuredClone(coinData.snapshot);
+        },
+        purchaseCoinItem: async itemId => {
+          state.coinPurchases.push(itemId);
+          if (state.coinFailure) throw new Error('购买保存失败，请重试');
+          const item = coinCatalog.find(item => item.id === itemId)!;
+          if (coinData.snapshot.wallet.wallet.coins < item.price) throw new Error('码币不足');
+          if (item.kind === 'seed') {
+            if (coinData.snapshot.plants.filter(plant => !plant.harvestedAt).length >= 3) throw new Error('生长位已满');
+            coinData.snapshot.plants.push({ id: coinData.snapshot.plants.length + 1, seedId: item.id,
+              plantedAt: now, harvestedAt: null, growthDays: 0, requiredDays: item.growthDays! });
+          } else if (!coinData.snapshot.ownedItemIds.includes(itemId)) coinData.snapshot.ownedItemIds.push(itemId);
+          else return structuredClone(coinData.snapshot);
+          addCoinEntry(-item.price, `购买${item.name}`, itemId);
+          persistCoins();
+          return structuredClone(coinData.snapshot);
+        },
+        equipCoinItem: async itemId => {
+          state.coinEquips.push(itemId);
+          if (state.coinFailure) throw new Error('装扮保存失败，请重试');
+          const item = coinCatalog.find(item => item.id === itemId)!;
+          if (!coinData.snapshot.ownedItemIds.includes(itemId)) throw new Error('尚未拥有此装扮');
+          if (item.kind === 'theme') coinData.snapshot.equippedThemeId = itemId;
+          else coinData.snapshot.equippedPotId = itemId;
+          persistCoins();
+          return structuredClone(coinData.snapshot);
+        },
+        harvestCoinPlant: async plantId => {
+          if (state.coinFailure) throw new Error('收藏保存失败，请重试');
+          const plant = coinData.snapshot.plants.find(plant => plant.id === plantId)!;
+          if (plant.growthDays < plant.requiredDays) throw new Error('植物尚未成熟');
+          plant.harvestedAt = now;
+          persistCoins();
+          return structuredClone(coinData.snapshot);
+        },
+        listCoinTransactions: async query => {
+          if (state.coinReadFailure) throw new Error('收支明细读取失败');
+          const filtered = coinData.transactions.filter(item => query?.type === 'income' ? item.amount > 0 : query?.type === 'spend' ? item.amount < 0 : true).slice().reverse();
+          const page = query?.page || 1, pageSize = query?.pageSize || 10;
+          return { records: structuredClone(filtered.slice((page - 1) * pageSize, page * pageSize)), total: filtered.length, page, pageSize };
+        },
         getZoomFactor: async () => 1,
         generateReport: async (payload) => {
           state.generations.push(payload);
@@ -167,7 +261,7 @@ export const test = base.extend({
           return { success: true };
         },
       } as typeof window.api;
-    }, { ai: DEFAULT_AI_PROFILE, autoSync: DEFAULT_AUTO_SYNC_CONFIG, task: DEFAULT_AUTO_SYNC_TASK_CONFIG, feishu: DEFAULT_FEISHU_FORM_CONFIG });
+    }, { ai: DEFAULT_AI_PROFILE, autoSync: DEFAULT_AUTO_SYNC_CONFIG, task: DEFAULT_AUTO_SYNC_TASK_CONFIG, feishu: DEFAULT_FEISHU_FORM_CONFIG, coinCatalog: COIN_SHOP_ITEMS });
     await use(page);
   },
 });

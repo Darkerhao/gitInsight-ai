@@ -1,7 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
 
-export const navKeys = ['dashboard', 'repositories', 'sync', 'messages', 'help', 'material', 'config', 'generate', 'weekly', 'summary', 'reflection', 'history', 'timeline', 'ai', 'system', 'about'] as const;
+export const navKeys = ['dashboard', 'repositories', 'sync', 'messages', 'help', 'material', 'config', 'generate', 'weekly', 'summary', 'reflection', 'history', 'timeline', 'coins', 'ai', 'system', 'about'] as const;
 export type NavKey = (typeof navKeys)[number];
 
 const EmptyRouteView = {
