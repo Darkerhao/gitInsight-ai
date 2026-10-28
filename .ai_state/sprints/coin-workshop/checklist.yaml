@@ -1,0 +1,19 @@
+acceptance:
+  - id: assets
+    requirement: 主进程目录定价，余额扣币库存流水一致，永久物品幂等，失败可重试
+    status: passed
+  - id: appearance
+    requirement: 主题花盆可装备并重启保留，默认恢复原有明暗配色
+    status: passed
+  - id: garden
+    requirement: 三生长位、不同有效日报日期成长、成熟收藏留图鉴
+    status: passed
+  - id: ledger
+    requirement: 今日本地日期和累计收支、完整金额、筛选与分页
+    status: passed
+  - id: persistence
+    requirement: 新旧备份兼容，隔离Electron重启恢复后资产账本一致
+    status: passed
+  - id: validation
+    requirement: 专项与相关回归、类型构建、浏览器交互、独立代码规格评估
+    status: passed

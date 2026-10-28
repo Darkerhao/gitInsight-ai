@@ -1,3 +1,4 @@
+import type { CoinTransactionPage, CoinTransactionQuery, CoinWorkshopSnapshot } from './coinWorkshop.js';
 import type { AppLink, AppUpdateState } from './appUpdate.js';
 import type {
   AiConnectionTestPayload,
@@ -96,6 +97,11 @@ export interface GitInsightApi {
   getStorageInfo: () => Promise<StorageInfo>;
   exportDataBackup: () => Promise<BackupOperationResult>;
   restoreDataBackup: () => Promise<BackupOperationResult>;
+  getCoinWorkshop: () => Promise<CoinWorkshopSnapshot>;
+  purchaseCoinItem: (itemId: string) => Promise<CoinWorkshopSnapshot>;
+  equipCoinItem: (itemId: string) => Promise<CoinWorkshopSnapshot>;
+  harvestCoinPlant: (plantId: number) => Promise<CoinWorkshopSnapshot>;
+  listCoinTransactions: (query?: CoinTransactionQuery) => Promise<CoinTransactionPage>;
   getCheckinWalletSnapshot: () => Promise<CheckinWalletSnapshot>;
   runDailyCheckin: () => Promise<CheckinResult>;
   importCheckinWallet: (payload: CheckinWalletImportPayload) => Promise<CheckinWalletSnapshot>;

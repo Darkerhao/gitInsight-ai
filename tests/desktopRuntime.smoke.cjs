@@ -143,6 +143,12 @@ async function electronMain() {
           const config = await window.api.loadConfig();
           const material = await window.api.loadRoleMaterial('projectManager', '2026-01-02');
           if (${JSON.stringify(phase)} === 'write') {
+            await window.api.importCheckinWallet({ coins: 20000000, lastCheckinDate: '', streak: 0 });
+            for (const itemId of ['theme-ocean', 'pot-ceramic', 'seed-clover']) {
+              await window.api.purchaseCoinItem(itemId);
+            }
+            await window.api.equipCoinItem('theme-ocean');
+            await window.api.equipCoinItem('pot-ceramic');
             config.reporterName = 'Desktop runtime smoke';
             config.aiApiKey = ${JSON.stringify(fakeKey)};
             config.aiProfiles = config.aiProfiles.map(profile => ({ ...profile, apiKey: ${JSON.stringify(fakeKey)} }));
@@ -175,6 +181,8 @@ async function electronMain() {
             legacyMaterial: material,
             productMaterial: await window.api.loadRoleMaterial('productManager', '2026-01-03'),
             materialReport: await window.api.loadMaterialReport('projectManager', '2026-01-02'),
+            workshop: await window.api.getCoinWorkshop(),
+            transactions: await window.api.listCoinTransactions({ page: 1, pageSize: 20 }),
             mounted: Boolean(document.querySelector('#app')?.children.length),
           };
         })()`);
@@ -191,6 +199,19 @@ async function electronMain() {
         assert.equal(result.materialReport.materialRole, 'projectManager');
         assert.deepEqual(result.materialReport.repoPaths, []);
         assert.deepEqual(result.materialReport.material.sections, legacyMaterial.sections);
+        assert.equal(result.workshop.wallet.wallet.coins, 18300000);
+        assert.equal(result.workshop.equippedThemeId, 'theme-ocean');
+        assert.equal(result.workshop.equippedPotId, 'pot-ceramic');
+        assert.ok(result.workshop.ownedItemIds.includes('theme-ocean'));
+        assert.ok(result.workshop.ownedItemIds.includes('pot-ceramic'));
+        assert.equal(result.workshop.plants.length, 1);
+        assert.equal(result.workshop.plants[0].seedId, 'seed-clover');
+        assert.equal(result.workshop.plants[0].harvestedAt, null);
+        assert.equal(result.workshop.plants[0].growthDays, 0, 'Backdated reports cannot grow a newly planted seed');
+        assert.equal(result.workshop.summary.totalIncome, 20000000);
+        assert.equal(result.workshop.summary.totalSpent, 1700000);
+        assert.equal(result.transactions.total, 4);
+        assert.equal(result.transactions.records.reduce((balance, record) => balance + record.amount, 0), 18300000);
         assert.equal(window.isVisible(), false);
         if (isRestored) {
           assert.ok(result.config.aiProfiles.every(profile => profile.apiKey === ''));
@@ -212,6 +233,9 @@ async function electronMain() {
             config.feishuForm.endpoint = 'https://example.invalid/fake-backup-endpoint';
             await window.api.saveConfig(config);
             const exported = await window.api.exportDataBackup();
+            await window.api.purchaseCoinItem('seed-sunflower');
+            await window.api.equipCoinItem('theme-default');
+            await window.api.equipCoinItem('pot-default');
             config.reporterName = 'Mutated after export';
             config.autoSync.enabled = false;
             await window.api.saveConfig(config);
@@ -220,11 +244,20 @@ async function electronMain() {
               repoNames: ['isolated-repository'], repoPaths: [${JSON.stringify(path.join(root, 'repository'))}],
               report: 'Created after export', status: 'draft', commitsCount: 2, filesCount: 2,
             });
-            return { exported, config: await window.api.loadConfig(), reports: await window.api.listDailyReports() };
+            return {
+              exported, config: await window.api.loadConfig(), reports: await window.api.listDailyReports(),
+              workshop: await window.api.getCoinWorkshop(),
+              transactions: await window.api.listCoinTransactions({ page: 1, pageSize: 20 }),
+            };
           })()`);
           assert.deepEqual(exported.exported, { canceled: false, filePath: backupPath });
           assert.equal(exported.config.reporterName, 'Mutated after export');
           assert.equal(exported.reports.length, 4);
+          assert.equal(exported.workshop.wallet.wallet.coins, 17900000);
+          assert.equal(exported.workshop.plants.length, 2);
+          assert.equal(exported.workshop.equippedThemeId, 'theme-default');
+          assert.equal(exported.workshop.equippedPotId, 'pot-default');
+          assert.equal(exported.transactions.total, 5);
           // Restore exits the main process before invoke can resolve. Its pending
           // file and relaunch request are verified by the parent after exit.
           await window.webContents.executeJavaScript('void window.api.restoreDataBackup(); true');
@@ -350,7 +383,7 @@ async function nodeMain() {
     await restoredAgain.ready;
     await restoredAgain.exit;
     assert.deepEqual(fs.readFileSync(originalPath), originalSnapshot, 'Later startup must preserve the original snapshot byte for byte');
-    console.log(`Desktop runtime smoke passed (Electron ${require('electron/package.json').version}): renderer + preload IPC, encrypted credentials, legacy material migration, both material roles generated and persisted without Git, backup round trip including material identity, single-instance rejection and original snapshot preservation. All data isolated; no visible windows or network requests.`);
+    console.log(`Desktop runtime smoke passed (Electron ${require('electron/package.json').version}): renderer + preload IPC, encrypted credentials, legacy material migration, both material roles generated and persisted without Git, coin purchases/equipment/garden/ledger persisted across restart and backup restoration, backup round trip including material identity, single-instance rejection and original snapshot preservation. All data isolated; no visible windows or network requests.`);
   } finally {
     for (const child of children) {
       if (child.exitCode === null && child.signalCode === null) {

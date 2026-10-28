@@ -121,7 +121,12 @@ async function validateBackup(value: unknown): Promise<{ backup: DataBackup; dat
   try {
     const integrity = db.exec('PRAGMA integrity_check')[0]?.values;
     if (integrity?.length !== 1 || integrity[0]?.[0] !== 'ok') throw new Error('备份数据库完整性校验失败。');
-    const optionalColumns = { role_materials: ['role', 'date', 'sections_json', 'extra_notes', 'updated_at'] };
+    const optionalColumns = {
+      role_materials: ['role', 'date', 'sections_json', 'extra_notes', 'updated_at'],
+      coin_workshop_items: ['item_id', 'purchased_at'],
+      coin_workshop_settings: ['id', 'theme_id', 'pot_id'],
+      coin_garden_plants: ['id', 'seed_id', 'planted_at', 'planted_date', 'required_days', 'harvested_at'],
+    };
     for (const [table, required] of Object.entries({ ...requiredColumns, ...optionalColumns })) {
       const tableType = db.exec(`SELECT type FROM sqlite_master WHERE name = '${table}'`)[0]?.values[0]?.[0];
       if (!tableType && table in optionalColumns) continue;

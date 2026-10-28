@@ -1,3 +1,5 @@
+import type { CoinTransactionQuery } from '../../src/shared/coinWorkshop.js';
+import { getCoinWorkshop, purchaseCoinItem, equipCoinItem, harvestCoinPlant, listCoinTransactions } from './coinWorkshop.js';
 import { exportDataBackup, restoreDataBackup } from './backup.js';
 import { dialog, ipcMain, shell } from 'electron';
 import { APP_LINKS } from '../../src/shared/appUpdate.js';
@@ -131,6 +133,11 @@ export function registerIpcHandlers() {
   handle('storage:info', async () => getStorageInfo());
   handle('storage:export-backup', async () => exportDataBackup());
   handle('storage:restore-backup', async () => restoreDataBackup());
+  handle('coin-workshop:get', () => getCoinWorkshop());
+  handle('coin-workshop:purchase', (_event, itemId: string) => purchaseCoinItem(itemId));
+  handle('coin-workshop:equip', (_event, itemId: string) => equipCoinItem(itemId));
+  handle('coin-workshop:harvest', (_event, plantId: number) => harvestCoinPlant(plantId));
+  handle('coin-workshop:transactions', (_event, query?: CoinTransactionQuery) => listCoinTransactions(query));
   handle('checkin-wallet:get-snapshot', async () => getCheckinWalletSnapshot());
   handle('checkin-wallet:daily-checkin', async () => runDailyCheckin());
   handle('checkin-wallet:import-local', async (_event, payload: CheckinWalletImportPayload) => importCheckinWallet(payload));

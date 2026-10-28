@@ -1,15 +1,25 @@
 ---
 path: Refactor
-stage: plan
-current_sprint_slug: report-performance
-current_roadmap_slug: report-performance
-route_confidence: 0.98
-next_action: "剩余性能项：Git 采集、日报流式预览和数据库合并持久化"
+stage: ship
+current_sprint_slug: coin-workshop
+current_roadmap_slug: coin-workshop
+route_confidence: 0.97
+next_action: "码币工坊本地实现、运行验证、独立审查与收敛检查完成；未提交、推送或发布"
 pointers:
   latest_architecture_update: architecture/ARCHITECTURE.md
 ---
 
 # AI State Index
+
+## 本轮状态（2026-10-28）
+
+- 用户确认在新分支实现码币工坊第一版：工作台装扮、代码花园、收支明细。
+- 分支 `codex/coin-workshop`；隔离工作区 `.cache/worktrees/coin-workshop`，完成后同步当前分支；不提交或推送。
+- 设计：`sprints/coin-workshop/design.md`；路线：`roadmap/coin-workshop/roadmap.md`。
+- 共享现有钱包与账本；主进程商品定价，购买、扣币和资产发放闭环；日报按不同有效工作日期驱动花园。
+- 已同步当前分支：工坊专项 9/9；完整单测 211 pass、0 fail、9 个既有 skip；浏览器 67/67；类型/构建、真实隔离 Electron 购买/重启/备份恢复通过。
+- 代码、规格与 evaluator 均 PASS：`sprints/coin-workshop/reviews/pass1.md`；收敛检查与架构记录完成，checklist 全通过。未提交、推送或发布，保留原未跟踪配置。
+- 原 report-performance 记录保留，当前不修改相关性能实现。
 
 ## 本轮状态（2026-10-17）
 
@@ -110,6 +120,8 @@ pointers:
 ## route_history
 
 - 2026-10-29: Refactor / release-version-policy；固定 patch 改为按完整提交语义与净代码规模统一判定，单一发布链路；专项 29 pass/11 Windows skip，额外 Git Bash 全部15/15、最终升级7/7、历史2/2，代码/规格/evaluator PASS。保留 report-performance 主任务状态，未提交或发布。
+
+- 2026-10-28: Refactor + roadmap / coin-workshop；用户已确认首版三个场景，涉及钱包、SQLite、IPC、装扮和花园页面，验收明确；置信度 0.97。新分支及隔离写集，不提交或发布。
 
 - 2026-10-18: Bugfix / feishu-record-hours；真实飞书记录页的工时字段带（h）单位导致查重解析失败，定点修正与失败诊断；置信度 0.99。保留 report-performance 主任务状态，不提交或发布。
 

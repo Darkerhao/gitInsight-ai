@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
-import { Bot, BrainCog, CalendarClock, CalendarDays, FileCog, FileText, FolderKanban, History, Info, LayoutDashboard, Lightbulb, MessageSquare, BookOpen, Settings, Sparkles, Sprout, ClipboardList } from 'lucide-vue-next';
+import { Bot, BrainCog, CalendarClock, CalendarDays, Coins, FileCog, FileText, FolderKanban, History, Info, LayoutDashboard, Lightbulb, MessageSquare, BookOpen, Settings, Sparkles, Sprout, ClipboardList } from 'lucide-vue-next';
 import { useAppUpdates } from '@/composables/useAppUpdates';
 import { useMessages } from '@/composables/useMessages';
 
@@ -51,6 +51,7 @@ const navGroups: NavGroup[] = [
     icon: Sprout,
     children: [
       { key: 'timeline', label: '时间长河', icon: History, enabled: true },
+      { key: 'coins', label: '码币工坊', icon: Coins, enabled: true },
     ],
   },
   {

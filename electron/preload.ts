@@ -1,3 +1,4 @@
+import type { CoinTransactionPage, CoinTransactionQuery, CoinWorkshopSnapshot } from '../src/shared/coinWorkshop.js';
 import { contextBridge, ipcRenderer } from 'electron';
 import type { GitInsightApi } from '../src/shared/api.js';
 import type { AppLink, AppUpdateState } from '../src/shared/appUpdate.js';
@@ -117,6 +118,11 @@ const api: GitInsightApi = {
   getStorageInfo: () => ipcRenderer.invoke('storage:info') as Promise<StorageInfo>,
   exportDataBackup: () => ipcRenderer.invoke('storage:export-backup') as Promise<BackupOperationResult>,
   restoreDataBackup: () => ipcRenderer.invoke('storage:restore-backup') as Promise<BackupOperationResult>,
+  getCoinWorkshop: () => ipcRenderer.invoke('coin-workshop:get') as Promise<CoinWorkshopSnapshot>,
+  purchaseCoinItem: (itemId: string) => ipcRenderer.invoke('coin-workshop:purchase', itemId) as Promise<CoinWorkshopSnapshot>,
+  equipCoinItem: (itemId: string) => ipcRenderer.invoke('coin-workshop:equip', itemId) as Promise<CoinWorkshopSnapshot>,
+  harvestCoinPlant: (plantId: number) => ipcRenderer.invoke('coin-workshop:harvest', plantId) as Promise<CoinWorkshopSnapshot>,
+  listCoinTransactions: (query?: CoinTransactionQuery) => ipcRenderer.invoke('coin-workshop:transactions', query) as Promise<CoinTransactionPage>,
   getCheckinWalletSnapshot: () =>
     ipcRenderer.invoke('checkin-wallet:get-snapshot') as Promise<CheckinWalletSnapshot>,
   runDailyCheckin: () =>
