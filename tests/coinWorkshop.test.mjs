@@ -98,6 +98,46 @@ test('invalid products, unowned equipment, and insufficient funds leave balance 
   assert.equal((await c.shop.listCoinTransactions({ type: 'spend' })).total, 0);
 });
 
+test('card faces unlock permanently at catalog prices and concurrent retries charge once', async t => {
+  const c = await setup(t); await seed(c, 3500000);
+  const cards = [['card-paper', 500000, '时光纸笺'], ['card-blueprint', 1000000, '工程蓝图'], ['card-orbit', 2000000, '星轨纪念']];
+  let balance = 3500000;
+  for (const [id, price, name] of cards) {
+    await Promise.all([c.shop.purchaseCoinItem(id), c.shop.purchaseCoinItem(id)]);
+    balance -= price;
+    const snapshot = await c.shop.getCoinWorkshop();
+    assert.equal(snapshot.wallet.wallet.coins, balance);
+    assert.equal(snapshot.ownedItemIds.filter(itemId => itemId === id).length, 1);
+    const transaction = (await c.shop.listCoinTransactions({ type: 'spend' })).records.find(row => row.refKey === id);
+    assert.equal(transaction.amount, -price);
+    assert.equal(transaction.reason, `购买${name}`);
+    await assert.rejects(c.shop.equipCoinItem(id), /装扮|装备/);
+    assert.equal((await c.shop.getCoinWorkshop()).equippedPotId, 'pot-default');
+  }
+  assert.equal((await c.shop.listCoinTransactions({ type: 'spend' })).total, 3);
+  const restarted = await setup(t, c.directory);
+  const restored = await restarted.shop.getCoinWorkshop();
+  assert.equal(restored.wallet.wallet.coins, 0);
+  assert.ok(cards.every(([id]) => restored.ownedItemIds.includes(id)));
+  await restarted.shop.purchaseCoinItem('card-orbit');
+  assert.equal((await restarted.shop.listCoinTransactions({ type: 'spend' })).total, 3);
+});
+
+test('card purchase rejects insufficient funds and rolls back all state on persistence failure', async t => {
+  const c = await setup(t); await seed(c, 500000);
+  await assert.rejects(c.shop.purchaseCoinItem('card-blueprint'), /不足/);
+  c.state.fail = true;
+  await assert.rejects(c.shop.purchaseCoinItem('card-paper'), /disk unavailable/);
+  const snapshot = await c.shop.getCoinWorkshop();
+  assert.equal(snapshot.wallet.wallet.coins, 500000);
+  assert.ok(!snapshot.ownedItemIds.some(id => id.startsWith('card-')));
+  assert.equal((await c.shop.listCoinTransactions({ type: 'spend' })).total, 0);
+  c.state.fail = false;
+  await c.shop.purchaseCoinItem('card-paper');
+  assert.equal((await c.shop.getCoinWorkshop()).wallet.wallet.coins, 0);
+  assert.equal((await c.shop.listCoinTransactions({ type: 'spend' })).total, 1);
+});
+
 test('wallet writes serialize purchases, normal spending, check-in, and rewards without losing updates', async t => {
   const c = await setup(t); await seed(c, 1400000);
   const [purchase, spend, checkin, reward] = await Promise.allSettled([

@@ -1,5 +1,12 @@
 # 当前架构要点
 
+## 工作纪念卡（2026-10-28）
+
+- 工坊新增纪念卡页签，复用永久商品资产和账本；card 类型不能进入装备接口，不新增表或 IPC。
+- WorkMemoryCards 从现有时间长河 API 读取记录，日期/项目本地筛选；workMemoryCard 统一生成预览与 SVG 导出。动态文字转义，无外部资源或新增依赖。
+- 统计保留日报累计口径，合篇日报不拆分各项目贡献；空数据、非法日期、读取失败、未解锁均禁止导出。
+- [设计](../sprints/work-memory-cards/design.md) · [验证](../sprints/work-memory-cards/runtime-verify.md)
+
 ## 码币工坊（2026-10-28）
 
 - 成长中心 `/coins` 提供装扮、代码花园和收支明细；商品与价格只有 `src/shared/coinWorkshop.ts` 一份目录，主进程执行购买与拥有校验。

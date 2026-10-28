@@ -144,7 +144,7 @@ async function electronMain() {
           const material = await window.api.loadRoleMaterial('projectManager', '2026-01-02');
           if (${JSON.stringify(phase)} === 'write') {
             await window.api.importCheckinWallet({ coins: 20000000, lastCheckinDate: '', streak: 0 });
-            for (const itemId of ['theme-ocean', 'pot-ceramic', 'seed-clover']) {
+            for (const itemId of ['theme-ocean', 'pot-ceramic', 'seed-clover', 'card-paper', 'card-paper']) {
               await window.api.purchaseCoinItem(itemId);
             }
             await window.api.equipCoinItem('theme-ocean');
@@ -199,19 +199,21 @@ async function electronMain() {
         assert.equal(result.materialReport.materialRole, 'projectManager');
         assert.deepEqual(result.materialReport.repoPaths, []);
         assert.deepEqual(result.materialReport.material.sections, legacyMaterial.sections);
-        assert.equal(result.workshop.wallet.wallet.coins, 18300000);
+        assert.equal(result.workshop.wallet.wallet.coins, 17800000);
         assert.equal(result.workshop.equippedThemeId, 'theme-ocean');
         assert.equal(result.workshop.equippedPotId, 'pot-ceramic');
         assert.ok(result.workshop.ownedItemIds.includes('theme-ocean'));
         assert.ok(result.workshop.ownedItemIds.includes('pot-ceramic'));
+        assert.ok(result.workshop.ownedItemIds.includes('card-paper'));
+        assert.equal(result.transactions.records.filter(record => record.refKey === 'card-paper').length, 1);
         assert.equal(result.workshop.plants.length, 1);
         assert.equal(result.workshop.plants[0].seedId, 'seed-clover');
         assert.equal(result.workshop.plants[0].harvestedAt, null);
         assert.equal(result.workshop.plants[0].growthDays, 0, 'Backdated reports cannot grow a newly planted seed');
         assert.equal(result.workshop.summary.totalIncome, 20000000);
-        assert.equal(result.workshop.summary.totalSpent, 1700000);
-        assert.equal(result.transactions.total, 4);
-        assert.equal(result.transactions.records.reduce((balance, record) => balance + record.amount, 0), 18300000);
+        assert.equal(result.workshop.summary.totalSpent, 2200000);
+        assert.equal(result.transactions.total, 5);
+        assert.equal(result.transactions.records.reduce((balance, record) => balance + record.amount, 0), 17800000);
         assert.equal(window.isVisible(), false);
         if (isRestored) {
           assert.ok(result.config.aiProfiles.every(profile => profile.apiKey === ''));
@@ -253,11 +255,11 @@ async function electronMain() {
           assert.deepEqual(exported.exported, { canceled: false, filePath: backupPath });
           assert.equal(exported.config.reporterName, 'Mutated after export');
           assert.equal(exported.reports.length, 4);
-          assert.equal(exported.workshop.wallet.wallet.coins, 17900000);
+          assert.equal(exported.workshop.wallet.wallet.coins, 17400000);
           assert.equal(exported.workshop.plants.length, 2);
           assert.equal(exported.workshop.equippedThemeId, 'theme-default');
           assert.equal(exported.workshop.equippedPotId, 'pot-default');
-          assert.equal(exported.transactions.total, 5);
+          assert.equal(exported.transactions.total, 6);
           // Restore exits the main process before invoke can resolve. Its pending
           // file and relaunch request are verified by the parent after exit.
           await window.webContents.executeJavaScript('void window.api.restoreDataBackup(); true');
