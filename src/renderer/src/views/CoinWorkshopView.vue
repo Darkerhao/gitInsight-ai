@@ -4,13 +4,14 @@ import { ArrowDownLeft, ArrowUpRight, Check, Coins, Flower2, Palette, RefreshCw,
 import { ElMessage, ElMessageBox, ElSkeleton } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import GardenPlant from '@/components/rewards/GardenPlant.vue';
+import WorkMemoryCards from '@/components/rewards/WorkMemoryCards.vue';
 import { useCoinWorkshop } from '@/composables/useCoinWorkshop';
 import { COIN_SHOP_ITEMS } from '@shared/coinWorkshop';
 import type { CoinShopItem, CoinTransactionPage, CoinTransactionQuery } from '@shared/coinWorkshop';
 
 const workshop = useCoinWorkshop();
 const { snapshot, loading, error, pending } = workshop;
-const tab = ref<'shop' | 'garden' | 'ledger'>('shop');
+const tab = ref<'shop' | 'garden' | 'cards' | 'ledger'>('shop');
 const themes = COIN_SHOP_ITEMS.filter(item => item.kind === 'theme');
 const pots = COIN_SHOP_ITEMS.filter(item => item.kind === 'pot');
 const seeds = COIN_SHOP_ITEMS.filter(item => item.kind === 'seed');
@@ -46,7 +47,7 @@ async function purchase(item: CoinShopItem) {
       `花费 ${amount(item.price)} 码币${item.kind === 'seed' ? '种下' : '购买'}「${item.name}」？${item.kind === 'seed' ? '保存日报让它慢慢成长。' : '购买后永久拥有，切换使用不再扣币。'}`,
       '确认购买', { confirmButtonText: '确认购买', cancelButtonText: '再想想', type: 'info' },
     );
-    if (await workshop.purchase(item.id)) ElMessage.success(item.kind === 'seed' ? '已种下，下一份日报就是新的养分。' : '购买成功，可随时使用这款装扮。');
+    if (await workshop.purchase(item.id)) ElMessage.success(item.kind === 'seed' ? '已种下，下一份日报就是新的养分。' : '购买成功，已永久解锁。');
   } catch (cause) {
     if (cause !== 'cancel' && cause !== 'close') ElMessage.error(cause instanceof Error ? cause.message : '购买未完成');
   }
@@ -118,9 +119,11 @@ onMounted(() => { void workshop.refresh(); });
       <nav class="coin-tabs" role="tablist" aria-label="工坊内容">
         <button id="coin-shop-tab" role="tab" :aria-selected="tab === 'shop'" aria-controls="coin-shop-panel" @click="tab = 'shop'"><ShoppingBag :size="17" />装扮商店</button>
         <button id="coin-garden-tab" role="tab" :aria-selected="tab === 'garden'" aria-controls="coin-garden-panel" @click="tab = 'garden'"><Sprout :size="17" />代码花园<span>{{ growing.length }}/3</span></button>
+        <button id="coin-cards-tab" role="tab" :aria-selected="tab === 'cards'" aria-controls="coin-cards-panel" @click="tab = 'cards'"><Palette :size="17" />工作纪念卡</button>
         <button id="coin-ledger-tab" role="tab" :aria-selected="tab === 'ledger'" aria-controls="coin-ledger-panel" @click="tab = 'ledger'"><Coins :size="17" />收支明细</button>
       </nav>
 
+      <WorkMemoryCards v-if="tab === 'cards'" id="coin-cards-panel" role="tabpanel" aria-labelledby="coin-cards-tab" :owned-item-ids="snapshot.ownedItemIds" :balance="balance" :pending="pending" @purchase="purchase" />
       <section v-if="tab === 'shop'" id="coin-shop-panel" role="tabpanel" aria-labelledby="coin-shop-tab" class="coin-shop-panel">
         <div class="coin-section-head"><div><h2><Palette :size="20" /> 为工作台换一种心情</h2><p>一次购买，永久拥有。明亮与深色模式都能使用。</p></div><span class="coin-section-note">购买后点击使用，即刻切换配色</span></div>
         <div class="coin-theme-grid">

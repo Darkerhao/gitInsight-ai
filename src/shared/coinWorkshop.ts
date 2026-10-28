@@ -2,7 +2,7 @@ import type { CheckinWalletSnapshot } from './types.js';
 
 export interface CoinShopItem {
   id: string;
-  kind: 'theme' | 'seed' | 'pot';
+  kind: 'theme' | 'seed' | 'pot' | 'card';
   name: string;
   description: string;
   price: number;
@@ -11,6 +11,9 @@ export interface CoinShopItem {
 }
 
 export const COIN_SHOP_ITEMS: CoinShopItem[] = [
+  { id: 'card-paper', kind: 'card', name: '时光纸笺', description: '暖纸肌理、山形藏印，把日常酿成值得珍藏的时光。', price: 500000, accent: '#faf4e8' },
+  { id: 'card-blueprint', kind: 'card', name: '工程蓝图', description: '精密网格、立体构筑，为每一次交付留下工程印记。', price: 1000000, accent: '#102f4c' },
+  { id: 'card-orbit', kind: 'card', name: '星轨纪念', description: '深空微光、虹彩星环，让持续的投入拥有自己的引力。', price: 2000000, accent: '#231e3d' },
   { id: 'theme-default', kind: 'theme', name: '原野绿', description: '熟悉的清新绿色，随时免费切换。', price: 0, accent: '#b9f36b' },
   { id: 'theme-ocean', kind: 'theme', name: '深海蓝', description: '把海风的清爽带进工作台。', price: 1000000, accent: '#58c8ed' },
   { id: 'theme-lavender', kind: 'theme', name: '暮光紫', description: '安静的紫色，留一份沉稳给专注时刻。', price: 2000000, accent: '#b9a0ff' },

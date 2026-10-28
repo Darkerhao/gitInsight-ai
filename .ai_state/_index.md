@@ -1,15 +1,23 @@
 ---
 path: Refactor
 stage: ship
-current_sprint_slug: coin-workshop
-current_roadmap_slug: coin-workshop
+current_sprint_slug: work-memory-cards
+current_roadmap_slug: none
 route_confidence: 0.97
-next_action: "码币工坊本地实现、运行验证、独立审查与收敛检查完成；未提交、推送或发布"
+next_action: "工作纪念卡实现及本地验证、独立审查与收敛检查完成；未提交、推送或发布"
 pointers:
   latest_architecture_update: architecture/ARCHITECTURE.md
 ---
 
 # AI State Index
+
+## 工作纪念卡完成（2026-10-28）
+
+- `/coins` 新增工作纪念卡，日期/项目筛选，三款永久卡面 50/100/200 万码币，统一账本及 SVG 导出。
+- 无新增表、IPC 或依赖；共享时间长河统计口径，卡面注明日报累计与合篇范围。
+- 专项 13/13、Chrome 回归 8/8、类型/构建、真实隔离 Electron 购买幂等/重启/备份恢复通过；独立代码、规格、最终评估与收敛检查 PASS。
+- 设计及证据：`sprints/work-memory-cards/`。保留原未跟踪配置；未提交、推送或发布。
+
 
 ## 本轮状态（2026-10-28）
 
@@ -120,6 +128,9 @@ pointers:
 ## route_history
 
 - 2026-10-29: Refactor / release-version-policy；固定 patch 改为按完整提交语义与净代码规模统一判定，单一发布链路；专项 29 pass/11 Windows skip，额外 Git Bash 全部15/15、最终升级7/7、历史2/2，代码/规格/evaluator PASS。保留 report-performance 主任务状态，未提交或发布。
+
+- 2026-10-28: Refactor / work-memory-cards；现有商品和时间长河支撑单一购买导出闭环，跨目录集成与专项验证；置信度 0.97。
+
 
 - 2026-10-28: Refactor + roadmap / coin-workshop；用户已确认首版三个场景，涉及钱包、SQLite、IPC、装扮和花园页面，验收明确；置信度 0.97。新分支及隔离写集，不提交或发布。
 

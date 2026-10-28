@@ -85,7 +85,7 @@ export async function purchaseCoinItem(itemId: string): Promise<CoinWorkshopSnap
 
 export async function equipCoinItem(itemId: string): Promise<CoinWorkshopSnapshot> {
   const item = itemById(itemId);
-  if (item.kind === 'seed') throw new Error('种子不能作为装扮装备');
+  if (item.kind !== 'theme' && item.kind !== 'pot') throw new Error('只有主题和花盆可以作为装扮装备');
   await mutateCheckinWallet((db, wallet) => {
     if (!owned(db, item)) throw new Error('请先购买该装扮');
     const column = item.kind === 'theme' ? 'theme_id' : 'pot_id';
