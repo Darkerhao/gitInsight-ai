@@ -260,3 +260,18 @@ test('portable backups preserve workshop assets and accept old backups without w
   await files.writeFile(c.state.filename, JSON.stringify(exported));
   await restored.load('electron/main/backup.ts').restoreDataBackup();
 });
+
+test('focus scenes use permanent ownership and charge the listed prices exactly once', async t => {
+  const c = await setup(t); await seed(c);
+  assert.ok((await c.shop.getCoinWorkshop()).ownedItemIds.includes('scene-desk'));
+  for (const id of ['scene-rain', 'scene-cafe', 'scene-space']) {
+    await Promise.all([c.shop.purchaseCoinItem(id), c.shop.purchaseCoinItem(id)]);
+  }
+  const snapshot = await c.shop.getCoinWorkshop();
+  assert.equal(snapshot.wallet.wallet.coins, 4000000);
+  const tx = await c.shop.listCoinTransactions({ type: 'spend' });
+  assert.equal(tx.total, 3);
+  assert.deepEqual(tx.records.map(row => row.amount).sort(), [-1000000, -2000000, -3000000].sort());
+  const restarted = await setup(t, c.directory);
+  for (const id of ['scene-rain', 'scene-cafe', 'scene-space']) assert.ok((await restarted.shop.getCoinWorkshop()).ownedItemIds.includes(id));
+});

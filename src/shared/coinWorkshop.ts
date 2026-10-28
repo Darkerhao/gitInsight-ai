@@ -2,7 +2,7 @@ import type { CheckinWalletSnapshot } from './types.js';
 
 export interface CoinShopItem {
   id: string;
-  kind: 'theme' | 'seed' | 'pot' | 'card';
+  kind: 'theme' | 'seed' | 'pot' | 'card' | 'scene';
   name: string;
   description: string;
   price: number;
@@ -11,6 +11,10 @@ export interface CoinShopItem {
 }
 
 export const COIN_SHOP_ITEMS: CoinShopItem[] = [
+  { id: 'scene-desk', kind: 'scene', name: '简洁书桌', description: '一盏灯，一张桌，把此刻留给手头的事。', price: 0 },
+  { id: 'scene-rain', kind: 'scene', name: '雨夜', description: '窗外细雨与城市微光，陪你安静投入。', price: 1000000 },
+  { id: 'scene-cafe', kind: 'scene', name: '咖啡馆', description: '暖灯、木桌与一杯咖啡，留出自己的角落。', price: 2000000 },
+  { id: 'scene-space', kind: 'scene', name: '宇宙舱', description: '隔着舷窗看星球，让思绪专注于眼前。', price: 3000000 },
   { id: 'card-paper', kind: 'card', name: '时光纸笺', description: '暖纸肌理、山形藏印，把日常酿成值得珍藏的时光。', price: 500000, accent: '#faf4e8' },
   { id: 'card-blueprint', kind: 'card', name: '工程蓝图', description: '精密网格、立体构筑，为每一次交付留下工程印记。', price: 1000000, accent: '#102f4c' },
   { id: 'card-orbit', kind: 'card', name: '星轨纪念', description: '深空微光、虹彩星环，让持续的投入拥有自己的引力。', price: 2000000, accent: '#231e3d' },

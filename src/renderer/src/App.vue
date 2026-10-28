@@ -9,6 +9,7 @@ import AppTopbar from '@/components/AppTopbar.vue';
 import WelcomeGate from '@/components/WelcomeGate.vue';
 import { useAppUpdates } from '@/composables/useAppUpdates';
 import { usePageZoom } from '@/composables/usePageZoom';
+import { useFocusSpace } from '@/composables/useFocusSpace';
 import { useCoinWorkshop } from '@/composables/useCoinWorkshop';
 import { navKeys } from '@/router';
 import type { NavKey } from '@/router';
@@ -23,6 +24,7 @@ type ViewTransitionDocument = Document & {
 const assistant = useAssistant();
 const appUpdates = useAppUpdates();
 const coinWorkshop = useCoinWorkshop();
+const focusSpace = useFocusSpace();
 const THEME_STORAGE_KEY = 'gitinsight:theme-mode';
 const WELCOME_STORAGE_KEY = 'gitinsight:welcome-finished';
 const WELCOME_ANIMATION_ENABLED_KEY = 'gitinsight:welcome-animation-enabled';
@@ -292,6 +294,7 @@ onMounted(() => {
   void initializeAssistant();
   void appUpdates.initialize();
   void coinWorkshop.initialize();
+  focusSpace.initialize();
 });
 
 onBeforeUnmount(() => {
@@ -299,6 +302,7 @@ onBeforeUnmount(() => {
   assistant.dispose();
   appUpdates.dispose();
   coinWorkshop.dispose();
+  focusSpace.dispose();
 });
 </script>
 
