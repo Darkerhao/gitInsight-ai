@@ -214,6 +214,6 @@ npm run test:app-update:desktop # Windows 更新实跑：本地 HTTP、校验和
 npm run dist:win
 ```
 
-日常开发使用 `dev`：推送 `dev` 或向 `dev/main` 提 PR 时，GitHub Actions 执行测试、类型检查、构建与浏览器回归。验证通过后合入并推送 `main`，发布流程检查通过后自动递增补丁版本（如 `3.8.6 → 3.8.7`），回写版本文件并创建标签，再构建三平台统一安装包、发布 GitHub Release。生成版本提交后，CI 自动将该提交 cherry-pick 到 `dev`；开发前拉取 `dev` 即可。其他分支推送不触发检查或打包，手动打包仅允许 `main`。详见 [发布与打包工作流](docs/release-workflow.md)。
+日常开发使用 `dev`，向 `dev/main` 提 PR 时，GitHub Actions 执行测试、类型检查、构建与浏览器回归。合入并推送 `main` 后，发布流程检查通过，再根据上个版本以来的提交和代码规模自动升版：明确的不兼容变更升主版本；新增功能、有效代码增删 ≥ 500 行或涉及 ≥ 20 个代码文件升次版本；其余升补丁版本。流程回写版本文件并创建标签，构建三平台统一安装包，再发布 GitHub Release。生成版本提交后，CI 自动将该提交 cherry-pick 到 `dev`；开发前拉取 `dev` 即可。其他分支推送不触发检查或打包，手动打包仅允许 `main`。运行 `node scripts/release-version.mjs` 可只读预览判断依据，详见 [发布与打包工作流](docs/release-workflow.md)。
 
 架构说明、IPC 契约与代码约定见 [CLAUDE.md](CLAUDE.md)。
