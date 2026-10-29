@@ -109,6 +109,8 @@ pointers:
 
 ## route_history
 
+- 2026-10-29: Refactor / release-version-policy；固定 patch 改为按完整提交语义与净代码规模统一判定，单一发布链路；专项 29 pass/11 Windows skip，额外 Git Bash 全部15/15、最终升级7/7、历史2/2，代码/规格/evaluator PASS。保留 report-performance 主任务状态，未提交或发布。
+
 - 2026-10-18: Bugfix / feishu-record-hours；真实飞书记录页的工时字段带（h）单位导致查重解析失败，定点修正与失败诊断；置信度 0.99。保留 report-performance 主任务状态，不提交或发布。
 
 - 2026-10-17: Refactor / report-performance；用户授权继续三项剩余性能优化，调用链和验收明确，涉及主进程/IPC/渲染/持久化；置信度 0.98。隔离 worktree 实施，保留第一轮，不提交或推送。

@@ -53,10 +53,11 @@
 - 已移除无入口农场代码/类型及新建农场表，历史表不删除；打包仅使用 `electron-builder.config.cjs`。
 - [本轮验证](../sprints/desktop-reliability/runtime-verify.md)。
 
-## 自动版本与桌面发布（2026-09-29）
+## 自动版本与桌面发布（2026-10-29）
 
-- `release.yml` 是唯一发布入口：main push → 复用 checks → patch 升版并原子回写 main/tag → 三平台固定 SHA 打包 → 汇总发布 Release。
-- checks.yml 在 dev 推送、目标为 dev/main 的 PR 上独立触发；main 只通过发布流程调用检查，避免重复运行。其他分支推送不触发检查或打包。
+- `release.yml` 是唯一发布入口：main push → 复用 checks → scripts/release-version.mjs 判定升版并原子回写 main/tag → 三平台固定 SHA 打包 → 汇总发布 Release。
+- 版本策略无外部依赖：完整提交的显式破坏性标记 major，feat 或有效代码增删 ≥500 行/≥20 文件 minor，其余 patch。优先当前版本标签、否则最高可达稳定标签；净差异排除测试/文档/锁文件/产物与纯重命名，提交范围排除已发布的等价 cherry-pick。支持本地只读 JSON 预览，CI 写入升版输出及可读判定摘要。
+- checks.yml 在目标为 dev/main 的 PR 上独立触发；main 只通过发布流程调用检查，避免重复运行。其他分支推送不触发检查或打包。
 - main 发布串行执行；升版前过滤过期源提交，竞争写入由 Git 非强制原子推送拒绝。GITHUB_TOKEN 回写不会再触发 push 工作流。
 - 手动 workflow_dispatch 仅允许 main，只构建当前源提交，不升版或发布；其他分支或标签跳过全部任务。打包失败重跑 failed jobs 复用原版本。prepare 生成版本提交后，独立 sync-dev job 将准确 SHA cherry-pick -x 到最新 dev；普通 push 拒绝并发覆盖，空提交重跑跳过，冲突中止。同步失败单独重跑，不阻断三平台打包发布。
 - Artifacts 保留版本子目录；Release 用递归 glob 收集安装包。旧 release-tag 脚本已删除。

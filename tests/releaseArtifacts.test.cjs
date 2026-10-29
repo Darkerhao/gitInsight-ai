@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const { execFileSync, spawnSync } = require('node:child_process');
-const { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
+const { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
 const { join, resolve } = require('node:path');
 const { tmpdir } = require('node:os');
 const { test } = require('node:test');
@@ -74,6 +74,9 @@ test('only main pushes publish, after checks and all packages from one commit', 
   assert.ok(Object.hasOwn(workflow.on, 'workflow_dispatch'));
   assert.equal(workflow.concurrency['cancel-in-progress'], false);
   assert.equal(workflow.jobs.prepare.needs, 'verify');
+  const prepare = workflow.jobs.prepare.steps.find(step => step.id === 'version').run;
+  assert.match(prepare, /node scripts\/release-version\.mjs --github-output/);
+  assert.match(prepare, /npm version "\$bump" --no-git-tag-version --ignore-scripts/);
   assert.equal(workflow.jobs.verify.if, "github.ref == 'refs/heads/main'", 'Manual builds must also stay on main');
   assert.equal(workflow.jobs.verify.uses, './.github/workflows/checks.yml');
   const checks = load(readFileSync(join(__dirname, '../.github/workflows/checks.yml'), 'utf8'));
@@ -164,8 +167,11 @@ function releaseFixture(t) {
     name: 'release-test', version: '3.8.6', lockfileVersion: 3,
     packages: { '': { name: 'release-test', version: '3.8.6' } },
   }, null, 2) + '\n');
+  mkdirSync(join(checkout, 'scripts'));
+  copyFileSync(join(__dirname, '../scripts/release-version.mjs'), join(checkout, 'scripts/release-version.mjs'));
   git('add', '.');
   git('commit', '-m', 'Initial version');
+  git('tag', 'v3.8.6');
   git('remote', 'add', 'origin', remote);
   git('push', '-u', 'origin', 'main');
   const sha = git('rev-parse', 'HEAD');
@@ -184,6 +190,7 @@ function releaseFixture(t) {
       env: {
         ...process.env, GITHUB_EVENT_NAME: eventName, GITHUB_SHA: sourceSha,
         GITHUB_OUTPUT: outputFile.replaceAll('\\', '/'),
+        GITHUB_STEP_SUMMARY: join(root, 'github-summary').replaceAll('\\', '/'),
       },
     });
     const output = Object.fromEntries(readFileSync(outputFile, 'utf8').trim().split('\n').filter(Boolean)
@@ -304,6 +311,31 @@ shellTest('main release bumps both manifests and atomically pushes the version c
   assert.equal(git('--git-dir', remote, 'tag', '--list'), 'v3.8.7');
 });
 
+for (const [message, nextVersion] of [
+  ['feat(report): new report feature', '3.9.0'],
+  ['refactor(api)!: incompatible report contract', '4.0.0'],
+]) {
+  shellTest(`main release selects ${nextVersion} from the change and synchronizes both manifests`, t => {
+    const { remote, checkout, git, run } = releaseFixture(t);
+    mkdirSync(join(checkout, 'src'));
+    writeFileSync(join(checkout, 'src', 'feature.ts'), 'export const feature = true;\n');
+    git('add', 'src');
+    git('commit', '-m', message);
+    const source = git('rev-parse', 'HEAD');
+    git('push', 'origin', 'HEAD:main');
+    const result = run('push', source);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.output.tag, `v${nextVersion}`);
+    assert.equal(git('--git-dir', remote, 'rev-parse', 'main'), result.output.ref);
+    assert.equal(git('--git-dir', remote, 'rev-parse', `v${nextVersion}`), result.output.ref);
+    const pkg = JSON.parse(readFileSync(join(checkout, 'package.json'), 'utf8'));
+    const lock = JSON.parse(readFileSync(join(checkout, 'package-lock.json'), 'utf8'));
+    assert.equal(pkg.version, nextVersion);
+    assert.equal(lock.version, nextVersion);
+    assert.equal(lock.packages[''].version, nextVersion);
+  });
+}
+
 shellTest('manual builds preserve the selected commit and do not create release refs', t => {
   const { remote, git, sha, run } = releaseFixture(t);
   const result = run('workflow_dispatch');
@@ -334,7 +366,7 @@ shellTest('an existing remote version tag prevents a release without changing ma
   git('--git-dir', remote, 'tag', 'v3.8.7', sha);
   const result = run();
   assert.notEqual(result.status, 0);
-  assert.deepEqual(result.output, {});
+  assert.deepEqual(result.output, { bump: 'patch' });
   assert.equal(git('--git-dir', remote, 'rev-parse', 'main'), sha);
   assert.equal(git('--git-dir', remote, 'rev-parse', 'v3.8.7'), sha);
 });
@@ -345,7 +377,7 @@ shellTest('remote tag protection rejects the atomic push without leaving a versi
   const result = run();
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /atomic push failure|hook declined/);
-  assert.deepEqual(result.output, {});
+  assert.deepEqual(result.output, { bump: 'patch' });
   assert.equal(git('--git-dir', remote, 'rev-parse', 'main'), sha);
   assert.equal(git('--git-dir', remote, 'tag', '--list'), '');
 });

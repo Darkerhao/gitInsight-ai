@@ -50,7 +50,9 @@ jobs:
             exit 0
           fi
 
-          npm version patch --no-git-tag-version --ignore-scripts
+          node scripts/release-version.mjs --github-output
+          bump=$(sed -n 's/^bump=//p' "$GITHUB_OUTPUT" | tail -n 1)
+          npm version "$bump" --no-git-tag-version --ignore-scripts
           version=$(node -p "require('./package.json').version")
           tag="v$version"
           git config user.name "github-actions[bot]"
