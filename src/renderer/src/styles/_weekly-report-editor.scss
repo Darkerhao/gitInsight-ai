@@ -62,8 +62,13 @@
 }
 
 .weekly-editor-message {
+  animation: motion-feedback-in var(--motion-feedback) ease-out;
   color: var(--el-color-warning);
 }
+
+.weekly-editor-message.is-failed { color: var(--el-color-danger); }
+.weekly-editor-message.is-success { color: var(--c-primary); }
+@media (prefers-reduced-motion: reduce) { .weekly-editor-message { animation: none; } }
 
 .weekly-report-textarea .el-textarea__inner {
   min-height: 360px;

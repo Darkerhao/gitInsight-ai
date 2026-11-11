@@ -58,8 +58,8 @@ defineProps<{ themeId: string }>();
 .landscape-back { fill: var(--hill-back); }
 .landscape-middle { fill: var(--hill-middle); }
 .landscape-front { fill: var(--hill-front); }
-.preview-window { position: absolute; width: 73%; left: 13.5%; top: 28%; height: 64%; background: #202a29; border: 1px solid #ffffff65; border-radius: 6px; box-shadow: 0 9px 18px #12272040; transform: rotate(-5deg); transition: transform .22s ease; overflow: hidden; }
-.theme-preview:hover .preview-window { transform: rotate(0) translateY(-3px); }
+.preview-window { position: absolute; width: 73%; left: 13.5%; top: 28%; height: 64%; background: #202a29; border: 1px solid #ffffff65; border-radius: 6px; box-shadow: 0 9px 18px #12272040; transform: rotate(-5deg); transition: transform var(--motion-reset) ease; overflow: hidden; }
+@media (hover: hover) and (pointer: fine) { .theme-preview:hover .preview-window { transform: translateY(-2px) rotate(-5deg); } }
 .preview-titlebar { display: flex; gap: 3px; align-items: center; height: 16%; min-height: 13px; padding: 0 6%; border-bottom: 1px solid #ffffff10; }
 .preview-titlebar i { width: 3px; height: 3px; background: #86928c; border-radius: 50%; }
 .preview-titlebar i:first-child { background: var(--preview-accent); }

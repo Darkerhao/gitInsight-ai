@@ -288,7 +288,13 @@ async function initializeAssistant() {
   }
 }
 
+function updateMotionVisibility() {
+  document.documentElement.toggleAttribute('data-motion-paused', document.hidden);
+}
+
 onMounted(() => {
+  updateMotionVisibility();
+  document.addEventListener('visibilitychange', updateMotionVisibility);
   window.addEventListener('keydown', handlePageZoomShortcut, true);
   void initializePageZoom();
   void initializeAssistant();
@@ -298,6 +304,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', updateMotionVisibility);
+  document.documentElement.removeAttribute('data-motion-paused');
   window.removeEventListener('keydown', handlePageZoomShortcut, true);
   assistant.dispose();
   appUpdates.dispose();

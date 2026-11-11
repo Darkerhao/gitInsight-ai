@@ -181,42 +181,27 @@
   font-variant-numeric: tabular-nums;
 }
 
-@keyframes report-deck-float {
-  0%, 100% {
-    transform: perspective(900px) translateY(0) rotateX(0deg) rotateY(-3deg);
-  }
-  50% {
-    transform: perspective(900px) translateY(-6px) rotateX(4deg) rotateY(3deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .report-context-deck {
-    animation: report-deck-float 5s ease-in-out infinite;
-  }
-}
-
 @media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
-  .report-context-deck:hover {
-    animation-play-state: paused;
-  }
-
   .report-context-deck::before,
   .report-context-deck::after,
   .report-context-sheet {
-    transition: transform 240ms ease-out;
+    transition: transform var(--motion-reset) ease-out;
   }
 
+  .report-context-deck[data-tilting]::before,
+  .report-context-deck[data-tilting]::after,
+  .report-context-deck[data-tilting] .report-context-sheet { transition: none; }
+
   .report-context-deck::before {
-    transform: translate(6px, -12px) rotate(-6deg) rotateX(var(--deck-rotate-x, 0deg)) rotateY(calc(-12deg + var(--deck-rotate-y, 0deg))) scale(0.94);
+    transform: translate(6px, -12px) rotate(-6deg) rotateX(var(--card-tilt-x, 0deg)) rotateY(calc(-12deg + var(--card-tilt-y, 0deg))) scale(0.94);
   }
 
   .report-context-deck::after {
-    transform: translate(2px, -6px) rotate(-3deg) rotateX(var(--deck-rotate-x, 0deg)) rotateY(calc(-12deg + var(--deck-rotate-y, 0deg))) scale(0.97);
+    transform: translate(2px, -6px) rotate(-3deg) rotateX(var(--card-tilt-x, 0deg)) rotateY(calc(-12deg + var(--card-tilt-y, 0deg))) scale(0.97);
   }
 
   .report-context-sheet {
-    transform: rotate(-2deg) rotateX(var(--deck-rotate-x, 0deg)) rotateY(calc(-12deg + var(--deck-rotate-y, 0deg)));
+    transform: rotate(-2deg) rotateX(var(--card-tilt-x, 0deg)) rotateY(calc(-12deg + var(--card-tilt-y, 0deg)));
   }
 }
 

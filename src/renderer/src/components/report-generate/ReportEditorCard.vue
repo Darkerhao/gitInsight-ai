@@ -83,6 +83,11 @@ const generatingDrafts = computed(() => props.drafts.filter((item) => item.gener
 const generationDetail = computed(() => generatingDrafts.value.length
   ? `正在生成 ${generatingDrafts.value.map((item) => item.repoName).join('、')} 的日报`
   : props.status);
+const motionState = computed(() => props.loading
+  ? (props.cancelling ? 'cancelled' : 'running')
+  : activeDraft.value?.generateStatus === 'success' || activeDraft.value?.generateStatus === 'failed'
+    ? activeDraft.value.generateStatus
+    : props.setupReady ? 'ready' : 'idle');
 
 const activeKeyModel = computed({
   get: () => props.activeDraftKey,
@@ -119,7 +124,7 @@ function getTabStatusType(item: ProjectReportDraft) {
 </script>
 
 <template>
-  <section class="surface-card step-card report-editor-card atelier-stage-card" data-card-stage="生成" :data-glass-disabled="loading" aria-label="日报生成">
+  <section class="surface-card step-card report-editor-card atelier-stage-card motion-frame" data-card-stage="生成" :data-motion-state="motionState" :data-glass-disabled="loading" :aria-busy="loading" aria-label="日报生成">
     <div class="step-title">
       <span>2</span>
       <strong>生成与编辑</strong>
@@ -155,7 +160,6 @@ function getTabStatusType(item: ProjectReportDraft) {
       <FileText :size="18" aria-hidden="true" />
       <span>{{ cancelling ? '正在取消生成，已完成的日报将保留' : generationDetail }}</span>
       <el-button :disabled="cancelling" @click="emit('cancel-generation')">{{ cancelling ? '正在取消' : '取消生成' }}</el-button>
-      <div v-if="generatingDrafts.length" class="generation-light" role="progressbar" aria-label="日报生成中" />
     </div>
 
     <div class="generation-check-strip">
@@ -224,7 +228,7 @@ function getTabStatusType(item: ProjectReportDraft) {
       </el-collapse-item>
     </el-collapse>
 
-    <article :key="activeDraft?.key" class="report-preview" :class="{ 'is-empty': !activeHasReport, 'is-ready': !loading, 'is-generated': !loading && activeDraft?.generateStatus === 'success' }">
+    <article :key="activeDraft?.key" class="report-preview" :class="{ 'is-empty': !activeHasReport }">
       <div class="report-preview-head">
         <div>
           <h2>{{ activeDraft?.reportTitle || '请选择项目生成日报' }}</h2>
@@ -245,7 +249,7 @@ function getTabStatusType(item: ProjectReportDraft) {
         </div>
       </div>
 
-      <p v-if="activeDraft?.generateStatus === 'success' || activeDraft?.generateStatus === 'failed'" class="report-result-status" :class="activeDraft.generateStatus" role="status">
+      <p v-if="activeDraft?.generateStatus === 'success' || activeDraft?.generateStatus === 'failed'" :key="activeDraft.generateStatus" class="report-result-status" :class="activeDraft.generateStatus" role="status">
         <CheckCircle2 v-if="activeDraft.generateStatus === 'success'" :size="17" aria-hidden="true" />
         <CircleAlert v-else :size="17" aria-hidden="true" />
         <span>{{ activeDraft.generateStatus === 'success' ? '生成完成，可编辑后保存' : `生成失败：${activeDraft.generateMessage}` }}</span>

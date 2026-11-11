@@ -7,7 +7,7 @@ import StatusBadge from '@/components/common/StatusBadge.vue';
 import { useMessages } from '@/composables/useMessages';
 import type { MessageItem, MessageType, MessageStatus } from '@/composables/useMessages';
 
-const { messageItems, unreadCount, isRead, markAsRead, markAllAsRead: markAllRead } = useMessages();
+const { messageItems, unreadCount, isRead, markAsRead, markAllAsRead: markAllRead, animateArrival } = useMessages();
 
 const keyword = ref('');
 const typeFilter = ref<'all' | MessageType>('all');
@@ -146,10 +146,11 @@ function statusLabel(status: MessageStatus) {
           <span class="message-unread-count">未读 {{ unreadCount }}</span>
         </div>
 
-        <div class="message-list">
+        <TransitionGroup tag="div" class="message-list" :css="false" @enter="animateArrival">
           <el-button
             v-for="item in filteredMessages"
             :key="item.id"
+            :data-message-id="item.id"
             class="message-card"
             :class="{ unread: !isRead(item.id) }"
             @click="openDetail(item)"
@@ -162,8 +163,8 @@ function statusLabel(status: MessageStatus) {
             <p>{{ item.content }}</p>
           </el-button>
 
-          <div v-if="!filteredMessages.length" class="empty-state">暂无符合条件的真实消息记录</div>
-        </div>
+          <div v-if="!filteredMessages.length" key="empty" class="empty-state">暂无符合条件的真实消息记录</div>
+        </TransitionGroup>
       </section>
 
       <aside class="surface-card message-summary-card">

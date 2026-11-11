@@ -146,7 +146,7 @@ function exportReport() {
           </div>
           <p v-if="dirty" class="muted-text">有尚未保存的修改</p>
           <el-alert v-if="error" class="material-error" :title="error" type="error" :closable="false" show-icon />
-          <p v-if="message" class="material-status" role="status">{{ message }}</p>
+          <p v-if="message" :key="message" class="material-status" role="status">{{ message }}</p>
         </section>
 
         <section class="surface-card view-stack">
@@ -179,5 +179,7 @@ function exportReport() {
 .material-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .material-actions .el-button, .material-roles .el-button { margin-left: 0; }
 .material-page h3, .material-page p { margin: 0; }
+.material-status { color: var(--c-primary); animation: motion-feedback-in var(--motion-feedback) ease-out; }
+@media (prefers-reduced-motion: reduce) { .material-status { animation: none; } }
 @media (max-width: 1000px) { .material-columns { grid-template-columns: 1fr; } }
 </style>

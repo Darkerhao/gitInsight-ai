@@ -1252,7 +1252,8 @@ onBeforeUnmount(() => {
 }
 
 .coin-amount {
-  animation: coin-amount-pop 0.46s cubic-bezier(0.16, 1, 0.3, 1);
+  font-variant-numeric: tabular-nums;
+  animation: motion-feedback-in var(--motion-feedback) ease-out;
 }
 
 @keyframes protocol-orbit {
@@ -1265,10 +1266,7 @@ onBeforeUnmount(() => {
   54%, 100% { left: 112%; opacity: 0; }
 }
 
-@keyframes coin-amount-pop {
-  0% { transform: translateY(3px) scale(0.92); opacity: 0.4; }
-  100% { transform: translateY(0) scale(1); opacity: 1; }
-}
+@media (prefers-reduced-motion: reduce) { .coin-amount { animation: none; } }
 
 :root[data-theme='dark'] .topbar-coin-btn.el-button {
   border-color: rgba(251, 191, 36, 0.22);

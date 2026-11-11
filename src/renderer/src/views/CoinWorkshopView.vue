@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { ArrowDownLeft, ArrowRight, ArrowUpRight, Check, Coins, Flower2, Palette, RefreshCw, ShoppingBag, Sparkles, Sprout, Timer } from 'lucide-vue-next';
 import { ElMessage, ElMessageBox, ElSkeleton } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
@@ -12,6 +12,7 @@ import { COIN_SHOP_ITEMS } from '@shared/coinWorkshop';
 import type { CoinShopItem, CoinTransactionPage, CoinTransactionQuery } from '@shared/coinWorkshop';
 
 const workshop = useCoinWorkshop();
+const workshopRoot = ref<HTMLElement | null>(null);
 const { snapshot, loading, error, pending } = workshop;
 const tabs = [
   { id: 'shop', label: '装扮商店', caption: '给日常换个颜色', icon: ShoppingBag },
@@ -71,7 +72,15 @@ async function purchase(item: CoinShopItem) {
       `花费 ${amount(item.price)} 码币${item.kind === 'seed' ? '种下' : '购买'}「${item.name}」？${item.kind === 'seed' ? '保存日报让它慢慢成长。' : '购买后永久拥有，切换使用不再扣币。'}`,
       '确认购买', { confirmButtonText: '确认购买', cancelButtonText: '再想想', type: 'info' },
     );
-    if (await workshop.purchase(item.id)) ElMessage.success(item.kind === 'seed' ? '已种下，下一份日报就是新的养分。' : '购买成功，已永久解锁。');
+    if (await workshop.purchase(item.id)) {
+      ElMessage.success(item.kind === 'seed' ? '已种下，下一份日报就是新的养分。' : '购买成功，已永久解锁。');
+      await nextTick();
+      if (document.hidden || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const duration = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--motion-feedback'));
+      for (const target of workshopRoot.value?.querySelectorAll<HTMLElement>(`[data-product="${item.id}"], [data-card-id="${item.id}"]`) ?? []) {
+        target.animate([{ opacity: 0 }, { opacity: 1, offset: .35 }, { opacity: 0 }], { duration, easing: 'ease-out', pseudoElement: '::after' });
+      }
+    }
   } catch (cause) {
     if (cause !== 'cancel' && cause !== 'close') ElMessage.error(cause instanceof Error ? cause.message : '购买未完成');
   }
@@ -112,7 +121,7 @@ onMounted(() => { void workshop.refresh(); });
 </script>
 
 <template>
-  <div class="view-stack coin-workshop">
+  <div ref="workshopRoot" class="view-stack coin-workshop">
     <PageHeader title="码币工坊" subtitle="一点积累，一点喜欢。给工作留一处自己的空间。">
       <template #actions><el-button :icon="RefreshCw" :loading="loading" :disabled="Boolean(pending)" @click="refresh">刷新工坊</el-button></template>
     </PageHeader>
@@ -268,23 +277,23 @@ onMounted(() => { void workshop.refresh(); });
 .coin-studio-footer { position: absolute; bottom: 0; left: 0; right: 0; display: flex; align-items: center; gap: 23px; padding: 14px 25px; border-top: 1px solid color-mix(in srgb, var(--studio-ink) 10%, transparent); font-size: 10px; color: var(--studio-muted); }
 .coin-studio-footer > span { display: flex; align-items: center; gap: 6px; }
 .studio-footer-note { margin-left: auto; font-size: 9px; letter-spacing: 1px; }
-.coin-wallet { min-width: 0; padding: 23px 25px; border-radius: 22px; background: linear-gradient(125deg, #344b3d, #1d3028); color: #f2f0db; position: relative; overflow: hidden; }
-.coin-wallet::after { content: ''; position: absolute; width: 140px; height: 140px; right: -70px; top: -75px; border: 20px double #eddfb70a; border-radius: 50%; pointer-events: none; }
+.coin-wallet { min-width: 0; padding: 23px 25px; border: 1px solid var(--c-border-strong); border-radius: 22px; background: linear-gradient(125deg, var(--c-sheen), transparent 50%), var(--c-surface-inset); color: var(--c-text); position: relative; overflow: hidden; box-shadow: var(--shadow-card); }
+.coin-wallet::after { content: ''; position: absolute; width: 140px; height: 140px; right: -70px; top: -75px; border: 20px double var(--c-sheen); border-radius: 50%; pointer-events: none; }
 .coin-wallet-heading, .coin-wallet-heading > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
-.coin-wallet-heading > span > svg { color: #dcc99b; }
-.coin-wallet-heading button { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 50%; border: 1px solid #e8efd127; background: transparent; color: #e5ead8; cursor: pointer; }
-.coin-wallet-heading button:hover { background: #e8efd115; }
+.coin-wallet-heading > span > svg { color: var(--c-primary); }
+.coin-wallet-heading button { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 50%; border: 1px solid var(--c-border-strong); background: transparent; color: var(--c-text-muted); cursor: pointer; }
+.coin-wallet-heading button:hover { background: var(--c-primary-soft); }
 .coin-balance { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 15px 0 10px; font-size: clamp(26px, 2.5vw, 38px); font-weight: 500; letter-spacing: -1.5px; font-variant-numeric: tabular-nums; line-height: 1.15; overflow-wrap: anywhere; }
-.coin-balance small { color: #c2cdbd; font-size: 10px; font-weight: 400; letter-spacing: 0; }
-.coin-checkin-state { display: flex; align-items: center; gap: 6px; color: #d8d9b6; font-size: 10px; line-height: 1.7; }
-.coin-status-dot { width: 4px; height: 4px; border-radius: 50%; background: #dcc99b; flex-shrink: 0; }
-.coin-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; row-gap: 15px; border-top: 1px solid #f1efd81c; padding-top: 16px; margin-top: 17px; }
+.coin-balance small { color: var(--c-text-muted); font-size: 10px; font-weight: 400; letter-spacing: 0; }
+.coin-checkin-state { display: flex; align-items: center; gap: 6px; color: var(--c-text-muted); font-size: 10px; line-height: 1.7; }
+.coin-status-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--c-primary); flex-shrink: 0; }
+.coin-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; row-gap: 15px; border-top: 1px solid var(--c-border-strong); padding-top: 16px; margin-top: 17px; }
 .coin-metrics > div { display: flex; min-width: 0; flex-direction: column; gap: 6px; }
-.coin-metrics span { display: flex; align-items: center; gap: 3px; font-size: 10px; color: #b6c3b4; }
+.coin-metrics span { display: flex; align-items: center; gap: 3px; font-size: 10px; color: var(--c-text-muted); }
 .coin-metrics strong { font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; letter-spacing: -.2px; }
-.coin-metrics [data-coin-stat='today-income'] { color: #d4e6ab; }
+.coin-metrics [data-coin-stat='today-income'] { color: var(--c-primary); }
 .coin-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; padding: 6px; border: 1px solid var(--c-border); border-radius: 16px; background: var(--c-surface); }
-.coin-tabs > button { min-width: 0; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid transparent; border-radius: 11px; color: var(--c-text-muted); background: transparent; font: inherit; text-align: left; cursor: pointer; transition: background-color .18s, border-color .18s, color .18s; }
+.coin-tabs > button { min-width: 0; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid transparent; border-radius: 11px; color: var(--c-text-muted); background: transparent; font: inherit; text-align: left; cursor: pointer; transition: background-color var(--motion-fast), border-color var(--motion-fast), color var(--motion-fast); }
 .coin-tabs > button:hover { background: var(--c-surface-muted); }
 .coin-tabs > button[aria-selected='true'] { background: var(--c-primary-soft); border-color: color-mix(in srgb, var(--c-primary) 20%, transparent); color: var(--c-primary); }
 .coin-tab-icon { display: grid; place-items: center; flex-shrink: 0; }
@@ -382,9 +391,7 @@ onMounted(() => { void workshop.refresh(); });
 .coin-ledger-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; }
 .coin-ledger-pagination > span { font-size: 11px; color: var(--c-text-faint); }
 .coin-workshop button:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 4px; }
-.coin-wallet button:focus-visible { outline-color: #dce7b4; }
 html[data-theme='dark'] .coin-workshop { --studio-paper: #232d27; --studio-ink: #e1e6cf; --studio-muted: #b4bea8; }
-html[data-theme='dark'] .coin-wallet { border: 1px solid #4c6146; background: linear-gradient(125deg, #304034, #1b2b23); }
 html[data-theme='dark'] .coin-theme-art { filter: brightness(.88); }
 html[data-theme='dark'] .coin-pot-display { filter: brightness(.78); }
 @media (max-width: 1200px) {
@@ -418,7 +425,7 @@ html[data-theme='dark'] .coin-pot-display { filter: brightness(.78); }
   .coin-wallet { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); column-gap: 24px; padding: 20px 24px; }
   .coin-balance { margin-top: 8px; font-size: 30px; }
   .coin-wallet-heading, .coin-balance, .coin-checkin-state { grid-column: 1; }
-  .coin-metrics { grid-column: 2; grid-row: 1 / 4; border-top: 0; border-left: 1px solid #f1efd81c; margin: 0; padding: 0 0 0 22px; align-content: center; }
+  .coin-metrics { grid-column: 2; grid-row: 1 / 4; border-top: 0; border-left: 1px solid var(--c-border-strong); margin: 0; padding: 0 0 0 22px; align-content: center; }
   .coin-tab-copy > span { display: none; }
   .coin-tabs > button { justify-content: center; padding: 13px 8px; }
   .coin-tab-copy strong { font-size: 11px; }
@@ -468,7 +475,7 @@ html[data-theme='dark'] .coin-pot-display { filter: brightness(.78); }
   .coin-studio-scene { opacity: .3; right: -65px; z-index: -1; }
   .coin-studio-copy { width: 100%; }
   .coin-wallet { display: block; }
-  .coin-metrics { border-left: 0; border-top: 1px solid #f1efd81c; margin-top: 20px; padding: 18px 0 0; }
+  .coin-metrics { border-left: 0; border-top: 1px solid var(--c-border-strong); margin-top: 20px; padding: 18px 0 0; }
   .coin-theme-grid { grid-template-columns: 1fr; }
   .coin-theme-art { height: 200px; }
   .coin-product p { min-height: 0; }

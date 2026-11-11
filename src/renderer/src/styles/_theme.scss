@@ -1,5 +1,10 @@
 @use 'tools' as *;
 
+@keyframes motion-feedback-in {
+  from { opacity: .65; }
+  to { opacity: 1; }
+}
+
 :root {
   color-scheme: light;
   font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -33,6 +38,10 @@
 
   --radius-card: 22px;
   --radius-block: 12px;
+  --motion-fast: 120ms;
+  --motion-feedback: 180ms;
+  --motion-reset: 240ms;
+  --motion-enter: 300ms;
   --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(40, 44, 52, 0.05), 0 12px 28px rgba(25, 28, 35, 0.07);
   --app-header-height: 72px;
   --scrollbar-track: rgba(226, 232, 240, 0.45);
@@ -375,6 +384,13 @@ textarea {
 }
 
 @include reduced-motion {
+  :root {
+    --motion-fast: 0ms;
+    --motion-feedback: 0ms;
+    --motion-reset: 0ms;
+    --motion-enter: 0ms;
+  }
+
   :root[data-theme-transition]::view-transition-new(root),
   :root[data-theme-transition]::view-transition-old(root) {
     animation-duration: 1ms;

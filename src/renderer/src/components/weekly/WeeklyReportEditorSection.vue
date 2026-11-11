@@ -94,8 +94,8 @@ const emit = defineEmits<{
         <div class="weekly-editor-meta">
           <span>提交记录：{{ activeDraft.lastReportResult?.commits.length ?? 0 }}</span>
           <span>影响文件：{{ countWeeklyReportFiles(activeDraft.lastReportResult) }}</span>
-          <span v-if="activeDraft.generateMessage" class="weekly-editor-message">{{ activeDraft.generateMessage }}</span>
-          <span v-if="activeDraft.publishMessage" class="weekly-editor-message">{{ activeDraft.publishMessage }}</span>
+          <span v-if="activeDraft.generateMessage" :key="activeDraft.generateMessage" class="weekly-editor-message" :class="{ 'is-failed': activeDraft.generateStatus === 'failed', 'is-success': activeDraft.generateStatus === 'success' }" role="status">{{ activeDraft.generateMessage }}</span>
+          <span v-if="activeDraft.publishMessage" :key="activeDraft.publishMessage" class="weekly-editor-message" :class="{ 'is-failed': activeDraft.publishStatus === 'failed', 'is-success': activeDraft.publishStatus === 'success' }" role="status">{{ activeDraft.publishMessage }}</span>
           <el-tag v-if="activeQuality" :type="activeQuality.score === 'good' ? 'success' : activeQuality.score === 'empty' ? 'info' : 'warning'" size="small" effect="plain">质量：{{ activeQuality.label }}</el-tag>
           <el-tag v-if="duplicateKeys.has(activeDraft.key)" type="warning" size="small" effect="plain">内容重复</el-tag>
         </div>

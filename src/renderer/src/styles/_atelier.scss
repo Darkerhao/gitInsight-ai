@@ -66,7 +66,7 @@
 
 .el-button,
 .atelier-workflow-step {
-  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, scale 120ms ease;
+  transition: color var(--motion-fast) ease, background-color var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, scale var(--motion-fast) ease;
 }
 
 .el-button:not(.is-text):not(.is-link):not(:disabled):not(.repo-picker-main):hover {
@@ -331,26 +331,24 @@
 
 .project-tabs .el-tabs__active-bar,
 .project-tabs .el-tabs__item {
-  transition-duration: 180ms;
+  transition-duration: var(--motion-feedback);
 }
 
-.generation-light {
+.motion-frame { position: relative; transition: border-color var(--motion-feedback); }
+.motion-frame[data-motion-state='ready'],
+.motion-frame[data-motion-state='success'] { border-color: color-mix(in srgb, var(--c-primary) 45%, var(--c-border)); }
+.motion-frame[data-motion-state='failed'] { border-color: var(--el-color-danger); }
+.motion-frame[data-motion-state='running']::after {
+  content: '';
   position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 45%;
+  top: -1px;
+  left: 38%;
+  width: 24%;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--c-text-muted), transparent);
-  opacity: 0.45;
-  animation: generation-light-sweep 2.8s ease-in-out infinite;
-}
-
-.report-editor-card .report-preview.is-ready {
-  animation: report-pane-in 180ms ease-out;
-}
-
-.report-editor-card .report-preview.is-generated {
-  animation: report-result-in 280ms ease-out;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--c-primary), transparent);
+  pointer-events: none;
+  animation: motion-edge-sweep 2.4s ease-in-out infinite;
 }
 
 .report-result-status {
@@ -360,6 +358,7 @@
   margin: 12px 20px;
   font-size: 13px;
   line-height: 1.5;
+  animation: motion-feedback-in var(--motion-feedback) ease-out;
 
   > svg {
     flex-shrink: 0;
@@ -374,20 +373,14 @@
   color: var(--c-primary);
 }
 
-@keyframes generation-light-sweep {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(325%); }
+.publish-status-title { animation: motion-feedback-in var(--motion-feedback) ease-out; }
+
+@keyframes motion-edge-sweep {
+  0%, 100% { transform: translateX(-100%); opacity: .3; }
+  50% { transform: translateX(100%); opacity: 1; }
 }
 
-@keyframes report-pane-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes report-result-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+:root[data-motion-paused] .motion-frame::after { animation-play-state: paused; }
 
 @media (prefers-reduced-motion: reduce) {
   .surface-card,
@@ -406,12 +399,13 @@
     scale: none !important;
   }
 
-  .generation-light {
+  .motion-frame[data-motion-state='running']::after {
     display: none;
   }
 
-  .report-editor-card .report-preview.is-ready,
-  .report-editor-card .report-preview.is-generated {
+  .motion-frame { transition: none; }
+  .report-result-status,
+  .publish-status-title {
     animation: none;
   }
 

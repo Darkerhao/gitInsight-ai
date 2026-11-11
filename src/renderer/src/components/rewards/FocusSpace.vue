@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { COIN_SHOP_ITEMS, type CoinShopItem } from '@shared/coinWorkshop';
 import rainMarkup from '@/assets/focus/rain.svg?raw';
 import cafeMarkup from '@/assets/focus/cafe.svg?raw';
@@ -12,6 +12,8 @@ import { useFocusSpace } from '@/composables/useFocusSpace';
 const props = defineProps<{ ownedItemIds: readonly string[]; balance: number; pending: string }>();
 const emit = defineEmits<{ purchase: [item: CoinShopItem] }>();
 const focus = useFocusSpace();
+const stage = ref<HTMLElement | null>(null);
+let stageObserver: IntersectionObserver;
 const { timer, time, sceneId, soundEnabled } = focus;
 const scenes = COIN_SHOP_ITEMS.filter(item => item.kind === 'scene');
 const artwork: Record<string, { image: string; markup: string; label: string; caption: string }> = {
@@ -29,13 +31,20 @@ watch(() => props.ownedItemIds, () => {
   const active = scenes.find(item => item.id === sceneId.value)!;
   if (!owned(active)) focus.selectScene('scene-desk');
 }, { immediate: true });
+onMounted(() => {
+  stageObserver = new IntersectionObserver(([entry]) => {
+    stage.value?.toggleAttribute('data-offscreen', !entry.isIntersecting);
+  });
+  stageObserver.observe(stage.value!);
+});
+onBeforeUnmount(() => stageObserver.disconnect());
 </script>
 
 <template>
   <section class="focus-space">
     <div class="focus-heading"><div><h2>给当下，留一段专注时间</h2><p>25 分钟专注 · 5 分钟休息。一次只做一件事。</p></div><label class="focus-sound"><input type="checkbox" :checked="soundEnabled" @change="focus.setSound(($event.target as HTMLInputElement).checked)" />完成提示音</label></div>
     <div class="focus-layout">
-      <div class="focus-stage" :data-scene="previewId" aria-label="专注场景预览">
+      <div ref="stage" class="focus-stage" :data-scene="previewId" aria-label="专注场景预览">
         <!-- Only bundled, trusted artwork is inserted here. -->
         <div v-if="artwork[previewId]" class="focus-art" :key="previewId" aria-hidden="true" v-html="sceneMarkup" />
         <template v-else><div class="focus-window" aria-hidden="true" /><div class="focus-desk" aria-hidden="true"><span class="focus-lamp" /><span class="focus-book" /><span class="focus-cup" /></div></template>
@@ -138,10 +147,9 @@ watch(() => props.ownedItemIds, () => {
 .focus-free-art::before { content: ''; position: absolute; right: 20%; top: 12%; width: 32%; height: 62%; border: 4px solid #b8c5b333; border-radius: 40px 40px 0 0; background: #a9bda433; }
 @media (max-width: 1000px) { .focus-scenes { grid-template-columns: repeat(2, minmax(0, 1fr)); } .focus-clock { width: 43%; } .focus-location small { display: none; } .focus-scene-swatch { height: 160px; } }
 @media (max-width: 650px) { .focus-heading { align-items: start; flex-direction: column; } .focus-stage { height: 500px; } .focus-stage-top { padding: 20px; } .focus-clock { top: 23%; width: 80%; } .focus-clock strong { font-size: 78px; } .focus-stage::after { background: #08132066; } .focus-scene-caption { bottom: 85px; } .focus-preview-note { left: 6%; right: auto; bottom: 20px; text-align: left; } .focus-preview-note button { display: inline; margin-left: 10px; } .focus-scenes { gap: 10px; } .focus-scene-footer { margin: 10px 4px; flex-wrap: wrap; } }
-.focus-art { animation: scene-arrive .65s ease-out; }
-.focus-scene-card { transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
-.focus-scene-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px #07182112; }
+.focus-art { animation: motion-feedback-in var(--motion-feedback) ease-out; }
+.focus-scene-card { transition: border-color var(--motion-fast), box-shadow var(--motion-fast); }
+.focus-scene-card:hover { box-shadow: 0 8px 24px #07182112; }
 .focus-scene-card.selected:hover { box-shadow: 0 0 0 1px var(--c-primary), 0 8px 24px #07182112; }
-@keyframes scene-arrive { from { opacity: 0; transform: scale(1.025); } to { opacity: 1; transform: scale(1); } }
-@media (prefers-reduced-motion: reduce) { .focus-art { animation: none; } .focus-scene-card { transition: none; } .focus-scene-card:hover { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .focus-art { animation: none; } .focus-scene-card { transition: none; } }
 </style>
