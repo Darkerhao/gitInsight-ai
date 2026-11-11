@@ -23,6 +23,7 @@ import PageHeader from '@/components/common/PageHeader.vue';
 import { formatLocalDate, shiftLocalDate } from '@/composables/assistant/dateUtils';
 import type { DailyReportRecord } from '@shared/types';
 import { useAssistant } from '@/composables/useAssistant';
+import { useMessages } from '@/composables/useMessages';
 
 echarts.use([GridComponent, TitleComponent, TooltipComponent, LineChart, PieChart, CanvasRenderer]);
 
@@ -39,6 +40,8 @@ const emit = defineEmits<{
 }>();
 
 const assistant = useAssistant();
+const { animateArrival } = useMessages();
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const {
   today,
   config,
@@ -189,8 +192,19 @@ function chartColor(variable: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(variable).trim();
 }
 
+function chartMotion() {
+  return {
+    animation: !reducedMotion.matches && !document.hidden,
+    animationDuration: 300,
+    animationDurationUpdate: 180,
+    animationEasing: 'cubicOut' as const,
+    animationEasingUpdate: 'cubicOut' as const,
+  };
+}
+
 function createTrendOption(): EChartsOption {
   return {
+    ...chartMotion(),
     color: trendLegend.map((item) => item.color),
     tooltip: {
       trigger: 'axis',
@@ -258,6 +272,7 @@ function createTrendOption(): EChartsOption {
 function createDonutOption(total: number, subtext: string, items: { label: string; value: number; color: string }[]): EChartsOption {
   const hasData = items.some((item) => item.value > 0);
   return {
+    ...chartMotion(),
     color: items.map((item) => item.color),
     tooltip: {
       trigger: 'item',
@@ -297,15 +312,14 @@ function createDonutOption(total: number, subtext: string, items: { label: strin
 function renderCharts() {
   if (!trendChart || !projectChart || !taskChart) return;
 
-  trendChart.setOption(createTrendOption(), true);
+  trendChart.setOption(createTrendOption());
   projectChart.setOption(
     createDonutOption(projectStats.value.total, '全部仓库', [
       { label: '已选择', value: projectStats.value.selected, color: '#22c55e' },
       { label: '未选择', value: projectStats.value.unselected, color: '#94a3b8' },
     ]),
-    true,
   );
-  taskChart.setOption(createDonutOption(taskDistribution.value.total, '全部任务', taskDistribution.value.items), true);
+  taskChart.setOption(createDonutOption(taskDistribution.value.total, '全部任务', taskDistribution.value.items));
 }
 
 function resizeCharts() {
@@ -322,6 +336,8 @@ onMounted(async () => {
   renderCharts();
   themeObserver = new MutationObserver(renderCharts);
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  reducedMotion.addEventListener('change', renderCharts);
+  document.addEventListener('visibilitychange', renderCharts);
 
   resizeObserver = new ResizeObserver(() => resizeCharts());
   [trendChartRef.value, projectChartRef.value, taskChartRef.value].forEach((el) => {
@@ -337,6 +353,8 @@ watch([trendRows, trendMax, projectStats, taskDistribution], async () => {
 });
 
 onBeforeUnmount(() => {
+  reducedMotion.removeEventListener('change', renderCharts);
+  document.removeEventListener('visibilitychange', renderCharts);
   window.removeEventListener('resize', resizeCharts);
   resizeObserver?.disconnect();
   themeObserver?.disconnect();
@@ -461,8 +479,8 @@ onBeforeUnmount(() => {
             <h3>最近同步记录</h3>
             <el-button link type="primary" @click="emit('navigate', 'history')">查看全部</el-button>
           </div>
-          <div class="execution-list">
-            <div v-for="item in recentExecutionItems" :key="item.id" class="execution-item">
+          <TransitionGroup tag="div" class="execution-list" :css="false" @enter="animateArrival">
+            <div v-for="item in recentExecutionItems" :key="item.id" :data-message-id="item.id" class="execution-item">
               <component :is="item.status === 'failed' ? CircleAlert : CheckCircle2" :size="18" :class="badgeStatus(item.status)" />
               <div>
                 <strong>{{ item.title }}</strong>
@@ -470,8 +488,8 @@ onBeforeUnmount(() => {
               </div>
               <time>{{ formatDateTime(item.time) }}</time>
             </div>
-            <div v-if="!recentExecutionItems.length" class="empty-state">暂无执行记录</div>
-          </div>
+            <div v-if="!recentExecutionItems.length" key="empty" class="empty-state">暂无执行记录</div>
+          </TransitionGroup>
         </section>
 
         <section class="surface-card dashboard-panel">

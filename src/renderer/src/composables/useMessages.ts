@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useAssistant } from '@/composables/useAssistant';
 import type { AutoSyncStatus } from '@shared/types';
 
@@ -81,6 +81,24 @@ function createMessages() {
     () => messageItems.value.filter((item) => !readIds.value.includes(item.id)).length,
   );
 
+  // Only arrivals in this render are eligible; filtering or replacing a snapshot never replays them.
+  let arrivingIds = new Set<string>();
+  watch(messageItems, (items, previous) => {
+    const previousIds = new Set(previous.map(item => item.id));
+    const added = items.filter(item => !previousIds.has(item.id));
+    const arrivals = arrivingIds = new Set(added.length === 1 ? [added[0].id] : []);
+    void nextTick(() => { if (arrivingIds === arrivals) arrivals.clear(); });
+  });
+
+  function animateArrival(element: Element, done: () => void) {
+    const id = element.getAttribute('data-message-id') || '';
+    if (arrivingIds.delete(id) && !document.hidden && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const duration = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--motion-feedback'));
+      element.animate([{ opacity: .65, transform: 'translateY(-4px)' }, { opacity: 1, transform: 'none' }], { duration, easing: 'ease-out' });
+    }
+    done();
+  }
+
   function persistReadIds() {
     localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(readIds.value));
   }
@@ -107,6 +125,7 @@ function createMessages() {
     markAsRead,
     markAllAsRead,
     normalizeStatus,
+    animateArrival,
   };
 }
 

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { ElMessage, ElSkeleton } from 'element-plus';
 import { COIN_SHOP_ITEMS } from '@shared/coinWorkshop';
 import type { CoinShopItem } from '@shared/coinWorkshop';
 import type { TimelineRecord } from '@shared/types';
 import { formatLocalDate } from '@shared/localDate';
 import { buildWorkMemoryCard, renderWorkMemoryCard } from '@shared/workMemoryCard';
+import { useCardTilt } from '@/composables/useCardTilt';
 
 const props = defineProps<{ ownedItemIds: readonly string[]; balance: number; pending: string }>();
 const emit = defineEmits<{ purchase: [item: CoinShopItem] }>();
@@ -27,6 +28,8 @@ const svg = computed(() => ready.value ? renderWorkMemoryCard(data.value, select
 const previews = computed(() => Object.fromEntries(cards.map(item => [item.id, `data:image/svg+xml;charset=utf-8,${encodeURIComponent(renderWorkMemoryCard(data.value, item.id))}`])));
 const selectedCard = computed(() => cards.find(item => item.id === selectedId.value)!);
 const unlocked = computed(() => props.ownedItemIds.includes(selectedId.value));
+const { tiltTarget, tilt, resetTilt } = useCardTilt();
+watch(selectedId, resetTilt, { flush: 'sync' });
 
 async function load() {
   loading.value = true;
@@ -100,7 +103,9 @@ onMounted(load);
       <el-empty v-else-if="!data.reports" description="该范围暂无工作记录，保存日报后再来制作纪念卡。" />
       <div v-if="ready" class="memory-stage" :class="selectedId">
         <div class="memory-stage-caption"><span>{{ selectedCard.name }} / 成品预览</span><span>{{ unlocked ? '已解锁 · 可导出' : '免费预览 · 解锁后可导出' }}</span></div>
-        <div class="memory-preview"><img :src="previews[selectedId]" alt="工作纪念卡预览" /></div>
+        <div ref="tiltTarget" class="memory-preview" @pointermove="tilt" @pointerleave="resetTilt" @pointercancel="resetTilt">
+          <div :key="selectedId" class="memory-card-surface" :data-card-id="selectedId"><img :src="previews[selectedId]" alt="工作纪念卡预览" /></div>
+        </div>
       </div>
       <div class="memory-export"><div><strong>把这一程，保存下来。</strong><p>PNG 高清图片 · SVG 矢量原图 · 无外部素材</p></div><div class="memory-export-actions"><el-button :disabled="!ready || !unlocked || Boolean(exporting)" :loading="exporting === 'svg'" @click="exportCard('svg')">导出 SVG</el-button><el-button type="primary" :disabled="!ready || !unlocked || Boolean(exporting)" :loading="exporting === 'png'" @click="exportCard('png')">导出 PNG</el-button></div></div>
     </div>
@@ -117,15 +122,16 @@ onMounted(load);
 .memory-heading p { margin: 0; }
 .memory-permanent { padding: 8px 12px; border: 1px solid var(--c-border); border-radius: 20px; color: var(--c-text-muted); font-size: 11px; white-space: nowrap; }
 .memory-products { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-.memory-product { min-width: 0; overflow: hidden; border: 1px solid var(--c-border); border-radius: 16px; transition: border-color .18s; }
+.memory-product { position: relative; min-width: 0; overflow: hidden; border: 1px solid var(--c-border); border-radius: 16px; transition: border-color var(--motion-fast); }
 .memory-product.selected { border-color: var(--c-primary); }
 .memory-select { display: block; padding: 0; width: 100%; background: none; border: 0; color: var(--c-text); cursor: pointer; font: inherit; text-align: left; }
 .memory-select:focus-visible { outline: 2px solid var(--c-primary); outline-offset: -3px; border-radius: 14px; }
 .memory-thumb { display: block; position: relative; padding: 24px 19px; background: #e6e0d2; overflow: hidden; }
 .memory-thumb.card-blueprint { background: #183b3e; }
 .memory-thumb.card-orbit { background: #25273b; }
-.memory-thumb img { display: block; width: 100%; border-radius: 5px; transform: rotate(-3deg); box-shadow: 0 12px 20px #0003; transition: transform .2s; }
-.memory-select:hover img, .selected .memory-thumb img { transform: rotate(0); }
+.memory-thumb img { display: block; width: 100%; border-radius: 5px; transform: rotate(-3deg); box-shadow: 0 12px 20px #0003; transition: transform var(--motion-reset); }
+.selected .memory-thumb img { transform: rotate(0); }
+@media (hover: hover) and (pointer: fine) { .memory-select:hover img { transform: translateY(-2px) rotate(0); } }
 .memory-selected { position: absolute; right: 9px; bottom: 9px; padding: 4px 9px; border-radius: 4px; color: #fff; background: #111a; font-size: 10px; }
 .memory-product-name { display: flex; align-items: center; gap: 10px; padding: 19px 18px 0; }
 .memory-number { color: var(--c-text-faint); font: italic 18px Georgia, serif; }
@@ -148,14 +154,22 @@ onMounted(load);
 .memory-stage.card-orbit { background: radial-gradient(ellipse at 50% 10%, #42425b, #1b1d2b); }
 .memory-stage-caption { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; color: #686050; margin-bottom: 24px; }
 .card-blueprint .memory-stage-caption, .card-orbit .memory-stage-caption { color: #c1c9d2; }
-.memory-preview { max-width: 900px; margin: auto; }
-.memory-preview img { display: block; width: 100%; border-radius: 2%; box-shadow: 0 20px 32px -10px #0006, 0 2px 5px #0002; }
+.memory-preview { max-width: 900px; margin: auto; perspective: 1200px; }
+.memory-card-surface { position: relative; border-radius: 2%; transform: rotateX(var(--card-tilt-x, 0deg)) rotateY(var(--card-tilt-y, 0deg)); transition: transform var(--motion-reset) ease-out; animation: memory-card-in var(--motion-feedback) ease-out; }
+.memory-preview[data-tilting] .memory-card-surface { transition: none; will-change: transform; }
+.memory-card-surface::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(ellipse at var(--card-shine-x, 50%) var(--card-shine-y, 50%), var(--memory-shine, #fff8), transparent 60%); opacity: 0; pointer-events: none; transition: opacity var(--motion-feedback); }
+.memory-preview[data-tilting] .memory-card-surface::before { opacity: .22; }
+.card-paper .memory-preview { --memory-shine: #ffe6b5; }
+.card-blueprint .memory-preview { --memory-shine: #d5eeee; }
+.card-orbit .memory-preview { --memory-shine: #e1d8ff; }
+.memory-preview img { display: block; width: 100%; border-radius: inherit; box-shadow: 0 20px 32px -10px #0006, 0 2px 5px #0002; }
+@keyframes memory-card-in { from { opacity: .65; } to { opacity: 1; } }
 .memory-export strong { font-size: 14px; font-weight: 500; }
 .memory-export p { margin: 5px 0 0; font-size: 11px; }
 .memory-export { flex-wrap: wrap; }
 .memory-export-actions { display: flex; }
 .memory-note { margin: 0; font-size: 11px; }
-@media (prefers-reduced-motion: reduce) { .memory-thumb img, .memory-product { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .memory-thumb img, .memory-product, .memory-card-surface, .memory-card-surface::before { transition: none; animation: none; } .memory-card-surface { transform: none; } .memory-card-surface::before { opacity: 0 !important; } .memory-select:hover img { transform: rotate(-3deg); } .selected .memory-thumb img { transform: none; } }
 @media (max-width: 1000px) { .memory-products { gap: 10px; } .memory-purchase { flex-wrap: wrap; } }
 @media (max-width: 800px) { .memory-products { grid-template-columns: 1fr; } .memory-permanent { display: none; } .memory-editor { padding: 16px; } .memory-stage { padding: 14px 12px 24px; } .memory-stage-caption { font-size: 10px; } }
 </style>

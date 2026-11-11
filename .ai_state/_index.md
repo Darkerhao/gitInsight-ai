@@ -1,15 +1,31 @@
 ---
 path: Refactor
 stage: ship
-current_sprint_slug: focus-space
-current_roadmap_slug: none
-route_confidence: 0.97
-next_action: "专注空间实现及本地验证、独立审查与收敛检查完成；未提交、推送或发布"
+current_sprint_slug: reactbits-motion
+current_roadmap_slug: reactbits-motion
+route_confidence: 0.98
+next_action: "完成后评审测试全部结束：当前dev单测244通过/11平台跳过、浏览器83通过、构建与隔离Electron通过；代码/规格/evaluator PASS，无需修复；未提交或发布"
 pointers:
   latest_architecture_update: architecture/ARCHITECTURE.md
 ---
 
 # AI State Index
+
+## 完成后评审（2026-11-12）
+
+- 按用户要求在当前 dev 完整复跑：`npm test` 244 pass / 0 fail / 11 Windows平台发布shell skip；完整浏览器83通过；类型/构建与真实隔离Electron通过。
+- 被测27个源码/测试文件校验一致，测试后没有功能修改；独立代码/规格/evaluator全部PASS，无需修复。
+- [本轮记录](sprints/reactbits-motion/revalidation-2026-11-12.md) · [评审](sprints/reactbits-motion/reviews/pass2.md)。不暂存、提交或发布。
+
+## 动效设计实施（2026-11-11）
+
+- 用户确认按 [动效设计](../docs/2026-11-11-ReactBits动效设计方案.md) 实施，两批范围均包含在本次任务。
+- Refactor：共享现有倾斜逻辑，局部展示和业务状态反馈；无新增依赖、数据库或 IPC。
+- 隔离 worktree：`.cache/worktrees/reactbits-motion`，基线 `b7564737a1f2edfb73dae0fd14be3f0245a6fe5b`；保留当前工作区设计文档，不提交或推送。
+- 当前工具未提供 writer 生命周期 raw hook 绑定证据；采用隔离目录单写者实施，原生只读 agent 独立审查，不伪造绑定或生命周期记录。
+- 设计与验收：`sprints/reactbits-motion/`；两批顺序：`roadmap/reactbits-motion/`。
+- 17 工坊、98 可靠性单测；82 浏览器全量 + 最终相关17项通过；目标窗口截图、类型/构建和真实隔离Electron通过。独立代码/规格/evaluator PASS，原重复/废弃动效已移除。
+- 当前 dev 工作区已按清单同步37个文件并逐份校验；集成 `npm run check` 与动效/纪念卡11项浏览器回归通过，保留原设计文档的实施前备份。未暂存或提交。
 
 ## 专注空间完成（2026-10-28）
 
@@ -134,6 +150,8 @@ pointers:
 - current_sprint_slug: weekly-summary
 
 ## route_history
+
+- 2026-11-11: Refactor + roadmap / reactbits-motion；已批准设计涵盖两批可独立验收 renderer 动效，共享原有状态与交互，置信度 0.98。
 
 - 2026-10-29: Refactor / release-version-policy；固定 patch 改为按完整提交语义与净代码规模统一判定，单一发布链路；专项 29 pass/11 Windows skip，额外 Git Bash 全部15/15、最终升级7/7、历史2/2，代码/规格/evaluator PASS。保留 report-performance 主任务状态，未提交或发布。
 

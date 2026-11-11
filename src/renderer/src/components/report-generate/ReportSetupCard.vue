@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { CheckCircle2, FileText, FolderGit2, ListChecks, Pencil, Pin, Plus, Search, Trash2 } from 'lucide-vue-next';
 import StatusBadge from '@/components/common/StatusBadge.vue';
+import { useCardTilt } from '@/composables/useCardTilt';
 import type { RepoInfo, ReportPromptStyle } from '@shared/types';
 import {
   getRepoDisplayName as resolveRepoDisplayName,
@@ -64,21 +65,7 @@ const emit = defineEmits<{
 const repoKeyword = ref('');
 const filteredRepos = computed(() => props.sortedRepos.filter((repo) => matchesRepoKeyword(repo, props.repoDisplayNames, repoKeyword.value)));
 
-function tiltReportDeck(event: PointerEvent) {
-  if (event.pointerType !== 'mouse') return;
-  const deck = event.currentTarget as HTMLElement;
-  const bounds = deck.getBoundingClientRect();
-  const x = Math.max(-0.5, Math.min(0.5, (event.clientX - bounds.left) / bounds.width - 0.5));
-  const y = Math.max(-0.5, Math.min(0.5, (event.clientY - bounds.top) / bounds.height - 0.5));
-  deck.style.setProperty('--deck-rotate-x', `${-y * 12}deg`);
-  deck.style.setProperty('--deck-rotate-y', `${x * 20}deg`);
-}
-
-function resetReportDeck(event: PointerEvent) {
-  const deck = event.currentTarget as HTMLElement;
-  deck.style.removeProperty('--deck-rotate-x');
-  deck.style.removeProperty('--deck-rotate-y');
-}
+const { tiltTarget, tilt, resetTilt } = useCardTilt(4, () => !props.generating);
 
 function displayName(repo: RepoInfo) {
   return resolveRepoDisplayName(repo, props.repoDisplayNames);
@@ -136,10 +123,11 @@ function handleEndDateTimeChange(value: string | null) {
         <span class="report-context-detail" :title="repoContextText">{{ selectedRepoSummary }}</span>
       </div>
       <div
+        ref="tiltTarget"
         class="report-context-deck"
-        @pointermove="tiltReportDeck"
-        @pointerleave="resetReportDeck"
-        @pointercancel="resetReportDeck"
+        @pointermove="tilt"
+        @pointerleave="resetTilt"
+        @pointercancel="resetTilt"
       >
         <div class="report-context-sheet">
           <span class="report-context-sheet-heading"><FileText :size="18" />研发日报</span>

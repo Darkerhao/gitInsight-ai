@@ -42,10 +42,10 @@ declare global {
 export const test = base.extend({
   page: async ({ page }, use) => {
     await page.addInitScript(({ ai, autoSync, task, feishu, coinCatalog }) => {
-      localStorage.setItem('gitinsight:welcome-finished', 'true');
-      localStorage.setItem('gitinsight:welcome-animation-enabled', 'false');
-      const repos = [{ name: 'Project A', path: '/workspace/a' }, { name: 'Project B', path: '/workspace/b' }];
       const params = new URLSearchParams(location.search);
+      localStorage.setItem('gitinsight:welcome-finished', 'true');
+      localStorage.setItem('gitinsight:welcome-animation-enabled', params.has('welcome') ? 'true' : 'false');
+      const repos = [{ name: 'Project A', path: '/workspace/a' }, { name: 'Project B', path: '/workspace/b' }];
       const config = {
         workspaceDir: '/workspace', workspaceDirs: ['/workspace'], selectedRepoPaths: repos.map((repo) => repo.path),
         ignoredRepoPaths: [], pinnedRepoPaths: [], repoDisplayNames: {}, reporterName: '测试用户', gitAuthorEmail: '',

@@ -20,3 +20,25 @@
   --c-primary-hover: color-mix(in srgb, var(--coin-accent) 80%, #fff);
   --c-on-primary: #152126;
 }
+.coin-workshop [data-product] { position: relative; }
+.coin-workshop [data-product]::after,
+.memory-card-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--c-primary);
+  border-radius: inherit;
+  background: linear-gradient(135deg, var(--c-primary-soft), transparent 50%);
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .coin-workshop [data-product]::after,
+  .memory-card-surface::after { opacity: 0 !important; }
+}
+
+:root[data-motion-paused] .focus-art,
+:root[data-motion-paused] .focus-art *,
+.focus-stage[data-offscreen] .focus-art,
+.focus-stage[data-offscreen] .focus-art *,
+:root[data-motion-paused] .timeline-view * { animation-play-state: paused !important; }

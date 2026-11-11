@@ -69,6 +69,10 @@ const activeWorkHours = computed({
 });
 
 const canRecalculateHours = computed(() => props.drafts.some((item) => item.commitsCount > 0));
+const motionState = computed(() => props.pushing ? 'running'
+  : props.activeDraft?.publishStatus === 'success' || props.activeDraft?.publishStatus === 'failed'
+    ? props.activeDraft.publishStatus
+    : props.canPublishActive ? 'ready' : 'idle');
 const generatedWorkHoursTotal = computed(() =>
   props.drafts
     .filter((item) => item.hasReport)
@@ -141,20 +145,20 @@ function handleReportDateChange(value: string | null) {
 
 <template>
   <aside class="view-stack publish-sidebar atelier-publish-rail" data-card-stage="发布" aria-label="日报发布">
-    <section class="surface-card publish-panel">
+    <section class="surface-card publish-panel motion-frame" :data-motion-state="motionState" :aria-busy="pushing">
       <div class="step-title with-action">
         <div>
           <span>3</span>
           <strong>发布与同步</strong>
         </div>
-        <StatusBadge :status="canPublishActive ? 'success' : 'pending'" :label="canPublishActive ? '可发布' : '待准备'" />
+        <StatusBadge :key="motionState" :status="pushing ? 'running' : activeDraft?.publishStatus === 'success' ? 'success' : activeDraft?.publishStatus === 'failed' ? 'failed' : canPublishActive ? 'success' : 'pending'" :label="pushing ? '发布中' : activeDraft?.publishStatus === 'success' ? '已发布' : activeDraft?.publishStatus === 'failed' ? '发布失败' : canPublishActive ? '可发布' : '待准备'" />
       </div>
 
       <div class="publish-control-section publish-status-section">
         <div class="publish-summary-card" :class="{ ready: canPublishActive }">
           <Send :size="18" />
           <div>
-            <strong>{{ publishStatusTitle }}</strong>
+            <strong :key="publishStatusTitle" class="publish-status-title" role="status">{{ publishStatusTitle }}</strong>
             <span>{{ publishStatusDetail }}，发布日期 {{ reportDate || '未选择' }}</span>
           </div>
         </div>

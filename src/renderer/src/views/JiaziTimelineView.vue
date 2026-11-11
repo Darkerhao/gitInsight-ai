@@ -443,8 +443,8 @@ header p { margin: 0; color: var(--tl-muted); font-size: 13.5px; }
 .node b {
   position: absolute; inset: -8px;
   border: 1px solid color-mix(in srgb, var(--tone) 22%, transparent); border-radius: 50%;
-  animation: orbit 9s linear infinite;
 }
+.event.selected .node b { animation: orbit 9s linear infinite; }
 .node b::after {
   content: ""; position: absolute; left: 50%; top: -2px;
   width: 4px; height: 4px; border-radius: 50%;
