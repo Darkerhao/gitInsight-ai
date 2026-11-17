@@ -156,7 +156,6 @@
 :root[data-theme='dark'] .metric-card,
 :root[data-theme='dark'] .help-list-item,
 :root[data-theme='dark'] .help-module-card,
-:root[data-theme='dark'] .message-card,
 :root[data-theme='dark'] .help-check-card,
 :root[data-theme='dark'] .help-faq-item {
   background: var(--c-surface);
@@ -208,8 +207,7 @@
 :root[data-theme='dark'] .settings-note-item,
 :root[data-theme='dark'] .help-card,
 :root[data-theme='dark'] .usage-guide-btn,
-:root[data-theme='dark'] .help-collapse .el-collapse-item__header,
-:root[data-theme='dark'] .message-card.unread {
+:root[data-theme='dark'] .help-collapse .el-collapse-item__header {
   background: var(--c-surface-muted);
 }
 

@@ -143,7 +143,7 @@ function statusLabel(status: MessageStatus) {
       <section class="surface-card">
         <div class="panel-head">
           <h3>消息列表</h3>
-          <span class="message-unread-count">未读 {{ unreadCount }}</span>
+          <span class="message-unread-count" :class="{ 'is-empty': unreadCount === 0 }" role="status">未读 {{ unreadCount }}</span>
         </div>
 
         <TransitionGroup tag="div" class="message-list" :css="false" @enter="animateArrival">
@@ -156,7 +156,10 @@ function statusLabel(status: MessageStatus) {
             @click="openDetail(item)"
           >
             <div class="message-card-head">
-              <strong>{{ item.title }}</strong>
+              <div class="message-card-title">
+                <strong>{{ item.title }}</strong>
+                <span v-if="!isRead(item.id)" class="message-unread-badge">未读</span>
+              </div>
               <StatusBadge :status="item.status" :label="statusLabel(item.status)" />
             </div>
             <span class="message-card-meta">{{ typeLabel(item.type) }} · {{ formatDateTime(item.createdAt) }}</span>
