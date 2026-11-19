@@ -474,10 +474,12 @@
   display: none;
 }
 
-.topbar-greeting p {
-  margin: 4px 0 0;
-  color: var(--c-text-muted);
-  font-size: 12px;
+.topbar-greeting-title {
+  margin: 0;
+  color: var(--c-text);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .topbar-actions {
@@ -531,8 +533,8 @@
 .topbar-avatar {
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, #3b6cf6, #5a86ff);
-  color: #fff;
+  background: var(--c-primary);
+  color: var(--c-on-primary);
   font-size: 13px;
   font-weight: 600;
 }
@@ -684,7 +686,7 @@
 }
 
 .config-scope-group.git {
-  border-color: rgba(59, 108, 246, 0.22);
+  border-color: color-mix(in srgb, var(--c-primary) 22%, var(--c-border));
 }
 
 .config-scope-group.report {
@@ -741,8 +743,8 @@
 
 .config-scope-badge.git,
 .field-scope-note {
-  border-color: rgba(59, 108, 246, 0.22);
-  background: rgba(59, 108, 246, 0.08);
+  border-color: color-mix(in srgb, var(--c-primary) 22%, var(--c-border));
+  background: var(--c-primary-soft);
   color: var(--c-primary);
 }
 
@@ -772,11 +774,9 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  border: 1px solid rgba(59, 108, 246, 0.16);
+  border: 1px solid color-mix(in srgb, var(--c-primary) 18%, var(--c-border));
   border-radius: var(--radius-block);
-  background:
-    linear-gradient(135deg, rgba(59, 108, 246, 0.07), rgba(22, 163, 74, 0.05)),
-    var(--c-surface-muted);
+  background: var(--c-surface-muted);
   padding: 14px;
 }
 
@@ -889,7 +889,7 @@
 }
 
 .ai-profile-item.el-button.active {
-  border-color: rgba(59, 108, 246, 0.38);
+  border-color: color-mix(in srgb, var(--c-primary) 40%, var(--c-border));
   background: var(--c-primary-soft);
   color: var(--c-primary);
 }
@@ -980,9 +980,9 @@
 
 .ai-config-action-btn.el-button--primary.is-plain:hover,
 .ai-config-action-btn.el-button--primary.is-plain:focus-visible {
-  border-color: #315bd8;
-  background: #315bd8;
-  color: #fff;
+  border-color: var(--c-primary-hover);
+  background: var(--c-primary-hover);
+  color: var(--c-on-primary);
   box-shadow: 0 8px 18px color-mix(in srgb, var(--c-primary) 22%, transparent);
   transform: translateY(-1px);
 }
@@ -1226,6 +1226,22 @@
   flex: 0 0 auto;
 }
 
+.ai-option-manager {
+  font-size: 13px;
+  color: var(--c-text-muted);
+}
+
+.ai-option-manager summary {
+  cursor: pointer;
+  color: var(--c-primary);
+}
+
+.ai-option-manager ul {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
 /* 自动同步 */
 .auto-sync-config {
   display: flex;
@@ -1259,9 +1275,9 @@
   gap: 14px;
   border: 1px solid var(--c-border-strong);
   border-radius: var(--radius-block);
-  background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+  background: var(--c-surface);
   padding: 12px 14px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+  box-shadow: none;
   transition:
     border-color 0.2s ease,
     background 0.2s ease,
@@ -1270,10 +1286,8 @@
 
 .auto-sync-toggle-card.active {
   border-color: rgba(22, 163, 74, 0.36);
-  background: linear-gradient(180deg, #ecfdf3 0%, var(--tone-green-bg) 100%);
-  box-shadow:
-    inset 4px 0 0 rgba(22, 163, 74, 0.72),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.78);
+  background: var(--tone-green-bg);
+  box-shadow: inset 3px 0 0 var(--tone-green);
 }
 
 .auto-sync-toggle-card > div {
@@ -1377,7 +1391,7 @@
 }
 
 .state-switch.el-switch .el-switch__input:focus-visible ~ .el-switch__core {
-  outline: 3px solid rgba(59, 108, 246, 0.24);
+  outline: 3px solid color-mix(in srgb, var(--c-primary) 24%, transparent);
   outline-offset: 2px;
 }
 
@@ -2018,7 +2032,7 @@
   .sidebar-menu.el-menu--horizontal > .el-menu-item.is-active {
     background: var(--c-primary-soft);
     color: var(--c-primary);
-    box-shadow: inset 0 0 0 1px rgba(59, 108, 246, 0.16);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-primary) 18%, transparent);
   }
 
   .sidebar-menu.el-menu--horizontal > .el-sub-menu > .el-sub-menu__title .el-sub-menu__icon-arrow {
@@ -2102,7 +2116,7 @@
     padding: 14px 16px;
   }
 
-  .topbar-greeting h1 {
+  .topbar-greeting-title {
     font-size: 18px;
   }
 

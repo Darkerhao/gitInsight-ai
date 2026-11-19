@@ -149,7 +149,6 @@
 }
 
 :root[data-theme='dark'] .project-card,
-:root[data-theme='dark'] .repo-picker-trigger.el-button,
 :root[data-theme='dark'] .repo-picker-item,
 :root[data-theme='dark'] .segmented-action.el-button,
 :root[data-theme='dark'] .generation-check-card.el-button,
@@ -211,8 +210,6 @@
   background: var(--c-surface-muted);
 }
 
-:root[data-theme='dark'] .repo-picker-trigger.el-button:hover,
-:root[data-theme='dark'] .repo-picker-trigger.el-button:focus-visible,
 :root[data-theme='dark'] .operation-card.el-button:hover,
 :root[data-theme='dark'] .role-select-card-item.active,
 :root[data-theme='dark'] .report-mode-switch button.active,
@@ -448,7 +445,7 @@ textarea {
   box-shadow: var(--shadow-card);
 }
 
-:where(button, a, [tabindex]):focus-visible {
+:where(button, a, summary, [tabindex]):focus-visible {
   @include focus-ring;
 }
 

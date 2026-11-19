@@ -22,6 +22,15 @@ assert.match(sidebar, /lucide-vue-next/, 'sidebar icons must come from Lucide');
 assert.match(sidebar, /atelier-sidebar/, 'sidebar should use the atelier shell');
 assert.match(topbar, /topbar-command/, 'topbar should expose the command/status rail');
 assert.match(topbar, /topbar-zoom/, 'topbar should expose page zoom controls');
+assert.match(app, /<main id="main-content"/, 'the shell should expose a single main content region');
+assert.match(app, /class="skip-link" href="#main-content"/, 'keyboard users should be able to skip to page content');
+assert.equal((app.match(/<main\b/g) ?? []).length, 1, 'the app shell must own the only main landmark');
+assert.doesNotMatch(topbar, /<h1\b/, 'the greeting must not compete with each page heading');
+assert.doesNotMatch(await read('src/renderer/src/views/DashboardView.vue'), /<main\b/, 'the dashboard must not nest a main landmark');
+assert.doesNotMatch(await read('src/renderer/src/views/ReportConfigView.vue'), /<main\b/, 'configuration pages must not nest a main landmark');
+assert.match(await read('src/renderer/src/views/HistoryLogsView.vue'), /aria-label="筛选项目"/, 'history filters should expose accessible names');
+assert.match(await read('src/renderer/src/views/MessageCenterView.vue'), /aria-label="搜索消息内容"/, 'message search should expose an accessible name');
+assert.match(await read('src/renderer/src/components/panels/AdvancedConfigPanels.vue'), /aria-label="`删除\$\{group\.label\} \$\{item\}`"/, 'AI option deletion icons should expose their target');
 assert.match(app, /handlePageZoomShortcut/, 'app shell should support page zoom shortcuts');
 assert.match(generate, /atelier-page/, 'report generation should opt into the atelier page treatment');
 assert.match(generate, /data-stage="scope"/, 'scope stage should be addressable for interaction styling');
@@ -37,7 +46,11 @@ assert.match(indexStyles, /@use ['"]atelier['"]/, 'atelier stylesheet must be lo
 assert.match(atelierStyles, /prefers-reduced-motion/, 'atelier motion must have an accessibility fallback');
 assert.match(atelierStyles, /\.atelier-workflow-step\.active/, 'active workflow stage needs visible feedback');
 
-const emojiPattern = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+const emojiPattern = /(?:\p{Emoji_Presentation}|\p{Emoji}\uFE0F|[#*0-9]\uFE0F?\u20E3)/u;
+assert.equal(emojiPattern.test('步骤完成 ✓'), false, 'ordinary status symbols must not be treated as emoji');
+assert.equal(emojiPattern.test('😀'), true, 'emoji pictographs must be detected');
+assert.equal(emojiPattern.test('⚠️'), true, 'emoji variation sequences must be detected');
+
 async function assertNoEmoji(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   for (const entry of entries) {

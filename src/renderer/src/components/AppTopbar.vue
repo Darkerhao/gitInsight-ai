@@ -37,7 +37,7 @@ const greetingText = computed(() => {
   return '晚上好';
 });
 
-const configStatusText = computed(() => (isConfigDirty.value ? '配置待保存' : '配置已同步'));
+const configStatusText = computed(() => (isConfigDirty.value ? '有未保存修改' : '配置已保存'));
 const configStatusType = computed(() => (isConfigDirty.value ? 'warning' : 'success'));
 const currentDateLabel = computed(() =>
   new Intl.DateTimeFormat('zh-CN', {
@@ -58,7 +58,7 @@ const currentDateLabel = computed(() =>
       </span>
     </div>
     <div class="topbar-greeting">
-      <h1>{{ greetingText }}</h1>
+      <p class="topbar-greeting-title">{{ greetingText }}</p>
       <div class="topbar-meta" aria-label="当前工作区信息">
         <span><CalendarDays :size="13" />{{ currentDateLabel }}</span>
       </div>
@@ -104,7 +104,7 @@ const currentDateLabel = computed(() =>
         />
       </el-tooltip>
 
-      <el-tag class="topbar-status" :type="configStatusType" effect="plain" round>
+      <el-tag class="topbar-status" :type="configStatusType" effect="plain" round role="status" aria-live="polite">
         {{ configStatusText }}
       </el-tag>
 
@@ -114,9 +114,10 @@ const currentDateLabel = computed(() =>
         type="warning"
         plain
         :icon="Save"
+        aria-label="保存全部配置"
         @click="saveSettings"
       >
-        保存配置
+        保存全部配置
       </el-button>
 
       <div class="topbar-user">

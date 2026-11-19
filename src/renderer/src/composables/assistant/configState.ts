@@ -25,7 +25,6 @@ type ConfigStateContext = {
   getWorkspaceDirs: () => string[];
   getRepoKey: (path: string) => string;
   validateAutoSyncBeforeSave: (payload: AppConfig) => Promise<boolean>;
-  refreshAutoSyncState: () => Promise<void>;
 };
 
 export function createConfigState(ctx: ConfigStateContext) {
@@ -36,7 +35,6 @@ export function createConfigState(ctx: ConfigStateContext) {
     getWorkspaceDirs,
     getRepoKey,
     validateAutoSyncBeforeSave,
-    refreshAutoSyncState,
   } = ctx;
 
   const reporterOptions = computed(() => (config.reporterName ? [config.reporterName] : []));
@@ -271,11 +269,15 @@ export function createConfigState(ctx: ConfigStateContext) {
 
 
   async function saveSettings() {
-    const payload = getConfigPayload();
-    if (!(await validateAutoSyncBeforeSave(payload))) return;
     try {
+      const payload = getConfigPayload();
+      const signature = getEditableConfigSignature();
+      if (!(await validateAutoSyncBeforeSave(payload))) return;
+      if (signature !== getEditableConfigSignature()) {
+        ElMessage.warning('校验期间配置有修改，请重新保存');
+        return;
+      }
       await persistConfig();
-      await refreshAutoSyncState();
       ElMessage.success('配置已保存');
     } catch (error) {
       ElMessage.error(error instanceof Error ? error.message : '配置保存失败');
@@ -297,7 +299,7 @@ export function createConfigState(ctx: ConfigStateContext) {
     config.aiProfiles = [...profiles, profile];
     config.activeAiProfileId = profile.id;
     syncLegacyAiFieldsFromActiveProfile();
-    ElMessage.success('AI 配置已新增');
+    ElMessage.info('AI 配置已新增，当前修改待保存');
   }
 
 
@@ -317,7 +319,7 @@ export function createConfigState(ctx: ConfigStateContext) {
     }
     const profile = profiles.find((item) => item.id === id);
     try {
-      await ElMessageBox.confirm(`确定删除「${profile?.name || '未命名配置'}」吗？删除后会同时移除这套配置的 API Key。`, '删除 AI 配置', {
+      await ElMessageBox.confirm(`确定删除「${profile?.name || '未命名配置'}」及其 API Key 吗？保存修改后生效。`, '删除 AI 配置', {
         confirmButtonText: '删除',
         cancelButtonText: '取消',
         type: 'warning',
@@ -332,8 +334,7 @@ export function createConfigState(ctx: ConfigStateContext) {
       config.activeAiProfileId = nextProfiles[0]?.id || DEFAULT_AI_PROFILE.id;
     }
     syncLegacyAiFieldsFromActiveProfile();
-    await persistConfig();
-    ElMessage.success('AI 配置已删除');
+    ElMessage.info('AI 配置已移除，当前修改待保存');
   }
 
 
@@ -347,21 +348,15 @@ export function createConfigState(ctx: ConfigStateContext) {
   }
 
 
-  async function removeAiBaseUrlOption(value: string) {
-    config.aiBaseUrlOptions = config.aiBaseUrlOptions.filter((item) => item !== value);
-    if (activeAiProfile.value.baseUrl === value) activeAiProfile.value.baseUrl = '';
-    syncLegacyAiFieldsFromActiveProfile();
-    await persistConfig();
-    ElMessage.success('接口地址选项已删除');
-  }
-
-
-  async function removeAiModelOption(value: string) {
-    config.aiModelOptions = config.aiModelOptions.filter((item) => item !== value);
-    if (activeAiProfile.value.model === value) activeAiProfile.value.model = '';
-    syncLegacyAiFieldsFromActiveProfile();
-    await persistConfig();
-    ElMessage.success('模型选项已删除');
+  function removeAiOption(field: 'baseUrl' | 'model', value: string) {
+    const isInUse = config.aiProfiles.some((profile) => profile[field].trim() === value);
+    if (isInUse) {
+      ElMessage.warning('请先将使用此选项的 AI 配置改为其他值');
+      return;
+    }
+    const optionsKey = field === 'baseUrl' ? 'aiBaseUrlOptions' : 'aiModelOptions';
+    config[optionsKey] = config[optionsKey].filter((item) => item !== value);
+    ElMessage.info('选项已移除，当前修改待保存');
   }
 
 
@@ -384,7 +379,6 @@ export function createConfigState(ctx: ConfigStateContext) {
     removeAiProfile,
     rememberAiBaseUrlOption,
     rememberAiModelOption,
-    removeAiBaseUrlOption,
-    removeAiModelOption,
+    removeAiOption,
   };
 }

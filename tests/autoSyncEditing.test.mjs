@@ -61,3 +61,112 @@ test('save completion preserves later task edits and their unsaved indication', 
   assert.equal(ctx.assistant.isConfigDirty.value, true);
   ctx.assistant.dispose();
 });
+
+test('edits made during validation stay unsaved until they pass validation', async () => {
+  const pending = deferred();
+  const ctx = assistantHarness();
+  await ctx.assistant.init();
+  const task = ctx.assistant.config.autoSync.tasks[0];
+  task.name = 'Validated revision';
+  ctx.api.validateAutoSync = (payload) => {
+    assert.equal(payload.autoSync.tasks[0].name, 'Validated revision');
+    return pending.promise;
+  };
+  const saving = ctx.assistant.saveSettings();
+  task.name = 'Edited during validation';
+  pending.resolve({ valid: true });
+  await saving;
+  assert.equal(ctx.saves.length, 0);
+  assert.equal(ctx.assistant.isConfigDirty.value, true);
+
+  ctx.api.validateAutoSync = async (payload) => {
+    assert.equal(payload.autoSync.tasks[0].name, 'Edited during validation');
+    return { valid: true };
+  };
+  await ctx.assistant.saveSettings();
+  assert.equal(ctx.saves[0].autoSync.tasks[0].name, 'Edited during validation');
+  assert.equal(ctx.assistant.isConfigDirty.value, false);
+  ctx.assistant.dispose();
+});
+
+test('AI profile and option edits do not write configuration on their own', async () => {
+  const ctx = assistantHarness();
+  await ctx.assistant.init();
+  const { assistant } = ctx;
+  assistant.config.aiBaseUrlOptions = ['https://example.test/v1'];
+  assistant.config.aiModelOptions = ['model-to-remove'];
+  assistant.activeAiProfile.value.baseUrl = 'https://active.example.test/v1';
+  assistant.activeAiProfile.value.model = 'active-model';
+  assistant.rememberAiModelOption('model-to-remove');
+  assistant.removeAiOption('baseUrl', 'https://example.test/v1');
+  assistant.removeAiOption('model', 'model-to-remove');
+  assert.equal(assistant.activeAiProfile.value.baseUrl, 'https://active.example.test/v1');
+  assert.equal(assistant.activeAiProfile.value.model, 'active-model');
+  assert.ok(assistant.isConfigDirty.value);
+  assistant.createAiProfile();
+  await assistant.removeAiProfile(assistant.config.activeAiProfileId);
+  assert.equal(assistant.config.aiProfiles.length, 1);
+  assert.equal(ctx.saves.length, 0);
+  assert.equal(assistant.isConfigDirty.value, true);
+  await assistant.saveSettings();
+  assert.equal(ctx.saves.length, 1);
+  assert.ok(!ctx.saves[0].aiBaseUrlOptions.includes('https://example.test/v1'));
+  assert.ok(!ctx.saves[0].aiModelOptions.includes('model-to-remove'));
+  assert.equal(assistant.isConfigDirty.value, false);
+  assistant.dispose();
+});
+
+test('AI options used by another profile are not deleted from the suggestions', async () => {
+  const ctx = assistantHarness();
+  await ctx.assistant.init();
+  const { assistant } = ctx;
+  const { baseUrl, model } = assistant.activeAiProfile.value;
+  assistant.rememberAiBaseUrlOption(baseUrl);
+  assistant.rememberAiModelOption(model);
+  assistant.rememberAiBaseUrlOption('https://unused.example.test/v1');
+  assistant.rememberAiModelOption('unused-model');
+  const otherProfileId = assistant.activeAiProfile.value.id;
+  assistant.createAiProfile();
+  assistant.activeAiProfile.value.baseUrl = 'https://other.example.test/v1';
+  assistant.activeAiProfile.value.model = 'other-model';
+  await assistant.saveSettings();
+
+  assistant.removeAiOption('baseUrl', baseUrl);
+  assistant.removeAiOption('model', model);
+  assert.equal(assistant.aiBaseUrlOptions.value.includes(baseUrl), true);
+  assert.equal(assistant.aiModelOptions.value.includes(model), true);
+  assert.ok(ctx.messages.includes('请先将使用此选项的 AI 配置改为其他值'));
+  assert.equal(assistant.isConfigDirty.value, false);
+
+  assistant.removeAiOption('baseUrl', 'https://unused.example.test/v1');
+  assistant.removeAiOption('model', 'unused-model');
+
+  assert.ok(!assistant.aiBaseUrlOptions.value.includes('https://unused.example.test/v1'));
+  assert.ok(!assistant.aiModelOptions.value.includes('unused-model'));
+  assert.equal(assistant.config.aiProfiles.find(profile => profile.id === otherProfileId).model, model);
+  assert.equal(assistant.isConfigDirty.value, true);
+  assistant.dispose();
+});
+
+test('validation and save failures preserve all configuration edits and can retry', async () => {
+  const ctx = assistantHarness();
+  await ctx.assistant.init();
+  const { assistant } = ctx;
+  assistant.activeAiProfile.value.name = 'Unsaved profile';
+  ctx.api.validateAutoSync = async () => { throw new Error('validation unavailable'); };
+  await assistant.saveSettings();
+  assert.ok(ctx.messages.includes('validation unavailable'));
+  assert.equal(assistant.isConfigDirty.value, true);
+  ctx.api.validateAutoSync = async () => ({ valid: true });
+  const save = ctx.api.saveConfig;
+  ctx.api.saveConfig = async () => { throw new Error('disk full'); };
+  await assistant.saveSettings();
+  assert.ok(ctx.messages.includes('disk full'));
+  assert.equal(assistant.activeAiProfile.value.name, 'Unsaved profile');
+  assert.equal(assistant.isConfigDirty.value, true);
+  ctx.api.saveConfig = save;
+  await assistant.saveSettings();
+  assert.equal(ctx.saves.length, 1);
+  assert.equal(assistant.isConfigDirty.value, false);
+  assistant.dispose();
+});

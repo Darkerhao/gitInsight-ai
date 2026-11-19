@@ -1,10 +1,35 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
 async function publishAll(page: Page, weekly: boolean) {
   await page.getByRole('button', { name: weekly ? '提交全部待提交日报' : '发布全部已生成项目', exact: true }).click();
   await page.getByRole('button', { name: weekly ? /确认提交 \d+ 条/ : '确认发布', exact: true }).click();
 }
+
+test('研发日报复制被拒绝时保留正文，Markdown 导出保留完整内容', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/#/generate');
+  await expect(page.getByRole('button', { name: '复制内容', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '导出 Markdown', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '重新生成当前项目', exact: true }).click();
+  await expect(page.locator('.editable-report textarea')).toHaveValue(/Project A/);
+  await page.locator('.editable-report textarea').fill('研发日报正文\n人工校对内容');
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true,
+      value: { writeText: async () => { throw new Error('denied'); } } });
+  });
+  await page.getByRole('button', { name: '复制内容', exact: true }).click();
+  await expect(page.getByText('复制失败，请手动选择内容复制', { exact: true })).toBeVisible();
+  await expect(page.locator('.editable-report textarea')).toHaveValue('研发日报正文\n人工校对内容');
+  const downloading = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出 Markdown', exact: true }).click();
+  const download = await downloading;
+  expect(await download.failure()).toBeNull();
+  expect(await readFile((await download.path())!, 'utf8')).toBe('研发日报正文\n人工校对内容');
+  expect(errors).toEqual([]);
+});
 
 for (const weekly of [false, true]) {
   const label = weekly ? '批量补日报' : '写今日日报';
@@ -199,7 +224,7 @@ test('配置加载失败展示错误并阻止默认配置写入，修复后可�
 });
 
 test('后台运行通知保留任务名称、启停、新增与删除编辑', async ({ page }) => {
-  await page.goto('/?autoSyncTask=1#/config');
+  await page.goto('/?autoSyncTask=1#/sync');
   const names = page.getByPlaceholder('任务名称', { exact: true });
   await expect(names.first()).toHaveValue('已有任务');
   await names.first().fill('未保存的任务名称');
@@ -229,9 +254,9 @@ test('后台运行通知保留任务名称、启停、新增与删除编辑', as
 });
 
 test('备份取消和错误可重试，保留未保存配置并反馈导出结果', async ({ page }) => {
-  await page.goto('/#/system');
-  await page.getByRole('tab', { name: '集成配置', exact: true }).click();
-  await page.getByPlaceholder('请选择工作目录').fill('/workspace/unsaved');
+  await page.goto('/#/config');
+  await page.getByPlaceholder('例如：D:/workspace').fill('/workspace/unsaved');
+  await page.getByRole('menuitem', { name: '系统设置', exact: true }).click();
   await page.getByRole('tab', { name: '安全设置', exact: true }).click();
   await expect(page.getByText(/备份包含全部本地数据库记录和已保存配置/)).toBeVisible();
   const exportBackup = page.getByRole('button', { name: '导出备份', exact: true });
@@ -253,5 +278,7 @@ test('备份取消和错误可重试，保留未保存配置并反馈导出结�
   expect(await page.evaluate(() => window.reportTest.backupCalls)).toEqual(['export', 'restore', 'export', 'restore', 'export']);
   expect(await page.evaluate(() => window.reportTest.configSaves)).toBe(0);
   await page.getByRole('tab', { name: '集成配置', exact: true }).click();
-  await expect(page.getByPlaceholder('请选择工作目录')).toHaveValue('/workspace/unsaved');
+  await expect(page.locator('.integration-summary-list')).toContainText('/workspace/unsaved');
+  await page.getByRole('button', { name: '前往日报配置', exact: true }).click();
+  await expect(page.getByPlaceholder('例如：D:/workspace')).toHaveValue('/workspace/unsaved');
 });

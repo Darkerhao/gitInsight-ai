@@ -8,18 +8,20 @@ import {
   KeyRound,
   Link,
   RefreshCw,
-  Save,
   Settings,
   ShieldCheck,
 } from 'lucide-vue-next';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { useRouter } from 'vue-router';
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import { useAssistant } from '@/composables/useAssistant';
+import { copyText } from '@/utils/clipboard';
 import { DEFAULT_AUTO_SYNC_CONFIG, DEFAULT_AUTO_SYNC_TASK_CONFIG } from '@shared/types';
 
 const assistant = useAssistant();
-const { config, activeAiProfile, projectOptions, storageInfo, refreshLocalData, saveSettings } = assistant;
+const { config, activeAiProfile, projectOptions, storageInfo, refreshLocalData } = assistant;
+const router = useRouter();
 
 const activeTab = ref('basic');
 const backupOperation = ref<'export' | 'restore' | ''>('');
@@ -96,12 +98,7 @@ async function refreshStorage() {
 async function copyDataDirectory() {
   const path = storageInfo.value?.userDataPath;
   if (!path) return;
-  try {
-    await navigator.clipboard.writeText(path);
-    ElMessage.success('本地数据目录已复制');
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '复制目录失败');
-  }
+  await copyText(path, '本地数据目录已复制');
 }
 
 async function runBackupOperation(operation: 'export' | 'restore') {
@@ -127,7 +124,7 @@ async function resetSettings() {
   }
   config.feishuForm.defaultWorkHours = 8;
   config.feishuForm.projectWorkHours = {};
-  ElMessage.success('已重置同步默认值，请保存后生效');
+  ElMessage.success('已重置同步默认值，请使用顶栏按钮保存全部配置后生效');
 }
 
 const operationCards = [
@@ -144,7 +141,7 @@ const operationCards = [
     key: 'reset',
     icon: Settings,
     title: '重置同步默认值',
-    desc: '恢复自动同步时间和默认工时，保存后写入 config.json',
+    desc: '恢复自动同步时间和默认工时，需在顶栏保存全部配置后生效',
     tag: '需要保存生效',
     tone: 'warning',
     action: resetSettings,
@@ -195,34 +192,33 @@ const operationCards = [
         </div>
 
         <div v-if="activeTab === 'integration'" class="settings-section">
-          <div class="panel-head">
-            <h3>当前配置</h3>
-          </div>
-          <div class="field-grid three-columns">
-            <div class="field">
-              <label>工作目录</label>
-              <el-input v-model="config.workspaceDir" placeholder="请选择工作目录" />
-            </div>
-            <div class="field">
-              <label>AI Base URL</label>
-              <el-input v-model="activeAiProfile.baseUrl" />
-            </div>
-            <div class="field">
-              <label>AI Model</label>
-              <el-input v-model="activeAiProfile.model" />
-            </div>
-            <div class="field">
-              <label>默认工时</label>
-              <el-input-number v-model="config.feishuForm.defaultWorkHours" :min="0.5" :max="24" :step="0.5" controls-position="right" />
-            </div>
-            <div class="field">
-              <label>自动同步任务</label>
-              <el-input :model-value="autoSyncSummary" readonly />
-            </div>
-            <div class="field">
-              <label>飞书项目</label>
-              <el-input :model-value="selectedProject" readonly />
-            </div>
+          <div class="panel-head"><h3>集成配置摘要</h3></div>
+          <p class="muted-text">每项设置仅在所属页面编辑；这里展示当前值并提供快捷入口。</p>
+          <div class="view-stack integration-summary-list">
+            <section class="integration-summary">
+              <h3>日报与飞书</h3>
+              <el-descriptions :column="2" border>
+                <el-descriptions-item label="工作目录">{{ config.workspaceDir || '未选择' }}</el-descriptions-item>
+                <el-descriptions-item label="汇报人">{{ config.reporterName || '未配置' }}</el-descriptions-item>
+                <el-descriptions-item label="飞书项目">{{ selectedProject }}</el-descriptions-item>
+                <el-descriptions-item label="默认工时">{{ config.feishuForm.defaultWorkHours }} 小时</el-descriptions-item>
+              </el-descriptions>
+              <el-button class="integration-summary-link" type="primary" plain @click="router.push('/config')">前往日报配置</el-button>
+            </section>
+            <section class="integration-summary">
+              <h3>AI 连接</h3>
+              <el-descriptions :column="2" border>
+                <el-descriptions-item label="当前配置">{{ activeAiProfile.name || '未命名配置' }}</el-descriptions-item>
+                <el-descriptions-item label="接口地址">{{ activeAiProfile.baseUrl || '未配置' }}</el-descriptions-item>
+                <el-descriptions-item label="模型名称">{{ activeAiProfile.model || '未配置' }}</el-descriptions-item>
+              </el-descriptions>
+              <el-button class="integration-summary-link" type="primary" plain @click="router.push('/ai')">前往 AI 设置</el-button>
+            </section>
+            <section class="integration-summary">
+              <h3>自动同步</h3>
+              <p>{{ autoSyncSummary }}</p>
+              <el-button class="integration-summary-link" type="primary" plain @click="router.push('/sync')">前往同步任务</el-button>
+            </section>
           </div>
         </div>
 
@@ -291,9 +287,6 @@ const operationCards = [
           </div>
         </div>
 
-        <div v-if="activeTab === 'basic' || activeTab === 'integration'" class="button-row end">
-          <el-button :icon="Save" type="primary" @click="saveSettings">保存设置</el-button>
-        </div>
       </section>
 
       <aside class="view-stack">
@@ -323,3 +316,9 @@ const operationCards = [
     </div>
   </div>
 </template>
+
+<style scoped>
+.integration-summary { display: grid; gap: 12px; min-width: 0; padding-top: 16px; border-top: 1px solid var(--c-border); }
+.integration-summary-link { justify-self: start; }
+.integration-summary :deep(.el-descriptions__table) { table-layout: fixed; overflow-wrap: anywhere; }
+</style>

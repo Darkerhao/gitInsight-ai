@@ -6,6 +6,7 @@ import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import { useMessages } from '@/composables/useMessages';
 import type { MessageItem, MessageType, MessageStatus } from '@/composables/useMessages';
+import { copyText } from '@/utils/clipboard';
 
 const { messageItems, unreadCount, isRead, markAsRead, markAllAsRead: markAllRead, animateArrival } = useMessages();
 
@@ -62,12 +63,7 @@ async function copyMessage(item?: MessageItem | null) {
     ElMessage.warning('暂无可复制的消息');
     return;
   }
-  try {
-    await navigator.clipboard.writeText(`${item.title}\n${item.content}`);
-    ElMessage.success('消息内容已复制');
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '复制消息失败');
-  }
+  await copyText(`${item.title}\n${item.content}`, '消息内容已复制');
 }
 
 function resetFilters() {
@@ -113,7 +109,7 @@ function statusLabel(status: MessageStatus) {
 
     <section class="surface-card message-toolbar-card">
       <div class="message-toolbar-grid">
-        <el-input v-model="keyword" :prefix-icon="Search" placeholder="搜索消息内容" />
+        <el-input v-model="keyword" :prefix-icon="Search" aria-label="搜索消息内容" placeholder="搜索消息内容" />
         <el-select v-model="typeFilter" aria-label="消息类型">
           <el-option label="全部类型" value="all" />
           <el-option label="任务通知" value="sync" />
@@ -128,8 +124,11 @@ function statusLabel(status: MessageStatus) {
           <el-option label="提醒" value="pending" />
           <el-option label="信息" value="info" />
         </el-select>
+        <label class="visually-hidden" for="messages-start-date">消息开始日期</label>
+        <label class="visually-hidden" for="messages-end-date">消息结束日期</label>
         <el-date-picker
           v-model="timeRange"
+          :id="['messages-start-date', 'messages-end-date']"
           type="daterange"
           value-format="YYYY-MM-DD"
           start-placeholder="开始日期"

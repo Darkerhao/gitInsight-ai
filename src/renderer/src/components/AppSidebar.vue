@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue';
-import { Bot, BrainCog, CalendarClock, CalendarDays, Coins, FileCog, FileText, FolderKanban, History, Info, LayoutDashboard, Lightbulb, MessageSquare, BookOpen, Settings, Sparkles, Sprout, ClipboardList } from 'lucide-vue-next';
+import { BrainCog, CalendarClock, CalendarDays, Coins, FileCog, FileText, FolderKanban, History, Info, LayoutDashboard, Lightbulb, MessageSquare, BookOpen, Settings, Sprout, ClipboardList } from 'lucide-vue-next';
 import { useAppUpdates } from '@/composables/useAppUpdates';
 import { useMessages } from '@/composables/useMessages';
 
@@ -167,14 +167,9 @@ onBeforeUnmount(() => {
       </el-menu>
     </nav>
 
-    <div v-if="activeNav !== 'generate'" class="sidebar-tip">
-      <div class="sidebar-tip-icon"><Bot :size="28" /></div>
-      <div class="sidebar-tip-title">
-        <Sparkles :size="14" />
-        <span>工作流提示</span>
-      </div>
+    <div v-if="activeNav === 'dashboard'" class="sidebar-tip">
+      <div class="sidebar-tip-title"><span>工作流提示</span></div>
       <p class="sidebar-tip-desc">从 Git 提交或工作素材生成日报，串联同步、周报、复盘与历史记录。</p>
-      <el-button class="sidebar-tip-btn" @click="emit('update:activeNav', 'generate')">开始生成日报</el-button>
     </div>
   </aside>
 </template>

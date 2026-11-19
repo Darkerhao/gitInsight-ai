@@ -6,6 +6,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import { useAssistant } from '@/composables/useAssistant';
 import { createMaterialReports } from '@/composables/useMaterialReports';
+import { copyText } from '@/utils/clipboard';
 import { MATERIAL_ROLE_LABELS, isMaterialRole, materialSections } from '@shared/materialReport';
 import type { MaterialRole } from '@shared/types';
 
@@ -71,11 +72,11 @@ async function publishReport() {
 }
 
 async function copyReport() {
-  try { await navigator.clipboard.writeText(draft.value.report); ElMessage.success('日报已复制'); }
-  catch { ElMessage.error('复制失败，请手动选择正文复制'); }
+  await copyText(draft.value.report, '日报已复制');
 }
 
 function exportReport() {
+  if (!draft.value.report.trim()) return;
   const url = URL.createObjectURL(new Blob([draft.value.report], { type: 'text/markdown;charset=utf-8' }));
   const link = document.createElement('a');
   link.href = url;
@@ -164,7 +165,8 @@ function exportReport() {
           <el-button :icon="Send" type="primary" :disabled="busy || !draft.report.trim() || !config.feishuForm.projectOptionId || published" @click="publishReport">
             {{ published ? '已提交飞书' : '发布素材日报' }}
           </el-button>
-          <el-button link type="primary" @click="router.push('/config')">配置 AI 与飞书</el-button>
+          <el-button link type="primary" @click="router.push('/ai')">AI 设置</el-button>
+          <el-button link type="primary" @click="router.push('/config')">飞书配置</el-button>
         </section>
       </div>
     </div>

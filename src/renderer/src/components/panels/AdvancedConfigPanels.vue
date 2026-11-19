@@ -5,14 +5,9 @@ import type { AiConnectionTestResult } from '@shared/types';
 import { useAssistant } from '@/composables/useAssistant';
 import SectionTitle from '@/components/common/SectionTitle.vue';
 
-const props = withDefaults(
-  defineProps<{
-    mode?: 'full' | 'ai';
-  }>(),
-  {
-    mode: 'full',
-  },
-);
+const props = defineProps<{
+  mode: 'ai' | 'feishu';
+}>();
 
 const assistant = useAssistant();
 const {
@@ -20,7 +15,6 @@ const {
   advancedConfigPanels,
   aiBaseUrlOptions,
   aiModelOptions,
-  aiProfileOptions,
   activeAiProfile,
   feishuFieldOptions,
   feishuLoading,
@@ -32,8 +26,7 @@ const {
   removeAiProfile,
   rememberAiBaseUrlOption,
   rememberAiModelOption,
-  removeAiBaseUrlOption,
-  removeAiModelOption,
+  removeAiOption,
   loginFeishu,
   loadFeishuFields,
   loadFeishuProjects,
@@ -52,9 +45,13 @@ const fieldMappingRows = [
 ] as const;
 
 const isAiOnly = computed(() => props.mode === 'ai');
-const sectionTitle = computed(() => (isAiOnly.value ? 'AI 配置管理' : 'AI 接入与飞书连接'));
-const sectionSubtitle = computed(() => (isAiOnly.value ? '维护统一模型连接信息' : '维护模型、授权凭据和表单字段映射'));
+const sectionTitle = computed(() => (isAiOnly.value ? 'AI 配置管理' : '飞书接入与表单映射'));
+const sectionSubtitle = computed(() => (isAiOnly.value ? '维护统一模型连接信息' : '维护授权凭据、人员项目和表单字段映射'));
 const canRemoveAiProfile = computed(() => config.aiProfiles.length > 1);
+const aiOptionGroups = computed(() => [
+  { field: 'baseUrl', label: '接口地址', options: aiBaseUrlOptions.value },
+  { field: 'model', label: '模型名称', options: aiModelOptions.value },
+] as const);
 const aiConnectionTesting = ref(false);
 const aiConnectionTestResult = ref<AiConnectionTestResult | null>(null);
 const aiConnectionSignature = computed(() =>
@@ -140,21 +137,6 @@ const feishuGuideSteps = computed(() => [
     disabled: !feishuSubmitReady.value,
   },
 ]);
-const activePanels = computed<string[]>({
-  get: () => (isAiOnly.value ? ['ai'] : advancedConfigPanels.value),
-  set: (value) => {
-    if (isAiOnly.value) {
-      advancedConfigPanels.value = Array.from(new Set([...advancedConfigPanels.value, ...value, 'ai']));
-      return;
-    }
-    advancedConfigPanels.value = value;
-  },
-});
-
-function handleAiProfileChange(value: string) {
-  selectAiProfile(value);
-}
-
 async function runAiConnectionTest() {
   if (aiConnectionTesting.value) return;
 
@@ -193,7 +175,7 @@ async function runAiConnectionTest() {
 }
 
 function openAdvancedPanel(name: string) {
-  activePanels.value = Array.from(new Set([...activePanels.value, name]));
+  advancedConfigPanels.value = Array.from(new Set([...advancedConfigPanels.value, name]));
 }
 
 function runFeishuGuideAction(action: FeishuGuideAction, panel: string) {
@@ -253,56 +235,65 @@ function runFeishuGuideAction(action: FeishuGuideAction, panel: string) {
         <div class="field-grid">
           <div class="field">
             <label>配置名称</label>
-            <el-input v-model="activeAiProfile.name" placeholder="例如：DeepSeek 生产环境" />
+            <el-input v-model="activeAiProfile.name" aria-label="AI 配置名称" placeholder="例如：DeepSeek 生产环境" />
           </div>
           <div class="field field-span-2">
             <label>接口地址</label>
             <el-select
               v-model="activeAiProfile.baseUrl"
+              aria-label="AI 接口地址"
               filterable
               allow-create
               default-first-option
               placeholder="OpenAI兼容接口地址"
               @change="rememberAiBaseUrlOption"
             >
-              <el-option v-for="item in aiBaseUrlOptions" :key="item" :label="item" :value="item">
-                <div class="select-option-row">
-                  <span>{{ item }}</span>
-                  <el-button class="option-delete" link type="danger" :icon="Trash2" @click.stop="removeAiBaseUrlOption(item)" />
-                </div>
-              </el-option>
+              <el-option v-for="item in aiBaseUrlOptions" :key="item" :label="item" :value="item" />
             </el-select>
           </div>
           <div class="field">
             <label>模型名称</label>
             <el-select
               v-model="activeAiProfile.model"
+              aria-label="AI 模型名称"
               filterable
               allow-create
               default-first-option
               placeholder="模型名称"
               @change="rememberAiModelOption"
             >
-              <el-option v-for="item in aiModelOptions" :key="item" :label="item" :value="item">
-                <div class="select-option-row">
-                  <span>{{ item }}</span>
-                  <el-button class="option-delete" link type="danger" :icon="Trash2" @click.stop="removeAiModelOption(item)" />
-                </div>
-              </el-option>
+              <el-option v-for="item in aiModelOptions" :key="item" :label="item" :value="item" />
             </el-select>
           </div>
           <div class="field">
             <label>启用状态</label>
             <div class="state-switch-wrap" :class="{ active: activeAiProfile.enabled }">
-              <el-switch v-model="activeAiProfile.enabled" class="state-switch" />
+              <el-switch v-model="activeAiProfile.enabled" class="state-switch" aria-label="启用当前 AI 配置" />
               <span class="state-switch-label">{{ activeAiProfile.enabled ? '启用' : '停用' }}</span>
             </div>
           </div>
           <div class="field field-span-3">
             <label>API Key</label>
-            <el-input v-model="activeAiProfile.apiKey" type="password" show-password placeholder="API Key" />
+            <el-input v-model="activeAiProfile.apiKey" aria-label="AI API Key" type="password" show-password placeholder="API Key" />
           </div>
         </div>
+
+        <details v-if="aiBaseUrlOptions.length || aiModelOptions.length" class="ai-option-manager">
+          <summary>管理接口地址和模型候选项</summary>
+          <ul v-for="group in aiOptionGroups" :key="group.field" :aria-label="group.label">
+            <li v-for="item in group.options" :key="item" class="select-option-row">
+              <span>{{ item }}</span>
+              <el-button
+                class="option-delete"
+                link
+                type="danger"
+                :icon="Trash2"
+                :aria-label="`删除${group.label} ${item}`"
+                @click="removeAiOption(group.field, item)"
+              />
+            </li>
+          </ul>
+        </details>
 
         <div
           v-if="aiConnectionTestResult"
@@ -325,7 +316,7 @@ function runFeishuGuideAction(action: FeishuGuideAction, panel: string) {
       </section>
     </div>
 
-    <el-collapse v-else v-model="activePanels" class="advanced-collapse">
+    <el-collapse v-else v-model="advancedConfigPanels" class="advanced-collapse">
       <section class="feishu-guide-card" aria-label="飞书接入向导">
         <div class="feishu-guide-head">
           <div>
@@ -365,69 +356,7 @@ function runFeishuGuideAction(action: FeishuGuideAction, panel: string) {
         </div>
       </section>
 
-      <el-collapse-item :title="isAiOnly ? '模型连接配置' : 'AI 接入配置'" name="ai">
-        <div class="field-grid">
-          <div class="field field-span-3">
-            <label>当前 AI 配置</label>
-            <el-select v-model="config.activeAiProfileId" placeholder="选择 AI 配置" @change="handleAiProfileChange">
-              <el-option v-for="item in aiProfileOptions" :key="item.value" :label="item.label" :value="item.value">
-                <div class="select-option-row">
-                  <span>{{ item.label }}</span>
-                  <small>{{ item.model || item.baseUrl }}</small>
-                </div>
-              </el-option>
-            </el-select>
-          </div>
-          <div class="field field-span-2">
-            <label>接口地址</label>
-            <el-select
-              v-model="activeAiProfile.baseUrl"
-              filterable
-              allow-create
-              default-first-option
-              placeholder="OpenAI兼容接口地址"
-              @change="rememberAiBaseUrlOption"
-            >
-              <el-option v-for="item in aiBaseUrlOptions" :key="item" :label="item" :value="item">
-                <div class="select-option-row">
-                  <span>{{ item }}</span>
-                  <el-button
-                    class="option-delete"
-                    link
-                    type="danger"
-                    :icon="Trash2"
-                    @click.stop="removeAiBaseUrlOption(item)"
-                  />
-                </div>
-              </el-option>
-            </el-select>
-          </div>
-          <div class="field">
-            <label>模型名称</label>
-            <el-select
-              v-model="activeAiProfile.model"
-              filterable
-              allow-create
-              default-first-option
-              placeholder="模型名称"
-              @change="rememberAiModelOption"
-            >
-              <el-option v-for="item in aiModelOptions" :key="item" :label="item" :value="item">
-                <div class="select-option-row">
-                  <span>{{ item }}</span>
-                  <el-button class="option-delete" link type="danger" :icon="Trash2" @click.stop="removeAiModelOption(item)" />
-                </div>
-              </el-option>
-            </el-select>
-          </div>
-          <div class="field field-span-3">
-            <label>API Key</label>
-            <el-input v-model="activeAiProfile.apiKey" type="password" show-password placeholder="API Key" />
-          </div>
-        </div>
-      </el-collapse-item>
-
-      <el-collapse-item v-if="!isAiOnly" title="飞书连接配置" name="feishu">
+      <el-collapse-item title="飞书连接配置" name="feishu">
         <div class="field-grid">
           <div class="field field-span-2">
             <label>提交接口地址</label>
@@ -448,7 +377,7 @@ function runFeishuGuideAction(action: FeishuGuideAction, panel: string) {
         </div>
       </el-collapse-item>
 
-      <el-collapse-item v-if="!isAiOnly" title="飞书表单字段映射" name="fields">
+      <el-collapse-item title="飞书表单字段映射" name="fields">
         <div class="field-helper-row">
           <div>
             <strong>解析表单字段</strong>
@@ -487,7 +416,7 @@ function runFeishuGuideAction(action: FeishuGuideAction, panel: string) {
         </div>
       </el-collapse-item>
 
-      <el-collapse-item v-if="!isAiOnly" title="飞书人员与项目映射" name="mapping">
+      <el-collapse-item title="飞书人员与项目映射" name="mapping">
         <div class="field-grid">
           <div class="field">
             <label>汇报人 userId</label>

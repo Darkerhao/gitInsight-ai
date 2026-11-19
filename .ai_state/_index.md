@@ -1,15 +1,26 @@
 ---
 path: Refactor
 stage: ship
-current_sprint_slug: reactbits-motion
-current_roadmap_slug: reactbits-motion
+current_sprint_slug: product-experience-20261119
+current_roadmap_slug: product-experience-20261119
 route_confidence: 0.98
-next_action: "完成后评审测试全部结束：当前dev单测244通过/11平台跳过、浏览器83通过、构建与隔离Electron通过；代码/规格/evaluator PASS，无需修复；未提交或发布"
+next_action: "产品体验实施与评审修复完成：251项单测/契约通过、11平台跳过，92项浏览器回归、类型构建与隔离Electron通过；未推送"
 pointers:
   latest_architecture_update: architecture/ARCHITECTURE.md
 ---
 
 # AI State Index
+
+## 产品体验与界面优化（2026-11-19）
+
+- 按用户指定计划完成六个工作包；dev 实施前确认仅有版本元数据差异，已快进至 origin/dev `d4e1905`（v3.11.1）。
+- 配置入口唯一、全局显式保存与 AI 编辑边界、主内容/标题及跳过导航、工作台和侧栏减负、统一复制反馈、普通业务页平面材质、UI smoke 规则及 npm test 接入均完成。
+- 代码评审补充校验期间配置编辑隔离、键盘候选项管理和共用选项保护；日期筛选改为可区分的开始/结束无障碍名称，并修正对应回归断言、主题状态及测试说明。
+- 249 项单元/契约测试通过，11 项原有平台跳过；90/90 完整浏览器、32 张目标尺寸与明暗截图、类型/构建及真实隔离 Electron 验证通过。
+- 修复后完整 `npm test` 251 项通过、11 项原有 Windows 发布测试跳过；92/92 浏览器、`npm run check` 和隔离 Electron 冒烟通过。
+- 最后清理配置入口旧文案后，相关浏览器专项 7/7、UI smoke、类型和构建复验通过；32 张截图已刷新至最终入口文案。
+- 原专注计时测试的精确秒数断言被自然时钟推进干扰；只在用例中暂停测试时钟，专注功能实现未改动。
+- [计划与逐包结果](../docs/2026-11-19-产品体验与界面优化计划.md)；[架构](architecture/ARCHITECTURE.md)。界面截图证据保留在本地输出目录。
 
 ## 完成后评审（2026-11-12）
 
@@ -150,6 +161,8 @@ pointers:
 - current_sprint_slug: weekly-summary
 
 ## route_history
+
+- 2026-11-19: Refactor + roadmap / product-experience-20261119；用户计划已有六个可验收工作包，沿用 renderer 状态与持久化，按范围完成与验证；置信度 0.98。
 
 - 2026-11-11: Refactor + roadmap / reactbits-motion；已批准设计涵盖两批可独立验收 renderer 动效，共享原有状态与交互，置信度 0.98。
 
