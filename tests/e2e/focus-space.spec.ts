@@ -7,7 +7,8 @@ async function openFocus(page: Page) {
 }
 test('免费专注跨页连续、暂停继续、结束与完成休息提醒', async ({ page }) => {
   await openFocus(page);
-  await page.clock.install();
+  await page.clock.install({ time: new Date('2026-11-19T09:00:00+08:00') });
+  await page.clock.pauseAt(new Date('2026-11-19T09:01:00+08:00'));
   await page.getByLabel('完成提示音').uncheck();
   await page.getByRole('button', { name: '开始专注', exact: true }).click();
   await page.clock.fastForward(60000);

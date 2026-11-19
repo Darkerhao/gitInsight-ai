@@ -384,7 +384,7 @@ onBeforeUnmount(() => {
     </section>
 
     <div class="dashboard-layout">
-      <main class="dashboard-main">
+      <section class="dashboard-main">
         <div class="dashboard-chart-grid">
           <section class="surface-card dashboard-panel">
             <div class="panel-head">
@@ -471,7 +471,7 @@ onBeforeUnmount(() => {
             </div>
           </section>
         </div>
-      </main>
+      </section>
 
       <aside class="dashboard-aside">
         <section class="surface-card dashboard-panel">
@@ -534,9 +534,9 @@ onBeforeUnmount(() => {
       </div>
     </el-dialog>
 
-    <div class="button-row end">
-      <el-button :icon="FilePlus2" @click="emit('navigate', 'generate')">生成日报</el-button>
-      <el-button :icon="Send" type="primary" @click="emit('navigate', 'sync')">管理同步任务</el-button>
+    <div v-if="!sortedRepos.length || !config.reporterName" class="button-row end">
+      <el-button v-if="!sortedRepos.length" :icon="FilePlus2" @click="emit('navigate', 'repositories')">先配置仓库</el-button>
+      <el-button v-if="!config.reporterName" :icon="Send" type="primary" @click="emit('navigate', 'config')">先配置汇报人</el-button>
     </div>
   </div>
 </template>

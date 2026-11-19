@@ -164,8 +164,8 @@ function handleReportDateChange(value: string | null) {
         </div>
 
         <div class="publish-hint">
-          <span>自动同步、字段映射与定时配置统一在日报配置页维护。</span>
-          <el-button link type="primary" @click="emit('navigate', 'config')">去配置</el-button>
+          <span>飞书连接与表单字段映射在日报配置中维护。</span>
+          <el-button link type="primary" @click="emit('navigate', 'config')">飞书配置</el-button>
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { test, expect } from './fixtures';
 
 const errorsByPage = new WeakMap<Page, string[]>();
@@ -45,6 +46,8 @@ test('新旧导航均可访问，工作台生成入口复用当前编辑流程',
     await expect(page).toHaveURL(new RegExp(`#/${route}(?:\\?|$)`));
     await expect(item).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('heading', { name: label, exact: true })).toBeVisible();
+    await expect(page.locator('main')).toHaveCount(1);
+    await expect(page.locator('main h1')).toHaveCount(1);
     await expect(page.getByText(/is not a function/)).not.toBeVisible();
   }
   await page.getByRole('button', { name: '生成日报', exact: true }).first().click();
@@ -76,6 +79,122 @@ test('侧边栏菜单超出可视高度时可滚动查看全部条目', async ({
       .map(item => item.textContent?.trim() ?? '');
   });
   expect(unreachable, '每个菜单条目都应能滚动到可视区域内').toEqual([]);
+});
+
+test('工作台生成与同步主操作只出现一次，其他页面不显示工作流提示', async ({ page }) => {
+  await page.goto('/#/dashboard');
+  await expect(page.getByRole('heading', { name: '工作台', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '生成日报', exact: true })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: '管理同步任务', exact: true })).toHaveCount(1);
+  await page.getByRole('menuitem', { name: '历史日志', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '历史日志', exact: true })).toBeVisible();
+  await expect(page.locator('.sidebar-tip')).toHaveCount(0);
+});
+
+test('配置编辑入口唯一，系统摘要跳转到对应编辑页且统一保存可重试', async ({ page }) => {
+  await page.goto('/#/config');
+  await expect(page.getByRole('heading', { name: '日报配置', exact: true })).toBeVisible();
+  await expect(page.locator('.config-scope-group.git input')).toHaveCount(4);
+  await expect(page.locator('.config-scope-group input[placeholder="OpenAI兼容接口地址"]')).toHaveCount(0);
+
+  const workspace = page.locator('.config-scope-group.git input').first();
+  await workspace.fill('/workspace/updated');
+  const save = page.getByRole('button', { name: '保存全部配置', exact: true });
+  await expect(save).toBeVisible();
+  await page.evaluate(() => { window.reportTest.configFailure = true; });
+  await save.click();
+  await expect(page.getByText('config unavailable', { exact: true })).toBeVisible();
+  await expect(workspace).toHaveValue('/workspace/updated');
+  await page.evaluate(() => { window.reportTest.configFailure = false; });
+  await save.click();
+  await expect(page.locator('.el-message__content').filter({ hasText: /^配置已保存$/ }).last()).toBeVisible();
+
+  await page.getByRole('menuitem', { name: '同步任务', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '同步任务', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '新增同步任务', exact: true }).click();
+  await expect(page.locator('.auto-sync-task-card')).toHaveCount(1);
+
+  await page.getByRole('menuitem', { name: '系统设置', exact: true }).click();
+  await page.getByRole('tab', { name: '集成配置', exact: true }).click();
+  await expect(page.locator('.integration-summary-list input')).toHaveCount(0);
+  await expect(page.locator('.integration-summary-list')).toContainText('/workspace/updated');
+  await expect(page.locator('.integration-summary-list')).toContainText('共 1 个任务');
+  await page.getByRole('button', { name: '前往 AI 设置', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'AI 设置', exact: true })).toBeVisible();
+  await expect(page.locator('.ai-profile-manager')).toBeVisible();
+  await expect(page.locator('.advanced-collapse')).toHaveCount(0);
+  for (const [label, heading] of [['前往日报配置', '日报配置'], ['前往同步任务', '同步任务']]) {
+    await page.getByRole('menuitem', { name: '系统设置', exact: true }).click();
+    await page.getByRole('tab', { name: '集成配置', exact: true }).click();
+    await page.getByRole('button', { name: label, exact: true }).click();
+    await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+  }
+  await page.getByRole('menuitem', { name: '写今日日报', exact: true }).click();
+  await page.getByRole('button', { name: '同步任务', exact: true }).click();
+  await expect(page).toHaveURL(/#\/sync$/);
+  for (const [label, heading] of [['AI 设置', 'AI 设置'], ['飞书配置', '日报配置']]) {
+    await page.getByRole('menuitem', { name: '素材日报', exact: true }).click();
+    await page.getByRole('button', { name: label, exact: true }).click();
+    await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+  }
+});
+
+test('键盘可以跳过导航并进入唯一主内容区', async ({ page }) => {
+  await page.goto('/#/dashboard');
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.skip-link')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => (document.activeElement as HTMLElement)?.id)).toBe('main-content');
+  await expect(page).toHaveURL(/#\/dashboard$/);
+  await expect(page.locator('main')).toHaveCount(1);
+});
+
+test('历史和消息日期筛选分别标明开始与结束日期', async ({ page }) => {
+  for (const [route, label] of [['history', '历史日志'], ['messages', '消息']]) {
+    await page.goto(`/#/${route}`);
+    await expect(page.getByRole('combobox', { name: `${label}开始日期`, exact: true })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: `${label}结束日期`, exact: true })).toBeVisible();
+  }
+});
+
+test('键盘可以操作 AI 候选项管理', async ({ page }) => {
+  await page.goto('/#/ai');
+  await page.getByText('管理接口地址和模型候选项', { exact: true }).press('Enter');
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: '删除接口地址 https://api.openai.com/v1', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('请先将使用此选项的 AI 配置改为其他值', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '删除接口地址 https://api.openai.com/v1', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '保存全部配置', exact: true })).toHaveCount(0);
+});
+
+test('普通业务页在目标尺寸及明暗主题下无横向溢出', async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
+  for (const viewport of [{ width: 1366, height: 768 }, { width: 900, height: 600 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark'] as const) {
+      for (const path of ['dashboard', 'generate', 'config', 'ai', 'sync', 'system', 'history', 'messages']) {
+        await page.goto(`/#/${path}`);
+        await expect(page.locator('main h1')).toBeVisible();
+        const currentTheme = await page.locator('html').getAttribute('data-theme');
+        if (theme === 'dark' && currentTheme !== 'dark') await page.getByRole('button', { name: '切换深色模式', exact: true }).click();
+        if (theme === 'light' && currentTheme === 'dark') await page.getByRole('button', { name: '切换浅色模式', exact: true }).click();
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        await expect(page.locator('html')).not.toHaveAttribute('data-theme-transition');
+        await page.mouse.move(0, 0);
+        if (path === 'system') await page.getByRole('tab', { name: '集成配置', exact: true }).click();
+        const overflow = await page.evaluate(() => ({
+          viewport: document.documentElement.clientWidth,
+          page: document.documentElement.scrollWidth,
+          content: document.querySelector('.app-scroll')?.scrollWidth ?? 0,
+          contentViewport: document.querySelector('.app-scroll')?.clientWidth ?? 0,
+        }));
+        expect(overflow.page, `${path} ${theme} ${viewport.width} 页面宽度不得溢出`).toBeLessThanOrEqual(overflow.viewport + 1);
+        expect(overflow.content, `${path} ${theme} ${viewport.width} 内容宽度不得溢出`).toBeLessThanOrEqual(overflow.contentViewport + 1);
+        await page.screenshot({ path: testInfo.outputPath(`visual-${viewport.width}-${theme}-${path}.png`) });
+      }
+    }
+  }
 });
 
 test('工作台快捷操作与规则建议的按钮沿用卡片布局，不被组件默认样式挤坏', async ({ page }) => {
@@ -208,6 +327,36 @@ test('系统设置可复制真实本地数据目录', async ({ page, context }) 
   await page.getByRole('button', { name: '刷新状态', exact: true }).click();
   await page.getByRole('button', { name: '复制目录', exact: true }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('D:\\GitInsight\\本地数据');
+});
+
+test('消息和历史日志复制被拒绝时保留内容，历史导出可下载', async ({ page }) => {
+  await loadActivity(page);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true,
+      value: { writeText: async () => { throw new Error('denied'); } } });
+    window.api.queryHistoryLogs = async () => ({ total: 1, page: 1, pageSize: 10, records: [{
+      id: 'error-55', numericId: 55, time: new Date().toISOString(), type: '错误日志', project: 'Project A',
+      action: '复制测试', status: 'failed', duration: '—', operator: '测试用户', trigger: '手动', detail: '错误详情必须保留',
+    }] });
+  });
+  await page.getByRole('menuitem', { name: '消息中心', exact: true }).click();
+  await page.getByRole('button').filter({ hasText: '已提交整合日报' }).click();
+  const copyFailure = page.getByText('复制失败，请手动选择内容复制', { exact: true });
+  await page.getByRole('button', { name: '复制内容', exact: true }).click();
+  await expect(copyFailure).toBeVisible();
+  await expect(page.locator('.message-detail-text')).toContainText('已提交整合日报');
+  await page.getByRole('button', { name: '关闭此对话框' }).click();
+  await page.getByRole('menuitem', { name: '历史日志', exact: true }).click();
+  await page.locator('tbody tr').filter({ hasText: '复制测试' }).click();
+  await expect(copyFailure).toHaveCount(0);
+  await page.getByRole('button', { name: '复制', exact: true }).click();
+  await expect(copyFailure).toBeVisible();
+  await expect(page.locator('.log-detail-text')).toHaveText('错误详情必须保留');
+  const downloading = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出', exact: true }).click();
+  const download = await downloading;
+  expect(await download.failure()).toBeNull();
+  expect(await readFile((await download.path())!, 'utf8')).toBe('错误详情必须保留');
 });
 
 test('生成来源按当前草稿展示提交、文件与原始摘要', async ({ page }) => {

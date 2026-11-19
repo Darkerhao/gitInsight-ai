@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Save } from 'lucide-vue-next';
 import PageHeader from '@/components/common/PageHeader.vue';
 import AutoSyncCard from '@/components/panels/AutoSyncCard.vue';
 import { useAssistant } from '@/composables/useAssistant';
 import { formatLocalDate } from '@/composables/assistant/dateUtils';
 import { getAutoSyncStatusLabel, getAutoSyncStatusType } from '@/composables/assistant/autoSyncState';
 
-const { config, syncLogs, isConfigDirty, saveSettings, getRepoDisplayName, sortedRepos } = useAssistant();
+const { config, syncLogs, getRepoDisplayName, sortedRepos } = useAssistant();
 const route = useRoute();
 const router = useRouter();
 const activeTab = computed({
@@ -47,11 +46,7 @@ function formatTime(value: string) {
 
 <template>
   <div class="view-stack sync-tasks-view">
-    <PageHeader title="同步任务" subtitle="按任务管理仓库、飞书项目与执行窗口；定时同步仅在应用打开期间生效。">
-      <template #actions>
-        <el-button :icon="Save" type="primary" :disabled="!isConfigDirty" @click="saveSettings">保存任务配置</el-button>
-      </template>
-    </PageHeader>
+    <PageHeader title="同步任务" subtitle="按任务管理仓库、飞书项目与执行窗口；定时同步仅在应用打开期间生效。修改后使用顶栏的“保存全部配置”生效。" />
 
     <el-tabs v-model="activeTab" class="clean-tabs">
       <el-tab-pane label="任务列表" name="list" />

@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import PageHeader from '@/components/common/PageHeader.vue';
 import StatusBadge from '@/components/common/StatusBadge.vue';
 import { createProjectReportActions } from '@/composables/projectReportActions';
+import { copyText } from '@/utils/clipboard';
 import { useRouter } from 'vue-router';
 import { useAssistant } from '@/composables/useAssistant';
 import type { HistoryLogRecord, HistoryLogStatusFilter, HistoryLogTypeFilter } from '@shared/types';
@@ -147,12 +148,7 @@ async function handleSearch() {
 }
 
 async function copyActiveLog() {
-  if (!activeLog.value?.detail.trim()) {
-    ElMessage.warning('当前没有可复制的详情内容');
-    return;
-  }
-  await navigator.clipboard.writeText(activeLog.value.detail);
-  ElMessage.success('详情内容已复制');
+  await copyText(activeLog.value?.detail ?? '', '详情内容已复制');
 }
 
 function exportActiveLog() {
@@ -261,14 +257,14 @@ function formatDateTime(value: string) {
           <div class="field-grid">
             <div class="field">
               <label>项目</label>
-              <el-select v-model="selectedProject">
+              <el-select v-model="selectedProject" aria-label="筛选项目">
                 <el-option label="全部项目" value="全部项目" />
                 <el-option v-for="item in projectOptions" :key="item" :label="item" :value="item" />
               </el-select>
             </div>
             <div class="field">
               <label>日志类型</label>
-              <el-select v-model="selectedType">
+              <el-select v-model="selectedType" aria-label="筛选日志类型">
                 <el-option label="全部类型" value="全部类型" />
                 <el-option label="日报生成" value="日报生成" />
                 <el-option label="手动同步" value="手动同步" />
@@ -278,7 +274,7 @@ function formatDateTime(value: string) {
             </div>
             <div class="field">
               <label>状态</label>
-              <el-select v-model="selectedStatus">
+              <el-select v-model="selectedStatus" aria-label="筛选状态">
                 <el-option label="全部状态" value="全部状态" />
                 <el-option label="成功" value="成功" />
                 <el-option label="失败" value="失败" />
@@ -286,11 +282,20 @@ function formatDateTime(value: string) {
             </div>
             <div class="field">
               <label>时间范围</label>
-              <el-date-picker v-model="timeRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" />
+              <label class="visually-hidden" for="history-start-date">历史日志开始日期</label>
+              <label class="visually-hidden" for="history-end-date">历史日志结束日期</label>
+              <el-date-picker
+                v-model="timeRange"
+                :id="['history-start-date', 'history-end-date']"
+                type="daterange"
+                value-format="YYYY-MM-DD"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+              />
             </div>
           </div>
           <div class="filter-actions">
-            <el-input v-model="keyword" :prefix-icon="Search" placeholder="请输入操作内容、文件名或其他关键词" />
+            <el-input v-model="keyword" :prefix-icon="Search" aria-label="搜索历史日志" placeholder="请输入操作内容、文件名或其他关键词" />
             <el-button @click="resetFilters">重置</el-button>
             <el-button type="primary" @click="handleSearch">查询</el-button>
           </div>
@@ -351,7 +356,7 @@ function formatDateTime(value: string) {
       <aside class="detail-panel" v-if="activeLog">
         <div class="panel-head">
           <h3>日志详情</h3>
-          <el-button :icon="X" link @click="detailVisible = false" />
+          <el-button :icon="X" link aria-label="关闭日志详情" @click="detailVisible = false" />
         </div>
         <div class="detail-actions">
           <el-button :icon="RotateCcw" plain :disabled="!activeLog.reportRecord" @click="loadActiveReport">继续编辑</el-button>

@@ -31,7 +31,6 @@
   --glass-surface: var(--c-glass);
 }
 
-/* All cards use the same lit material, including scope and configuration panels. */
 .surface-card,
 .config-block {
   border: 1px solid transparent;
@@ -40,7 +39,14 @@
     linear-gradient(var(--glass-surface, var(--c-surface)), var(--glass-surface, var(--c-surface))) padding-box,
     var(--c-glass-edge) border-box;
   box-shadow: var(--shadow-card);
+}
 
+/* 普通业务页使用平面卡片，成长与特效场景保留原有材质。 */
+:where(.app-scroll:not([data-page='coins']):not([data-page='timeline'])) :is(.surface-card, .config-block, .aside-card) {
+  border: 1px solid var(--c-border);
+  border-radius: 16px;
+  background: var(--glass-surface, var(--c-surface));
+  box-shadow: none;
 }
 
 .config-block {
@@ -73,6 +79,11 @@
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 2px 5px rgb(0 0 0 / 0.12);
 }
 
+.app-scroll[data-page]:not([data-page='coins']):not([data-page='timeline']) .el-button:not(.el-button--primary) {
+  background-image: none;
+  box-shadow: none;
+}
+
 .el-button:not(:disabled):not(.repo-picker-main):not(.repo-picker-trigger):active,
 .atelier-workflow-step:active {
   scale: 0.98;
@@ -94,12 +105,6 @@
   background: var(--c-surface-muted);
   border: 1px solid var(--c-border-strong);
   color: var(--c-text);
-}
-
-.sidebar-tip-btn.el-button,
-.sidebar-tip-btn.el-button:hover {
-  background: var(--c-surface);
-  color: var(--c-primary);
 }
 
 .sidebar-brand-name {

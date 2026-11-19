@@ -12,6 +12,7 @@ import { useAssistant } from '@/composables/useAssistant';
 import type { ProjectReportDraft } from '@/composables/projectReportActions';
 import { countWeeklyReportFiles as countResultFiles } from '@shared/weeklyReport';
 import { getReportRangePayloadFromForm, resolveReportTimeRange } from '@/composables/assistant/reportState';
+import { copyText } from '@/utils/clipboard';
 import { allocateProjectWorkHours, normalizeProjectWorkHours, normalizeWorkHours } from '@/composables/assistant/normalizers';
 import { DEFAULT_CUSTOM_REPORT_PROMPT } from '@shared/reportPrompt';
 import type { DailyReportRecord, RepoInfo, ReportPromptStyle } from '@shared/types';
@@ -758,12 +759,8 @@ async function handleSaveAllReports() {
 
 async function copyReport() {
   const draft = activeDraft.value;
-  if (!draft?.report.trim()) {
-    ElMessage.warning('当前没有可复制的日报内容');
-    return;
-  }
-  await navigator.clipboard.writeText(draft.report);
-  ElMessage.success(`${displayDraftName(draft)} 日报内容已复制`);
+  if (!draft) return;
+  await copyText(draft.report, `${displayDraftName(draft)} 日报内容已复制`);
 }
 
 function exportMarkdown() {
@@ -1035,7 +1032,7 @@ onBeforeUnmount(() => {
       <template #actions>
         <el-button :icon="FileText" plain @click="emit('navigate', 'history')">生成记录</el-button>
         <el-button :icon="BrainCog" plain @click="emit('navigate', 'ai')">AI 设置</el-button>
-        <el-button :icon="CalendarDays" plain @click="emit('navigate', 'config')">同步配置</el-button>
+        <el-button :icon="CalendarDays" plain @click="emit('navigate', 'sync')">同步任务</el-button>
       </template>
     </PageHeader>
 

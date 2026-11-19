@@ -114,7 +114,7 @@ const quickStarts = [
 const moduleGuides = [
   {
     title: '日报配置',
-    desc: '配置工作区、汇报人、AI 接入与飞书字段',
+    desc: '配置工作区、汇报人与飞书字段',
     action: 'config',
     icon: Settings2,
   },

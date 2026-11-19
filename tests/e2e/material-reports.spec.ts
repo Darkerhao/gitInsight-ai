@@ -171,3 +171,19 @@ test('角色日期切换保护未保存内容，操作期间不串用上下文�
   expect(saves.at(-1)?.repoPaths).toEqual([]);
   expect(saves.at(-1)?.rawInput?.materialRole).toBe('productManager');
 });
+
+test('素材复制被拒绝时保留正文并提示手动复制，空正文禁止复制和导出', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await expect(page.getByRole('button', { name: '复制', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '导出 Markdown', exact: true })).toBeDisabled();
+  await page.getByLabel('日报正文', { exact: true }).fill('手改的正文必须保留');
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true,
+      value: { writeText: async () => { throw new Error('denied'); } } });
+  });
+  await page.getByRole('button', { name: '复制', exact: true }).click();
+  await expect(page.getByText('复制失败，请手动选择内容复制', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('日报正文', { exact: true })).toHaveValue('手改的正文必须保留');
+  expect(errors).toEqual([]);
+});

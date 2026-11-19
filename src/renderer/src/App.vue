@@ -127,6 +127,10 @@ function handleNavigate(value: string) {
   void router.push({ path: `/${target}` });
 }
 
+function skipToMainContent() {
+  document.getElementById('main-content')?.focus();
+}
+
 function isThemeMode(value: string | null): value is ThemeMode {
   return value === 'light' || value === 'dark';
 }
@@ -318,9 +322,10 @@ onBeforeUnmount(() => {
   <WelcomeGate v-if="showWelcome && !initializationError" :metrics="welcomeMetrics" @finished="finishWelcome" @navigate="handleNavigate" />
 
   <div class="app-layout atelier-app" :inert="(showWelcome && !initializationError) || undefined">
+    <a class="skip-link" href="#main-content" @click.prevent="skipToMainContent">跳转到主内容</a>
     <AppSidebar v-model:active-nav="activeNav" />
 
-    <main class="app-main">
+    <div class="app-main">
       <AppTopbar
         :theme-mode="themeMode"
         :zoom-factor="zoomFactor"
@@ -333,7 +338,7 @@ onBeforeUnmount(() => {
         @navigate="handleNavigate"
       />
 
-      <div class="app-scroll atelier-scroll" :class="{ 'is-immersive': activeNav === 'timeline' }">
+      <main id="main-content" class="app-scroll atelier-scroll" tabindex="-1" :data-page="activeNav" :class="{ 'is-immersive': activeNav === 'timeline' }">
         <el-result v-if="initializationError" icon="error" title="无法加载本地数据" :sub-title="initializationError">
           <template #extra>
             <p>请检查本地配置文件或磁盘状态，修复后重新加载。</p>
@@ -348,7 +353,7 @@ onBeforeUnmount(() => {
         <footer v-if="activeNav !== 'timeline'" class="app-footer">
           码迹AI{{ appVersionText }} · 让每一次提交，都成为看得见的成果
         </footer>
-      </div>
-    </main>
+      </main>
+    </div>
   </div>
 </template>

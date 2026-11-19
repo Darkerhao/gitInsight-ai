@@ -173,7 +173,6 @@ function createAssistant() {
     getWorkspaceDirs: () => repoState.getWorkspaceDirs(),
     getRepoKey: (path: string) => repoState.getRepoKey(path),
     validateAutoSyncBeforeSave: (payload: AppConfig) => autoSyncStateApi.validateAutoSyncBeforeSave(payload),
-    refreshAutoSyncState: () => autoSyncStateApi.refreshAutoSyncState(),
   });
 
   repoState = createRepoState({
@@ -262,11 +261,9 @@ function createAssistant() {
       !config.feishuForm.contentFieldId;
 
     advancedConfigPanels.value = [
-      ...(!config.aiApiKey ? ['ai'] : []),
       ...(feishuAuthIncomplete ? ['feishu'] : []),
       ...(feishuMappingIncomplete ? ['mapping'] : []),
       ...(feishuFieldMappingIncomplete ? ['fields'] : []),
-      ...(config.autoSync.enabled ? ['autoSync'] : []),
     ];
 
     repoState.restoreRepos();
@@ -383,8 +380,7 @@ function createAssistant() {
     removeAiProfile: configState.removeAiProfile,
     rememberAiBaseUrlOption: configState.rememberAiBaseUrlOption,
     rememberAiModelOption: configState.rememberAiModelOption,
-    removeAiBaseUrlOption: configState.removeAiBaseUrlOption,
-    removeAiModelOption: configState.removeAiModelOption,
+    removeAiOption: configState.removeAiOption,
     loginFeishu: feishuState.loginFeishu,
     openFeishuSubmissionRecords: feishuState.openFeishuSubmissionRecords,
     loadFeishuProjects: feishuState.loadFeishuProjects,
