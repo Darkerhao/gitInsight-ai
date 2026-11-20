@@ -17,7 +17,12 @@ function repository(t, { tagged = true } = {}) {
     writeFileSync(join(cwd, path), content);
   };
   const commit = message => { git('add', '.'); git('commit', '--allow-empty', '-m', message); };
-  const plan = () => JSON.parse(execFileSync(process.execPath, [script], { cwd, encoding: 'utf8' }));
+  const plan = (...args) => JSON.parse(execFileSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8' }));
+  const notes = () => {
+    const path = join(cwd, '.git', 'release-notes.md');
+    plan('--notes-file', path);
+    return readFileSync(path, 'utf8');
+  };
   git('init', '-b', 'main');
   git('config', 'user.name', 'Version test');
   git('config', 'user.email', 'version-test@example.com');
@@ -25,8 +30,50 @@ function repository(t, { tagged = true } = {}) {
   write('src/existing.ts', 'export const existing = true;\n');
   commit('feat: existing released feature');
   if (tagged) git('tag', 'v3.8.19');
-  return { cwd, git, write, commit, plan };
+  return { cwd, git, write, commit, plan, notes };
 }
+
+test('release notes contain direct commit details instead of only a comparison link', t => {
+  const { commit, notes } = repository(t);
+  commit('fix(ui): 收敛配置入口并完善页面体验\n\n- 统一配置保存、复制反馈和无障碍导航\n\n- 修复校验竞态并保护正在使用的 AI 候选项\n\n验证：测试通过\n\n(cherry picked from commit abcdef)');
+  commit('chore(release): v3.8.20');
+  commit("Merge branch 'dev'");
+  assert.equal(notes(), '## 更新内容\n\n- 收敛配置入口并完善页面体验\n  - 统一配置保存、复制反馈和无障碍导航\n  - 修复校验竞态并保护正在使用的 AI 候选项\n');
+});
+
+test('release notes keep all new subjects and safely preserve literal markup', t => {
+  const { commit, notes } = repository(t);
+  commit('feat: 新增日报筛选');
+  commit('修复 <日报> 与 A&B 显示');
+  const text = notes();
+  assert.match(text, /- 新增日报筛选/);
+  assert.match(text, /- 修复 &lt;日报&gt; 与 A&amp;B 显示/);
+  assert.doesNotMatch(text, /existing released feature/);
+});
+
+test('release notes exclude previously published cherry-picked fixes', t => {
+  const { git, write, commit, notes } = repository(t);
+  const shared = git('rev-parse', 'HEAD');
+  write('src/published.ts', 'publishedFix();\n');
+  commit('fix: 已经发布的修复');
+  const published = git('rev-parse', 'HEAD');
+  git('tag', '-f', 'v3.8.19');
+  git('checkout', '-b', 'dev', shared);
+  commit('chore(release): v3.8.19');
+  git('cherry-pick', published);
+  write('src/new.ts', 'newFix();\n');
+  commit('fix: 本次新增的修复');
+  const text = notes();
+  assert.match(text, /本次新增的修复/);
+  assert.doesNotMatch(text, /已经发布的修复|chore\(release\)/);
+});
+
+test('release notes handle the first release and an unchanged release explicitly', t => {
+  const first = repository(t, { tagged: false });
+  assert.match(first.notes(), /existing released feature/);
+  const unchanged = repository(t);
+  assert.equal(unchanged.notes(), '## 更新内容\n\n本次没有新增变更。\n');
+});
 
 test('a small fix uses patch and the released feature is excluded', t => {
   const { write, commit, plan } = repository(t);
