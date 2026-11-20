@@ -20,11 +20,11 @@
 把代码提交并推送到 `main`，即可触发 `.github/workflows/release.yml`：
 
 1. 复用 `checks.yml` 执行业务测试、类型检查、构建与浏览器回归。
-2. 检查通过后，由 `scripts/release-version.mjs` 根据上个版本以来的提交内容与代码规模选择 `major/minor/patch`，递增 `package.json`；同时更新 `package-lock.json` 的根版本和项目版本。
+2. 检查通过后，由 `scripts/release-version.mjs` 根据上个版本以来的提交内容与代码规模选择 `major/minor/patch`，同时生成具体更新说明，再递增 `package.json`；同时更新 `package-lock.json` 的根版本和项目版本。
 3. 自动提交 `chore(release): v<新版本>`，原子推送版本提交到 `main` 并创建对应标签。
 4. `sync-dev` 从最新 `origin/dev` 开始，使用 `git cherry-pick -x` 同步这一个版本提交并推送到 `dev`；提交信息保留来源 SHA。
 5. 与版本同步并行，三个打包任务使用同一个 main 版本提交，分别构建 Windows、macOS、Linux 安装包。
-6. 全部打包任务成功后，创建 Release 草稿，上传安装包、blockmap 与更新清单；全部上传成功后公开 Release 并标记为最新版本，客户端才会发现该版本。
+6. 全部打包任务成功后，使用准备阶段生成的更新说明创建 Release 草稿，上传安装包、blockmap 与更新清单；全部上传成功后公开 Release 并标记为最新版本，客户端才会发现该版本。
 
 `main` 的检查统一由发布流程调用，避免重复执行；目标为 `dev/main` 的 PR 独立执行检查。
 
@@ -58,6 +58,20 @@ node scripts/release-version.mjs
 ```
 
 预览不修改清单或创建 Git 提交、标签；真正的版本升级仍只在 main 发布流程中执行。
+
+### 更新说明
+
+更新说明与版本判定复用同一提交范围，在升版和打标签之前生成。提取每条提交的标题及正文中的 `-` / `*` 列表作为具体变更，去掉 `fix(ui):` 等提交前缀，排除版本提交、合并记录及已发布的等价提交。建议在提交正文中用列表写清本次修改；没有新增变更时明确说明，不编造功能内容。
+
+准备阶段将说明保存为独立 artifact，发布阶段通过 `body_path` 写入 GitHub Release。客户端沿用现有 Release feed 读取并显示文字，无需新增请求或依赖。这里不再使用 GitHub 的 PR 自动摘要，以免直接提交或 cherry-pick 发布时只剩 `Full Changelog` 链接。
+
+可在升版前本地预览说明（只额外写入指定文件）：
+
+```bash
+node scripts/release-version.mjs --notes-file .cache/release-notes.md
+```
+
+此流程对后续发布生效；已发布版本的说明需要在对应 GitHub Release 中补充，不会因本地代码变更自动回写。
 
 CI 写入 `main` 的版本提交后，会自动 cherry-pick 到 `dev`，只带入本次版本变更，不合并 main 的其他提交。开发前拉取即可：
 

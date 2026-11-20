@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, readFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 
 const git = (args, input) => execFileSync('git', args, {
   input, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'],
@@ -20,8 +20,9 @@ for (let i = 0; i < records.length - 1; i += 2) {
 }
 const breaking = /^[a-z][\w-]*(?:\([^\r\n)]+\))?!:|^BREAKING[ -]CHANGE:\s*\S/im;
 const feature = /^feat(?:\([^\r\n)]+\))?:\s*\S/im;
+const notesRequested = process.argv.includes('--notes-file');
 
-if (baseTag && commits.some(({ message }) => breaking.test(message) || feature.test(message))) {
+if (baseTag && (notesRequested || commits.some(({ message }) => breaking.test(message) || feature.test(message)))) {
   const patchIds = (ref, reverse = false) => git(['patch-id', '--stable'],
     git(['log', '--topo-order', '--no-merges', '--format=%H', '--patch', '--no-prefix', '--no-ext-diff', '--no-textconv',
       ...(reverse ? ['-R'] : []), ref]))
@@ -76,6 +77,20 @@ if (messages.some(message => breaking.test(message))) {
 
 const plan = { baseTag, commits: messages.length, files, additions, deletions, bump, reason };
 console.log(JSON.stringify(plan, null, 2));
+if (notesRequested) {
+  const notesPath = process.argv[process.argv.indexOf('--notes-file') + 1];
+  if (!notesPath || notesPath.startsWith('--')) throw new Error('--notes-file 需要指定输出文件路径');
+  const escapeHtml = text => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  const entries = messages.flatMap(message => {
+    const [subject, ...body] = message.split(/\r?\n/);
+    if (/^chore\(release\):|^Merge\b/i.test(subject)) return [];
+    const title = subject.replace(/^[a-z][\w-]*(?:\([^\r\n)]+\))?!?:\s*/i, '');
+    const details = body.map(line => line.trim()).filter(line => /^[-*]\s+\S/.test(line))
+      .map(line => `  - ${escapeHtml(line.replace(/^[-*]\s+/, ''))}`);
+    return [[`- ${escapeHtml(title)}`, ...details].join('\n')];
+  });
+  writeFileSync(notesPath, `## 更新内容\n\n${entries.join('\n') || '本次没有新增变更。'}\n`);
+}
 if (process.argv.includes('--github-output')) {
   appendFileSync(process.env.GITHUB_OUTPUT, `bump=${bump}\n`);
   appendFileSync(process.env.GITHUB_STEP_SUMMARY,

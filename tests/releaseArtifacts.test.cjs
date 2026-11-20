@@ -102,6 +102,16 @@ test('only main pushes publish, after checks and all packages from one commit', 
   assert.equal(publishers.length, 1);
   assert.equal(publishers[0].with.tag_name, '${{ needs.prepare.outputs.tag }}');
   assert.equal(publishers[0].with.draft, true, 'Clients must not see a release before all assets are uploaded');
+  assert.equal(publishers[0].with.body_path, 'release-notes.md');
+  assert.ok(!publishers[0].with.generate_release_notes, 'PR-only generated notes omit direct commits');
+  assert.match(prepare, /--notes-file "\$RUNNER_TEMP\/release-notes\.md"/);
+  const notesUpload = workflow.jobs.prepare.steps.find(step => step.uses?.startsWith('actions/upload-artifact@'));
+  assert.equal(notesUpload.if, "steps.version.outputs.tag != ''");
+  assert.equal(notesUpload.with.path, '${{ runner.temp }}/release-notes.md');
+  assert.equal(notesUpload.with['if-no-files-found'], 'error');
+  const notesDownload = workflow.jobs.release.steps.find(step => step.with?.name === notesUpload.with.name);
+  assert.ok(notesDownload.uses.startsWith('actions/download-artifact@'));
+  assert.equal(notesDownload.with.path, '.');
   const publishComplete = workflow.jobs.release.steps.at(-1);
   assert.equal(publishComplete.env.RELEASE_TAG, '${{ needs.prepare.outputs.tag }}');
   assert.match(publishComplete.run, /gh release edit .*--draft=false --latest/);
@@ -190,6 +200,7 @@ function releaseFixture(t) {
       env: {
         ...process.env, GITHUB_EVENT_NAME: eventName, GITHUB_SHA: sourceSha,
         GITHUB_OUTPUT: outputFile.replaceAll('\\', '/'),
+        RUNNER_TEMP: root.replaceAll('\\', '/'),
         GITHUB_STEP_SUMMARY: join(root, 'github-summary').replaceAll('\\', '/'),
       },
     });
